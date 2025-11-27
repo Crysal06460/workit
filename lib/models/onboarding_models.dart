@@ -123,6 +123,10 @@ class OnboardingData {
     required this.companyName,
     required this.siret,
     required this.address,
+    required this.postalCode,
+    required this.city,
+    this.journeyType,
+    this.trialSessionId,
   }) : invites = {
           for (final role in onboardingRoles) role: <String>[],
         };
@@ -130,6 +134,10 @@ class OnboardingData {
   final String companyName;
   final String siret;
   final String address;
+  final String postalCode;
+  final String city;
+  final String? journeyType; // structured | artisan
+  final String? trialSessionId;
   PlanOption? plan;
   final Map<String, List<String>> invites;
 

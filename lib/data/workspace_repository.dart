@@ -32,15 +32,25 @@ class WorkspaceRepository {
       'isUnlimited': plan.isUnlimited,
     };
 
+    final trialStart = DateTime.now().toUtc();
+    final trialEnd = trialStart.add(const Duration(days: 7));
+
     final workspaceData = {
       'companyName': data.companyName,
       'siret': data.siret,
       'address': data.address,
+      'postalCode': data.postalCode,
+      'city': data.city,
+      'journeyType': data.journeyType,
+      'trialSessionId': data.trialSessionId,
       'plan': planMap,
       'seatUsage': data.seatUsageForFirestore,
       'joinCodes': data.generatedCodes,
       'totalInvites': data.totalInvites,
-      'status': 'pending_activation',
+      'status': 'trial', // trial | expired | active
+      'trialStartAt': Timestamp.fromDate(trialStart),
+      'trialEndsAt': Timestamp.fromDate(trialEnd),
+      'subscriptionStatus': 'trial',
       'createdAt': serverTimestamp,
       'updatedAt': serverTimestamp,
     };
