@@ -5,7 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/onboarding_models.dart';
-import 'plan_selection_screen.dart';
+import 'account_setup_screen.dart';
+import 'select_metier_screen.dart';
 
 class CreateWorkspaceScreen extends StatefulWidget {
   const CreateWorkspaceScreen({super.key, this.journeyType, this.trialSessionId});
@@ -62,7 +63,7 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
       trialSessionId: widget.trialSessionId,
     );
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PlanSelectionScreen(data: data)),
+      MaterialPageRoute(builder: (_) => SelectMetierScreen(data: data)),
     );
   }
 
@@ -146,6 +147,15 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
                 controller: siretController,
                 label: 'SIRET (optionnel)',
                 keyboardType: TextInputType.number,
+                maxLength: 14,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                validator: (value) {
+                  if (value == null || value.isEmpty) return null; // facultatif
+                  if (value.length != 14 || !RegExp(r'^\d{14}$').hasMatch(value)) {
+                    return '14 chiffres';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 14),
               _DarkField(
@@ -379,44 +389,55 @@ extension on _CreateWorkspaceScreenState {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (_) {
+        final maxHeight = MediaQuery.of(context).size.height * 0.6;
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Sélectionnez votre commune',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...cities.map(
-                  (city) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      city,
-                      style: const TextStyle(color: Colors.white),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    onTap: () {
-                      setState(() => cityController.text = city);
-                      Navigator.of(context).pop();
-                    },
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Sélectionnez votre commune',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView.separated(
+                      itemBuilder: (_, index) {
+                        final city = cities[index];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            city,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          onTap: () {
+                            setState(() => cityController.text = city);
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      },
+                      separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white12),
+                      itemCount: cities.length,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

@@ -38,7 +38,13 @@ dependencies:
   cloud_firestore: ^5.6.12
   firebase_auth: ^5.7.0
   firebase_storage: ^12.4.10
+  cloud_functions: ^5.0.4
+  file_picker: ^6.1.1
+  image_picker: ^1.0.7
+  path: ^1.8.3
   rename: ^3.1.0
+  http: ^1.2.2
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +67,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/dictionnaire_workit/workit_dictionary.json
+    - assets/dictionnaire_workit/metiers_workit.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

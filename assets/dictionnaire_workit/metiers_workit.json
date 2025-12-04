@@ -1,0 +1,35 @@
+{
+  "metiers": {
+    "menuiserie_aluminium": {
+      "label": "Menuiserie Aluminium / PVC / Bois / Mixte",
+      "categories": {
+        "menuiseries_exterieures": {
+          "label": "Menuiseries exterieures",
+          "sous_categories": [
+            "Aluminium",
+            "PVC",
+            "Bois",
+            "Mixte",
+            "Acier"
+          ],
+          "types": {
+            "coulissant": {
+              "label": "Coulissant",
+              "variantes": [
+                "2 vantaux / 2 rails",
+                "3 vantaux / 3 rails",
+                "4 vantaux / 2 rails",
+                "4 vantaux / 4 rails",
+                "6 vantaux / 3 rails",
+                "Coulissant a levage",
+                "Coulissant ouvrant cache",
+                "Galandage simple",
+                "Galandage double"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

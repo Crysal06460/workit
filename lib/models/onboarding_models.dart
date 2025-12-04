@@ -68,55 +68,40 @@ class PlanOption {
 }
 
 List<PlanOption> defaultPlans() => const [
-      PlanOption(
-        id: 'abonnement_1',
-        name: 'Abonnement 1',
-        price: 'Tarif à définir',
-        seatsByRole: {
-          'commercial': 3,
-          'metreur': 1,
-          'poseur': 3,
-        },
-        features: [
-          '3 commerciaux inclus',
-          '1 métreur inclus',
-          '3 équipes de pose incluses',
-          'Accès complet au workflow WorkIt',
-        ],
-      ),
-      PlanOption(
-        id: 'abonnement_2',
-        name: 'Abonnement 2',
-        price: 'Tarif à définir',
-        seatsByRole: {
-          'commercial': 5,
-          'metreur': 2,
-          'poseur': 5,
-        },
-        features: [
-          '5 commerciaux inclus',
-          '2 métreurs inclus',
-          '5 équipes de pose incluses',
-          'Support WorkIt prioritaire',
-        ],
-      ),
-      PlanOption(
-        id: 'abonnement_3',
-        name: 'Abonnement 3',
-        price: 'Tarif à définir',
-        seatsByRole: {
-          'commercial': null,
-          'metreur': null,
-          'poseur': null,
-        },
-        features: [
-          'Utilisateurs illimités',
-          'Équipes de pose illimitées',
-          'Accès anticipé aux fonctionnalités IA',
-          'Gestion avancée des permissions',
-        ],
-      ),
-    ];
+  PlanOption(
+    id: 'abonnement_1',
+    name: 'Configuration 1',
+    price: 'Tarif à définir',
+    seatsByRole: {'commercial': 3, 'metreur': 1, 'poseur': 3},
+    features: [
+      '3 commerciaux inclus',
+      '1 métreur inclus',
+      '3 équipes de pose incluses',
+    ],
+  ),
+  PlanOption(
+    id: 'abonnement_2',
+    name: 'Configuration 2',
+    price: 'Tarif à définir',
+    seatsByRole: {'commercial': 5, 'metreur': 2, 'poseur': 5},
+    features: [
+      '5 commerciaux inclus',
+      '2 métreurs inclus',
+      '5 équipes de pose incluses',
+    ],
+  ),
+  PlanOption(
+    id: 'abonnement_3',
+    name: 'Configuration 3',
+    price: 'Tarif à définir',
+    seatsByRole: {'commercial': null, 'metreur': null, 'poseur': null},
+    features: [
+      'Commerciaux illimités',
+      'Mètreurs illimités',
+      'Équipes de pose illimitées',
+    ],
+  ),
+];
 
 class OnboardingData {
   OnboardingData({
@@ -127,9 +112,8 @@ class OnboardingData {
     required this.city,
     this.journeyType,
     this.trialSessionId,
-  }) : invites = {
-          for (final role in onboardingRoles) role: <String>[],
-        };
+    this.tradeKey,
+  }) : invites = {for (final role in onboardingRoles) role: <String>[]};
 
   final String companyName;
   final String siret;
@@ -138,7 +122,12 @@ class OnboardingData {
   final String city;
   final String? journeyType; // structured | artisan
   final String? trialSessionId;
+  String? tradeKey; // corps de métier choisi
   PlanOption? plan;
+  String adminEmail = '';
+  String adminUid = '';
+  bool creatorUsesWorkit = false;
+  String? creatorRoleKey; // commercial | metreur | commercial_metreur
   final Map<String, List<String>> invites;
 
   final Map<String, String> generatedCodes = {
@@ -149,31 +138,52 @@ class OnboardingData {
 
   int inviteCount(String roleKey) => invites[roleKey]?.length ?? 0;
 
-  Map<String, int> get inviteCounts => invites.map(
-        (key, value) => MapEntry(key, value.length),
-      );
+  List<String> get creatorRoles {
+    if (!creatorUsesWorkit || creatorRoleKey == null) return [];
+    if (creatorRoleKey == 'commercial_metreur') {
+      return ['commercial', 'metreur'];
+    }
+    return [creatorRoleKey!];
+  }
 
-  int get totalInvites => inviteCounts.values.fold(0, (sum, value) => sum + value);
+  String? get creatorRoleLabel {
+    if (!creatorUsesWorkit || creatorRoleKey == null) return null;
+    if (creatorRoleKey == 'commercial_metreur') {
+      return 'Commercial + Métreur';
+    }
+    return roleDisplayName(creatorRoleKey!);
+  }
+
+  int roleUsageCount(String roleKey) {
+    final base = inviteCount(roleKey);
+    final selfUsage = creatorRoles.contains(roleKey) ? 1 : 0;
+    return base + selfUsage;
+  }
+
+  Map<String, int> get inviteCounts =>
+      invites.map((key, value) => MapEntry(key, value.length));
+
+  int get totalInvites =>
+      inviteCounts.values.fold(0, (sum, value) => sum + value);
 
   int? seatLimit(String roleKey) => plan?.seatForRole(roleKey);
 
   int? remainingSeats(String roleKey) {
     final limit = seatLimit(roleKey);
     if (limit == null) return null;
-    final remaining = limit - inviteCount(roleKey);
+    final remaining = limit - roleUsageCount(roleKey);
     return remaining < 0 ? 0 : remaining;
   }
 
   String seatUsageLabel(String roleKey) {
     final limit = seatLimit(roleKey);
-    final count = inviteCount(roleKey);
+    final count = roleUsageCount(roleKey);
     if (limit == null) {
       return '$count / ∞';
     }
     return '$count / $limit';
   }
 
-  Map<String, dynamic> get seatUsageForFirestore => invites.map(
-        (key, value) => MapEntry(key, value.length),
-      );
+  Map<String, dynamic> get seatUsageForFirestore =>
+      {for (final key in onboardingRoles) key: roleUsageCount(key)};
 }

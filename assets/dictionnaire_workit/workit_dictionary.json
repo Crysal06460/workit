@@ -1,0 +1,2950 @@
+{
+  "workit_commercial": {
+    "part1_client": {
+      "fields": {
+        "nom": { "type": "text", "required": true },
+        "prenom": { "type": "text", "required": false },
+        "adresse_rue": { "type": "text", "required": true },
+        "adresse_code_postal": { "type": "number", "required": true },
+        "adresse_ville_auto": { "type": "auto", "source": "code_postal" },
+        "telephone": { "type": "tel", "required": true },
+        "email": { "type": "email", "required": false }
+      }
+    },
+    "part2_infos_generales": {
+      "fields": {
+        "type_chantier": {
+          "type": "dropdown",
+          "choices": ["Neuf", "Rénovation légère", "Rénovation complète", "Dépannage"]
+        },
+        "urgence": {
+          "type": "dropdown",
+          "choices": ["Non urgent", "48h", "24h", "Intervention immédiate"]
+        },
+        "site_accessibilite": {
+          "type": "dropdown",
+          "choices": [
+            "Accès facile",
+            "Accès difficile",
+            "Échelle nécessaire",
+            "Nacelle nécessaire",
+            "Accès intérieur uniquement"
+          ]
+        },
+        "commentaires_generaux": { "type": "textarea", "required": false }
+      }
+    },
+    "part3_produits": {
+      "card_structure": {
+        "produit": {
+          "type": "dropdown",
+          "choices_dynamic": "metiers[*].categories"
+        },
+        "sous_categorie": {
+          "type": "dropdown",
+          "choices_dynamic": "metiers[*].categories[*].sous_categories"
+        },
+        "type_produit": {
+          "type": "dropdown",
+          "choices_dynamic": "metiers[*].categories[*].types"
+        },
+        "configuration": {
+          "type": "dropdown",
+          "choices_dynamic": "metiers[*].categories[*].types[*].variantes"
+        },
+        "couleur": {
+          "type": "dropdown",
+          "choices_dynamic": "metiers[*].options.couleurs"
+        },
+        "materiau": {
+          "type": "dropdown",
+          "choices_dynamic": "metiers[*].categories[*].sous_categories"
+        },
+        "dimensions": {
+          "largeur": { "type": "number" },
+          "hauteur": { "type": "number" },
+          "unite": {
+            "type": "dropdown",
+            "choices": ["mm", "cm", "m"]
+          }
+        },
+        "quantite": {
+          "type": "number",
+          "min": 1
+        }
+      },
+      "actions": ["ajouter_produit", "supprimer_produit"]
+    },
+    "part4_date_previsionnelle": {
+      "date_prevue": {
+        "type": "datepicker",
+        "required": false
+      }
+    },
+    "part5_commentaires": {
+      "commentaires_libres": {
+        "type": "textarea"
+      }
+    },
+    "bouton_soumettre": {
+      "label": "Soumettre le devis",
+      "action": "submit"
+    }
+  },
+  "metiers": {
+    "menuiserie_aluminium": {
+      "label": "Menuiserie Aluminium / PVC / Bois / Mixte",
+      "categories": {
+        "menuiseries_exterieures": {
+          "label": "Menuiseries extérieures",
+          "sous_categories": ["Aluminium", "PVC", "Bois", "Mixte", "Acier"],
+          "types": {
+            "coulissant": {
+              "label": "Coulissant",
+              "variantes": [
+                "2 vantaux / 2 rails",
+                "3 vantaux / 3 rails",
+                "4 vantaux / 2 rails",
+                "4 vantaux / 4 rails",
+                "6 vantaux / 3 rails",
+                "Coulissant à levage",
+                "Coulissant ouvrant caché",
+                "Galandage simple",
+                "Galandage double"
+              ]
+            },
+            "a_la_francaise": {
+              "label": "À la française",
+              "variantes": [
+                "1 battant",
+                "2 battants",
+                "1 battant + 1 fixe",
+                "1 fixe + 1 battant + 1 fixe",
+                "2 battants + imposte",
+                "2 battants + allège",
+                "Combinaisons multi-fixes"
+              ]
+            },
+            "oscillo_battant": {
+              "label": "Oscillo-battant",
+              "variantes": [
+                "1 vantail OB",
+                "1 OB + 1 fixe",
+                "1 OB + 1 battant",
+                "2 vantaux dont 1 OB"
+              ]
+            },
+            "soufflet": {
+              "label": "Soufflet",
+              "variantes": ["Soufflet seul", "Soufflet + imposte", "Soufflet intégré"]
+            },
+            "fixe": {
+              "label": "Fixe",
+              "variantes": [
+                "Fixe simple",
+                "Fixe bandeau",
+                "Fixe imposte",
+                "Fixe latéral",
+                "Fixe trapèze",
+                "Fixe cintré"
+              ]
+            },
+            "porte_entree": {
+              "label": "Porte d'entrée",
+              "variantes": [
+                "Pleine",
+                "Semi-vitrée",
+                "Vitrée",
+                "Avec tierce",
+                "Avec 2 tierces",
+                "Avec imposte"
+              ]
+            },
+            "chassis_composes": {
+              "label": "Châssis composés",
+              "variantes": [
+                "Allège vitrée",
+                "Allège pleine",
+                "Imposte ouvrante",
+                "Imposte fixe",
+                "Latéraux fixes"
+              ]
+            }
+          },
+          "options": {
+            "materiaux": ["Aluminium", "PVC", "Bois", "Mixte", "Acier"],
+            "couleurs": {
+              "aluminium_ral": "Tous RAL (mat, satin, texturé, brillant)",
+              "bicoloration": true,
+              "bois_essences": ["Chêne", "Pin", "Mélèze", "Exotique"]
+            },
+            "vitrages": [
+              "Double vitrage 4/16/4",
+              "Triple vitrage",
+              "Feuilleté 44.2 / 44.4",
+              "Contrôle solaire",
+              "Acoustique renforcé",
+              "Opaque sablé / dépoli",
+              "Retardateur effraction"
+            ],
+            "equipements": [
+              "Crémone 1 point",
+              "Crémone 3 points",
+              "Ferrures invisibles",
+              "Limiteur d'ouverture",
+              "Aérateurs",
+              "Petits bois"
+            ]
+          },
+          "dimensions": {
+            "largeur": { "unit": ["mm", "cm", "m"] },
+            "hauteur": { "unit": ["mm", "cm", "m"] }
+          }
+        },
+        "volets_roulants": {
+          "label": "Volets roulants",
+          "sous_categories": ["Rénovation", "Bloc-baie", "Traditionnel"],
+          "types": {
+            "vr_aluminium": {
+              "label": "VR Aluminium",
+              "variantes": ["Lames isolées", "Lames extrudées", "Ajourées / Pleines"]
+            },
+            "vr_pvc": {
+              "label": "VR PVC",
+              "variantes": ["Lames PVC standard"]
+            }
+          },
+          "options": {
+            "manoeuvres": [
+              "Manivelle",
+              "Sangle",
+              "Motorisation filaire",
+              "Radio IO",
+              "Radio RTS",
+              "Motorisation solaire"
+            ],
+            "coffres": ["Pan coupé", "Arrondi", "Carré"],
+            "couleurs": "Tous RAL"
+          },
+          "dimensions": {
+            "largeur": {},
+            "hauteur": {}
+          }
+        },
+        "volets_battants": {
+          "label": "Volets battants",
+          "sous_categories": ["Bois", "Aluminium", "PVC"],
+          "types": {
+            "plein": { "label": "Plein", "variantes": ["1 vantail", "2 vantaux", "3/4 vantaux"] },
+            "persienne": {
+              "label": "Persienné",
+              "variantes": ["Ajouré", "Semi-ajouré"]
+            }
+          },
+          "options": {
+            "barres": ["Barres", "Barres + écharpes", "Sans barres"],
+            "ferrures": ["Arrêt marseillais", "Arrêt espagnol", "Crémaillère"]
+          }
+        },
+        "stores_exterieurs": {
+          "label": "Stores extérieurs",
+          "types": {
+            "banne": {
+              "label": "Store banne",
+              "variantes": ["Coffre intégral", "Semi-coffre", "Monobloc"]
+            },
+            "vertical": { "label": "Vertical", "variantes": ["ZIP", "Guidé"] }
+          },
+          "options": {
+            "motorisation": ["Radio", "Filaire"],
+            "capteurs": ["Vent", "Soleil"],
+            "eclairage": ["LED bras", "LED coffre"]
+          }
+        },
+        "stores_interieurs": {
+          "label": "Stores intérieurs",
+          "types": {
+            "enrouleur": { "label": "Enrouleur" },
+            "venitien": { "label": "Vénitien (alu/bois)" },
+            "californien": { "label": "Bandes verticales" },
+            "bateau": { "label": "Bateau" }
+          },
+          "options": {
+            "tissus": ["Tamisant", "Occultant", "Screen"],
+            "commandes": ["Chaînette", "Motorisé"]
+          }
+        },
+        "portes_garage": {
+          "label": "Portes de garage",
+          "types": {
+            "sectionnelle": {
+              "label": "Sectionnelle",
+              "variantes": ["Plafond", "Latérale"]
+            },
+            "enroulable": { "label": "Enroulable" }
+          },
+          "options": {
+            "motorisation": ["Radio", "Chaîne", "Courroie"],
+            "hublots": ["Ronds", "Carrés"]
+          }
+        },
+        "portails": {
+          "label": "Portails",
+          "types": {
+            "battant": { "label": "Battant", "variantes": ["1 vantail", "2 vantaux"] },
+            "coulissant": { "label": "Coulissant", "variantes": ["Rail", "Autoporté"] }
+          },
+          "options": {
+            "materiaux": ["Alu", "Acier"],
+            "motorisation": ["Bras", "Enterré", "Crémaillère"],
+            "style": ["Plein", "Ajouré", "Semi-ajouré"]
+          }
+        },
+        "pergolas": {
+          "label": "Pergolas / Vérandas",
+          "types": {
+            "bioclimatique": {
+              "label": "Bioclimatique",
+              "variantes": ["1 module", "Multi-modules"]
+            },
+            "pergola_toile": { "label": "Pergola toile", "variantes": ["Toile zip", "Rétractable"] }
+          },
+          "options": {
+            "fermetures": ["Stores ZIP", "Vitrage coulissant"],
+            "eclairage": ["LED périphériques", "LED lames"],
+            "capteurs": ["Pluie", "Vent"]
+          }
+        },
+        "moustiquaires": {
+          "label": "Moustiquaires",
+          "types": {
+            "enroulable_verticale": { "label": "Enroulable verticale" },
+            "enroulable_laterale": { "label": "Enroulable latérale" },
+            "coulissante": { "label": "Coulissante" },
+            "fixe": { "label": "Fixe" }
+          }
+        }
+      },
+      "options": {
+        "couleurs": {
+          "ral": "Tous RAL",
+          "bicoloration": true
+        }
+      }
+    },
+    "platrerie_isolation_cloisons": {
+      "label": "Plâtrerie – Isolation – Cloisons",
+      "categories": {
+        "cloisons": {
+          "label": "Cloisons intérieures",
+          "types": {
+            "cloison_placo": {
+              "label": "Cloison Placo",
+              "variantes": [
+                "72/48",
+                "98/48",
+                "120/48",
+                "160/48",
+                "Cloison phonique renforcée",
+                "Cloison coupe-feu (EI30/EI60)"
+              ]
+            },
+            "cloison_modulaire": {
+              "label": "Cloison modulaire",
+              "variantes": [
+                "Pleine",
+                "Vitrée simple",
+                "Vitrée double",
+                "Avec stores intégrés",
+                "Semi-vitrée"
+              ]
+            },
+            "cloison_verriere": {
+              "label": "Verrière intérieure",
+              "variantes": [
+                "Verrière fixe",
+                "Verrière avec soubassement",
+                "Verrière atelier",
+                "Verrière + porte"
+              ]
+            }
+          },
+          "options": {
+            "finitions": [
+              "Prête à peindre",
+              "Enduit lisse",
+              "Enduit renforcé",
+              "Joints bande papier",
+              "Joints bande armée"
+            ],
+            "isolants": ["Laine de verre", "Laine de roche", "Isolant acoustique", "Aucun"],
+            "performances": [
+              "Acoustique standard",
+              "Acoustique renforcé",
+              "Résistance au feu EI30",
+              "Résistance au feu EI60"
+            ]
+          },
+          "dimensions": {
+            "largeur": {},
+            "hauteur": {},
+            "epaisseur": { "choices": ["48mm", "72mm", "98mm", "120mm", "160mm"] }
+          }
+        },
+        "doublages_isolation": {
+          "label": "Doublages & Isolation",
+          "types": {
+            "doublage_placo_isolation": {
+              "label": "Doublage placo + isolant",
+              "variantes": ["Doublage collé", "Ossature métallique + isolant + placo"]
+            },
+            "isolation_thermique": {
+              "label": "Isolation thermique",
+              "variantes": [
+                "Laine de verre",
+                "Laine de roche",
+                "Polyuréthane",
+                "Polystyrène",
+                "Fibre de bois"
+              ]
+            },
+            "isolation_phonique": {
+              "label": "Isolation phonique",
+              "variantes": [
+                "Laine acoustique",
+                "Plaque phonique",
+                "Système double ossature"
+              ]
+            }
+          },
+          "options": {
+            "epaissseurs_isolants": [
+              "45mm",
+              "70mm",
+              "90mm",
+              "100mm",
+              "120mm",
+              "140mm"
+            ]
+          },
+          "dimensions": {
+            "largeur": {},
+            "hauteur": {}
+          }
+        },
+        "plafonds": {
+          "label": "Faux plafonds & Plafonds",
+          "types": {
+            "faux_plafond_placo": {
+              "label": "Faux-plafond Placo",
+              "variantes": ["BA13", "BA15", "BA18", "Hydrofuge", "Phonique"]
+            },
+            "faux_plafond_dalle": {
+              "label": "Faux-plafond dalle",
+              "variantes": [
+                "Dalles 600x600",
+                "Dalles 1200x600",
+                "Acoustiques",
+                "Dalles techniques"
+              ]
+            }
+          },
+          "options": {
+            "structures": ["Ossature métallique", "Suspentes acoustiques", "Fourrures renforcées"],
+            "acoustique": ["Standard", "Renforcée"],
+            "spot_led_prevu": ["Oui", "Non"]
+          },
+          "dimensions": {
+            "surface_m2": { "type": "area" },
+            "hauteur_sous_plafond": {}
+          }
+        },
+        "enduits": {
+          "label": "Enduits & Finitions",
+          "types": {
+            "enduit_lissage": {
+              "label": "Enduit de lissage",
+              "variantes": ["Lissage complet", "Reprises ponctuelles"]
+            },
+            "enduit_joint": {
+              "label": "Enduit joints plaques",
+              "variantes": ["Joints papier", "Joints armés"]
+            }
+          },
+          "options": {
+            "finitions": [
+              "Prêt à peindre",
+              "Finition soignée",
+              "Sans ponçage",
+              "Ponçage fin inclus"
+            ]
+          }
+        }
+      },
+      "options": {
+        "couleurs": {
+          "standard": ["Blanc", "Blanc mat", "Gris clair", "Beige", "Aucun (brut)"]
+        },
+        "performances": {
+          "thermique": ["R", "RT2012", "RE2020"],
+          "phonique": ["Standard", "Renforcé (>50 dB)"]
+        }
+      }
+    },
+    "electricite_courants_faibles": {
+      "label": "Électricité – Courants faibles",
+      "categories": {
+        "tableaux_electriques": {
+          "label": "Tableaux électriques",
+          "types": {
+            "tableau_neuf": {
+              "label": "Tableau complet – Neuf",
+              "variantes": [
+                "Tableau résidentiel",
+                "Tableau tertiaire",
+                "Pré-câblé",
+                "Personnalisé"
+              ]
+            },
+            "tableau_renovation": {
+              "label": "Tableau – Rénovation",
+              "variantes": [
+                "Remplacement complet",
+                "Mise en sécurité (NF C15-100)",
+                "Ajout rangée(s)"
+              ]
+            }
+          },
+          "options": {
+            "modules": [
+              "Disjoncteur 10A",
+              "Disjoncteur 16A",
+              "Disjoncteur 20A",
+              "Disjoncteur 32A",
+              "Inter différentiel Type AC",
+              "Inter différentiel Type A",
+              "Para-surtenseur",
+              "Peignes d'alimentation"
+            ],
+            "marques": ["Legrand", "Schneider", "Hager", "Autre"]
+          }
+        },
+        "cablage_circuits": {
+          "label": "Câblage & circuits",
+          "types": {
+            "prises_electriques": {
+              "label": "Prises électriques",
+              "variantes": [
+                "Prise 16A",
+                "Prise renforcée 20A",
+                "Prise extérieure IP55",
+                "Prise spécialisée (LL, LV, Four, etc.)"
+              ]
+            },
+            "eclairage_interieur": {
+              "label": "Éclairage intérieur",
+              "variantes": [
+                "Points lumineux simples",
+                "Va-et-vient",
+                "Spots encastrés",
+                "Dalles LED",
+                "Appliques"
+              ]
+            },
+            "eclairage_exterieur": {
+              "label": "Éclairage extérieur",
+              "variantes": [
+                "Projecteur LED",
+                "Applique IP65",
+                "Spot sol",
+                "Balise LED"
+              ]
+            },
+            "chauffage_electrique": {
+              "label": "Chauffage électrique",
+              "variantes": [
+                "Radiateur panneau rayonnant",
+                "Radiateur inertie",
+                "Sèche-serviette",
+                "Plancher chauffant électrique"
+              ]
+            }
+          },
+          "options": {
+            "sections_cables": [
+              "1.5 mm²",
+              "2.5 mm²",
+              "4 mm²",
+              "6 mm²",
+              "10 mm²"
+            ],
+            "gainage": ["Gaines ICTA", "Gaines préfilées", "Chemin de câble"],
+            "protection": ["Disjoncteur", "Inter diff", "Sans protection (rallonge)"]
+          }
+        },
+        "domotique": {
+          "label": "Domotique",
+          "types": {
+            "box_domotique": {
+              "label": "Box domotique",
+              "variantes": [
+                "Somfy TaHoma",
+                "Delta Dore Tydom",
+                "Jeedom",
+                "Autre box compatible"
+              ]
+            },
+            "modules_domotiques": {
+              "label": "Modules domotiques",
+              "variantes": [
+                "Module volet roulant",
+                "Module lumière",
+                "Module prise connectée",
+                "Thermostat connecté",
+                "Détecteurs divers (mouvement, fumée, fuite…)"
+              ]
+            }
+          },
+          "options": {
+            "protocoles": [
+              "IO",
+              "RTS",
+              "Zigbee",
+              "Z-Wave",
+              "Wifi",
+              "Bluetooth"
+            ]
+          }
+        },
+        "courants_faibles": {
+          "label": "Courants faibles",
+          "types": {
+            "reseau_informatique": {
+              "label": "Réseau informatique",
+              "variantes": [
+                "RJ45 Cat 6",
+                "RJ45 Cat 6A",
+                "RJ45 Cat 7",
+                "Baie de brassage",
+                "Switch"
+              ]
+            },
+            "videosurveillance": {
+              "label": "Vidéosurveillance",
+              "variantes": [
+                "Caméra IP",
+                "Caméra analogique",
+                "Caméra motorisée",
+                "NVR / Enregistreur"
+              ]
+            },
+            "alarme": {
+              "label": "Alarme",
+              "variantes": [
+                "Détecteur ouverture",
+                "Détecteur mouvement",
+                "Sirène intérieure",
+                "Sirène extérieure",
+                "Centrale alarme"
+              ]
+            }
+          },
+          "options": {
+            "marques": ["Hikvision", "Dahua", "Ajax", "Somfy", "Autres"],
+            "alimentation": ["PoE", "12V", "Batterie"]
+          }
+        },
+        "irve": {
+          "label": "Bornes de recharge (IRVE)",
+          "types": {
+            "borne_mono": {
+              "label": "Borne monophasée",
+              "variantes": ["7 kW", "9 kW"]
+            },
+            "borne_tri": {
+              "label": "Borne triphasée",
+              "variantes": ["11 kW", "22 kW"]
+            }
+          },
+          "options": {
+            "marques": ["Wallbox", "Schneider", "Legrand", "Hager"],
+            "pilotage": ["Wifi", "Bluetooth", "4G"],
+            "securite": ["Différentiel Type A", "Différentiel Type F", "Disjoncteur courbe C"]
+          }
+        }
+      },
+      "options": {
+        "couleurs": {
+          "appareillage": ["Blanc", "Noir", "Alu", "Anthracite"],
+          "ip": ["IP20", "IP44", "IP65"]
+        },
+        "normes": ["NF C15-100", "IRVE obligatoire certif", "Sécurité incendie"],
+        "marques_generales": ["Legrand", "Schneider", "Hager", "Somfy", "Hikvision", "Bosch"]
+      }
+    },
+    "chauffage_climatisation_ventilation": {
+      "label": "Chauffage – Climatisation – Ventilation",
+      "categories": {
+        "climatisation": {
+          "label": "Climatisation",
+          "types": {
+            "mono_split": {
+              "label": "Mono-split",
+              "variantes": [
+                "Murale",
+                "Console",
+                "Plafonnier",
+                "Cassette 600x600",
+                "Gainable compact"
+              ]
+            },
+            "multi_split": {
+              "label": "Multi-split",
+              "variantes": [
+                "2 unités intérieures",
+                "3 unités intérieures",
+                "4 unités intérieures",
+                "5 unités intérieures"
+              ]
+            },
+            "gainable": {
+              "label": "Gainable",
+              "variantes": [
+                "Gainable simple",
+                "Gainable haute pression",
+                "Gainable pour pièce multi-sorties"
+              ]
+            }
+          },
+          "options": {
+            "puissances_kw": ["2.5 kW", "3.5 kW", "5 kW", "7 kW", "10 kW", "12 kW", "15 kW"],
+            "marques": ["Daikin", "Mitsubishi", "Toshiba", "Hitachi", "LG", "Panasonic"],
+            "fluide_frigo": ["R32", "R410A"],
+            "thermostats": ["Télécommande", "Wifi", "Fil pilote", "Système domotique"],
+            "longueur_liaisons_max": ["5m", "10m", "15m", "20m", "30m"]
+          },
+          "dimensions": {
+            "surface_piece_m2": {},
+            "hauteur_plafond": {}
+          }
+        },
+        "pompes_a_chaleur": {
+          "label": "Pompes à chaleur",
+          "types": {
+            "pac_air_air": {
+              "label": "PAC Air/Air (clim réversible)",
+              "variantes": ["Mono-split", "Multi-split", "Gainable"]
+            },
+            "pac_air_eau": {
+              "label": "PAC Air/Eau",
+              "variantes": [
+                "Monobloc",
+                "Bi-bloc",
+                "Ballon thermodynamique intégré",
+                "Plancher chauffant"
+              ]
+            },
+            "pac_eau_eau": {
+              "label": "PAC Eau/Eau",
+              "variantes": ["Géothermie horizontale", "Géothermie verticale"]
+            }
+          },
+          "options": {
+            "puissances_kw": [
+              "4 kW",
+              "6 kW",
+              "8 kW",
+              "10 kW",
+              "12 kW",
+              "16 kW",
+              "18 kW",
+              "20 kW"
+            ],
+            "production_eau_chaude": ["Avec ECS", "Sans ECS"],
+            "ballon_ecs": ["150L", "200L", "250L", "300L"],
+            "marques": ["Daikin", "Mitsubishi", "Atlantic", "Hitachi", "Panasonic", "Viessmann"],
+            "chauffage": ["Radiateurs", "Plancher chauffant", "Ventilo-convecteurs"]
+          },
+          "dimensions": {
+            "surface_maison": {},
+            "hauteur_sous_plafond": {}
+          }
+        },
+        "chauffage": {
+          "label": "Chauffage",
+          "types": {
+            "chaudiere_gaz": {
+              "label": "Chaudière gaz",
+              "variantes": ["Condensation", "Basse température"]
+            },
+            "chaudiere_fioul": {
+              "label": "Chaudière fioul",
+              "variantes": [
+                "Condensation",
+                "Basse température",
+                "Fioul hybride (avec PAC)"
+              ]
+            },
+            "radiateurs": {
+              "label": "Radiateurs",
+              "variantes": [
+                "Radiateur eau chaude",
+                "Radiateur électrique inertie",
+                "Radiateur panneau rayonnant",
+                "Sèche-serviette"
+              ]
+            },
+            "poeles": {
+              "label": "Poêles",
+              "variantes": [
+                "Poêle à granulés",
+                "Poêle à bois",
+                "Insert cheminée",
+                "Poêle étanche"
+              ]
+            }
+          },
+          "options": {
+            "puissance_radiateurs_kw": ["500W", "1000W", "1500W", "2000W"],
+            "evacuation": ["Ventouse", "Cheminée", "Tubage"],
+            "marques": ["Atlantic", "Saunier Duval", "Viessmann", "De Dietrich", "Godin"],
+            "regulation": ["Thermostat d'ambiance", "Programmation", "Connecté Wi-Fi"]
+          },
+          "dimensions": {
+            "surface_a_chauffer": {},
+            "hauteur_sous_plafond": {}
+          }
+        },
+        "ventilation": {
+          "label": "Ventilation & Extraction",
+          "types": {
+            "vmc_simple_flux": {
+              "label": "VMC simple flux",
+              "variantes": ["Auto-réglable", "Hygro A", "Hygro B"]
+            },
+            "vmc_double_flux": {
+              "label": "VMC double flux",
+              "variantes": ["Échangeur standard", "Rendement haut (>90%)"]
+            },
+            "extraction_salle_de_bain": {
+              "label": "Extraction sanitaire",
+              "variantes": ["Extraction simple", "Extraction hygro", "Temporisée"]
+            }
+          },
+          "options": {
+            "diametres": ["80mm", "100mm", "125mm", "150mm"],
+            "marques": ["Atlantic", "Aldes", "Vortice"],
+            "acoustique": ["Standard", "Renforcé (faible bruit)"]
+          }
+        },
+        "traitement_air": {
+          "label": "Traitement de l'air",
+          "types": {
+            "purificateur": {
+              "label": "Purificateur d'air",
+              "variantes": ["HEPA", "Charbon actif", "Ionisation"]
+            },
+            "deshumidificateur": {
+              "label": "Déshumidificateur",
+              "variantes": ["Résidentiel", "Professionnel"]
+            }
+          },
+          "options": {
+            "capacite_l_j": ["10L/j", "20L/j", "40L/j", "80L/j"]
+          }
+        }
+      },
+      "options": {
+        "couleurs": {
+          "standard": ["Blanc", "Anthracite", "Noir", "Inox"],
+          "unit_exterieure": ["Blanc", "Gris clair"]
+        },
+        "evacuations": ["Goulotte", "Encastré", "Gaine technique", "Apparent"],
+        "energie": ["Électricité", "Gaz", "Fioul", "Granulés", "Bois"],
+        "marques_generales": [
+          "Daikin",
+          "Mitsubishi",
+          "Atlantic",
+          "Hitachi",
+          "Panasonic",
+          "LG",
+          "Viessmann"
+        ]
+      }
+    },
+    "plomberie_sanitaire": {
+      "label": "Plomberie – Sanitaire",
+      "categories": {
+        "alimentation_eau": {
+          "label": "Alimentation en eau",
+          "types": {
+            "creation_reseau": {
+              "label": "Création réseau eau",
+              "variantes": [
+                "Eau froide",
+                "Eau chaude",
+                "Boucle ECS",
+                "Collecteur + nourrices"
+              ]
+            },
+            "modification_reseau": {
+              "label": "Modification réseau existant",
+              "variantes": [
+                "Déplacement alimentation",
+                "Extension réseau",
+                "Remplacement partiel"
+              ]
+            }
+          },
+          "options": {
+            "materiaux": ["PER", "Multicouche", "Cuivre"],
+            "diametres": ["12mm", "16mm", "20mm", "26mm"],
+            "isolation_tubes": ["Oui", "Non"]
+          },
+          "dimensions": {
+            "longueur_reseau_m": {},
+            "nombre_points_eau": {}
+          }
+        },
+        "evacuation": {
+          "label": "Évacuations",
+          "types": {
+            "creation_evacuation": {
+              "label": "Création évacuation",
+              "variantes": [
+                "PVC",
+                "PEHD",
+                "Évacuation sol",
+                "Évacuation murale"
+              ]
+            },
+            "modification_evacuation": {
+              "label": "Modification",
+              "variantes": [
+                "Déplacement évacuation",
+                "Reprise siphonique",
+                "Ajout pente"
+              ]
+            }
+          },
+          "options": {
+            "diametres": ["32mm", "40mm", "50mm", "80mm", "100mm"],
+            "siphons": ["Siphon classique", "Siphon extra-plat", "Siphon PMR"]
+          }
+        },
+        "chauffe_eau": {
+          "label": "Chauffe-eau & Ballons",
+          "types": {
+            "chauffe_eau_electrique": {
+              "label": "Chauffe-eau électrique",
+              "variantes": ["50L", "75L", "100L", "150L", "200L", "300L"]
+            },
+            "chauffe_eau_thermodynamique": {
+              "label": "Ballon thermodynamique",
+              "variantes": ["Split", "Monobloc"]
+            },
+            "chauffe_eau_gaz": {
+              "label": "Chauffe-eau gaz",
+              "variantes": ["Instantané", "Accumulation"]
+            }
+          },
+          "options": {
+            "marques": ["Atlantic", "Thermor", "Ariston", "De Dietrich"],
+            "pose_support": ["Murale", "Sol"],
+            "evacuation_condensats": ["Oui", "Non"]
+          },
+          "dimensions": {
+            "litres": {},
+            "hauteur": {},
+            "diametre": {}
+          }
+        },
+        "wc": {
+          "label": "WC & Sanitaires",
+          "types": {
+            "wc_classique": {
+              "label": "WC classique",
+              "variantes": [
+                "Sortie horizontale",
+                "Sortie verticale",
+                "Compact"
+              ]
+            },
+            "wc_suspendu": {
+              "label": "WC suspendu",
+              "variantes": [
+                "Bâti-support standard",
+                "Bâti-support autoportant",
+                "Plaque de commande",
+                "Cuvette sans bride"
+              ]
+            },
+            "wc_broyeur": {
+              "label": "WC broyeur",
+              "variantes": ["Alimentation arrière", "Alimentation latérale"]
+            }
+          },
+          "options": {
+            "plaques_commande": ["Blanc", "Chrome", "Noir"],
+            "abatants": ["Classique", "Frein de chute", "Démontable"]
+          }
+        },
+        "salles_de_bain": {
+          "label": "Salles de bain & Douches",
+          "types": {
+            "receveur_douche": {
+              "label": "Receveur de douche",
+              "variantes": [
+                "Extra-plat",
+                "Acrylique",
+                "Résine",
+                "Receveur à carreler",
+                "Douche italienne"
+              ]
+            },
+            "parois_douche": {
+              "label": "Parois de douche",
+              "variantes": [
+                "Porte pivotante",
+                "Porte coulissante",
+                "Paroi fixe",
+                "Walk-in",
+                "Traitement anticalcaire"
+              ]
+            },
+            "robinetterie": {
+              "label": "Robinetterie",
+              "variantes": [
+                "Mitigeur lavabo",
+                "Mitigeur baignoire",
+                "Colonne de douche",
+                "Barre thermostatique",
+                "Encastré mural"
+              ]
+            },
+            "meubles_sdb": {
+              "label": "Meubles de SDB",
+              "variantes": [
+                "Meuble simple vasque",
+                "Meuble double vasque",
+                "Plan vasque",
+                "Armoire miroir"
+              ]
+            }
+          },
+          "options": {
+            "finitions": ["Blanc", "Bois", "Anthracite", "Noir mat"],
+            "verre": ["Transparent", "Dépolie", "Sérigraphié"],
+            "evacuation": ["Siphon extra-plat", "Siphon classique"]
+          },
+          "dimensions": {
+            "largeur": {},
+            "profondeur": {},
+            "hauteur": {}
+          }
+        },
+        "cuisines_plomberie": {
+          "label": "Plomberie cuisine",
+          "types": {
+            "evier": {
+              "label": "Évier",
+              "variantes": [
+                "Inox",
+                "Résine",
+                "Céramique",
+                "1 bac",
+                "2 bacs"
+              ]
+            },
+            "mitigeur_cuisine": {
+              "label": "Mitigeur cuisine",
+              "variantes": [
+                "Classique",
+                "Douchette extractible",
+                "Col de cygne",
+                "Noir mat / Inox / Chromé"
+              ]
+            },
+            "lave_vaisselle": {
+              "label": "Raccord Lave-vaisselle",
+              "variantes": [
+                "Alimentation + évacuation",
+                "Déplacement alimentation",
+                "Création évacuation"
+              ]
+            }
+          }
+        },
+        "depannage": {
+          "label": "Dépannage plomberie",
+          "types": {
+            "fuite": {
+              "label": "Recherche & réparation fuite",
+              "variantes": [
+                "Fuite visible",
+                "Fuite encastrée",
+                "Fuite sanitaire",
+                "Fuite chauffage"
+              ]
+            },
+            "debouchage": {
+              "label": "Débouchage",
+              "variantes": [
+                "Lavabo",
+                "Douche",
+                "WC",
+                "Canalisation principale"
+              ]
+            }
+          }
+        }
+      },
+      "options": {
+        "marques": ["GROHE", "Hansgrohe", "Jacob Delafon", "Geberit", "Ideal Standard"],
+        "materiaux_tuyaux": ["PER", "Multicouche", "Cuivre", "PVC"],
+        "couleurs_robinetterie": ["Chrome", "Inox", "Noir mat", "Blanc"],
+        "evacuation": ["Au sol", "Murale", "Encastrée"],
+        "pression_eau": ["Standard", "Basse pression"]
+      }
+    },
+    "peinture_revetements": {
+      "label": "Peinture – Revêtements",
+      "categories": {
+        "peinture_interieure": {
+          "label": "Peinture intérieure",
+          "types": {
+            "murs": {
+              "label": "Murs",
+              "variantes": [
+                "Acrylique mate",
+                "Acrylique satin",
+                "Acrylique velours",
+                "Glycéro satin",
+                "Peinture monocouche",
+                "Peinture cuisine/salle de bain",
+                "Peinture anti-moisissure"
+              ]
+            },
+            "plafonds": {
+              "label": "Plafonds",
+              "variantes": [
+                "Acrylique mate",
+                "Monocouche",
+                "Anti-tâches",
+                "Anti-humidité"
+              ]
+            },
+            "boiseries": {
+              "label": "Boiseries",
+              "variantes": [
+                "Laque satinée",
+                "Laque brillante",
+                "Glycéro",
+                "Vernis",
+                "Lasure intérieure"
+              ]
+            }
+          },
+          "options": {
+            "preparation_support": [
+              "Ponçage léger",
+              "Ponçage complet",
+              "Rebouchage trous",
+              "Reprise fissures",
+              "Ratissage",
+              "Sous-couche"
+            ],
+            "finition": ["Mat", "Satin", "Velours", "Brillant"]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "hauteur_sous_plafond": {}
+          }
+        },
+        "peinture_exterieure": {
+          "label": "Peinture extérieure / Façade",
+          "types": {
+            "facade": {
+              "label": "Façade",
+              "variantes": [
+                "Peinture hydrofuge",
+                "Peinture siloxane",
+                "Peinture acrylique extérieure",
+                "Ravalement complet",
+                "Anti-mousse + peinture"
+              ]
+            },
+            "boiseries_ext": {
+              "label": "Boiseries extérieures",
+              "variantes": [
+                "Lasure",
+                "Peinture microporeuse",
+                "Vernis extérieur"
+              ]
+            },
+            "fermetures": {
+              "label": "Métal et ferronneries",
+              "variantes": [
+                "Anti-rouille + peinture",
+                "Direct sur rouille",
+                "Peinture métal"
+              ]
+            }
+          },
+          "options": {
+            "echafaudage": ["Oui", "Non"],
+            "lavage_support": ["Nettoyage haute pression", "Sans nettoyage"],
+            "protection_intemperies": ["Film polyane", "Bâches", "Aucune"]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "hauteur_travail_m": {}
+          }
+        },
+        "papiers_peints": {
+          "label": "Papiers peints & Revêtements muraux",
+          "types": {
+            "papier_peint": {
+              "label": "Papier peint",
+              "variantes": [
+                "Traditionnel",
+                "Vinyle",
+                "Intissé",
+                "Uni",
+                "Motifs"
+              ]
+            },
+            "fibres_verre": {
+              "label": "Toile de verre / Lissage",
+              "variantes": [
+                "Pose toile de verre",
+                "Pose voile lisse",
+                "Enduit + ponçage"
+              ]
+            }
+          },
+          "options": {
+            "preparation_support": ["Ratissage", "Sous-couche", "Enduit fin"],
+            "retraits": ["Dépose ancien papier", "Dépose complexe (colle forte)"]
+          },
+          "dimensions": {
+            "surface_m2": {}
+          }
+        },
+        "sols": {
+          "label": "Revêtements de sols",
+          "types": {
+            "parquet": {
+              "label": "Parquet",
+              "variantes": [
+                "Parquet flottant",
+                "Parquet stratifié",
+                "Parquet massif",
+                "Parquet contrecollé"
+              ]
+            },
+            "lvt_pvc": {
+              "label": "LVT / PVC",
+              "variantes": [
+                "Dalle PVC",
+                "Lame PVC clipsable",
+                "Lame PVC collée"
+              ]
+            },
+            "moquette": {
+              "label": "Moquette",
+              "variantes": [
+                "Moquette en lé",
+                "Moquette dalle",
+                "Moquette aiguilletée"
+              ]
+            },
+            "sols_souples": {
+              "label": "Sols souples",
+              "variantes": [
+                "Vinyle",
+                "Linoléum",
+                "Caoutchouc"
+              ]
+            }
+          },
+          "options": {
+            "preparation_sous_couche": [
+              "Ragréage",
+              "Ponçage",
+              "Démontage plinthes",
+              "Pose sous-couche acoustique",
+              "Pose sous-couche thermique"
+            ],
+            "plinthes": ["PVC", "Bois", "MDF peint", "Sans plinthes"]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "epaisseur_mm": {}
+          }
+        },
+        "revetements_speciaux": {
+          "label": "Revêtements spéciaux",
+          "types": {
+            "peinture_sol": {
+              "label": "Peinture sol",
+              "variantes": [
+                "Peinture garage",
+                "Peinture extérieur",
+                "Peinture antidérapante"
+              ]
+            },
+            "resine_sol": {
+              "label": "Résine sol",
+              "variantes": [
+                "Résine époxy",
+                "Résine polyuréthane",
+                "Résine décorative"
+              ]
+            }
+          },
+          "options": {
+            "preparation": [
+              "Ponçage béton",
+              "Décrassage",
+              "Primaire d'accroche"
+            ]
+          },
+          "dimensions": {
+            "surface_m2": {}
+          }
+        }
+      },
+      "options": {
+        "couleurs_peinture": [
+          "Blanc",
+          "Blanc cassé",
+          "Gris clair",
+          "Gris foncé",
+          "Noir",
+          "Beige",
+          "Toutes teintes RAL"
+        ],
+        "outils_application": [
+          "Rouleau",
+          "Pinceau",
+          "Pistolet",
+          "Airless"
+        ],
+        "marques": [
+          "Tollens",
+          "Sikkens",
+          "Ripolin",
+          "Dulux",
+          "Zolpan",
+          "Seigneurie"
+        ]
+      }
+    },
+    "carrelage_maconnerie_fine": {
+      "label": "Carrelage – Maçonnerie fine",
+      "categories": {
+        "carrelage_sols": {
+          "label": "Carrelage sols",
+          "types": {
+            "carrelage_standard": {
+              "label": "Carrelage standard",
+              "variantes": [
+                "Carreau 30x30",
+                "Carreau 45x45",
+                "Carreau 60x60",
+                "Carreau 75x75",
+                "Carreau 120x60",
+                "Carreau 90x90"
+              ]
+            },
+            "gres_cerame": {
+              "label": "Grès cérame",
+              "variantes": [
+                "Mat",
+                "Poli",
+                "Antidérapant R10",
+                "Antidérapant R11 extérieur"
+              ]
+            },
+            "carrelage_grand_format": {
+              "label": "Grand format",
+              "variantes": [
+                "120x120",
+                "120x278",
+                "Plaques XXL (≥240 cm)"
+              ]
+            }
+          },
+          "options": {
+            "poses": [
+              "Pose droite",
+              "Pose décalée 1/2",
+              "Pose diagonale",
+              "Pose chevron",
+              "Pose clipsable"
+            ],
+            "joints": [
+              "Joint ciment",
+              "Joint époxy",
+              "Couleur assortie",
+              "Couleur contrastée"
+            ],
+            "preparation_support": [
+              "Ragréage fin",
+              "Ragréage fort",
+              "Démontage ancien sol",
+              "Nettoyage + primaire"
+            ],
+            "plinthes": ["Carrelage", "PVC", "Bois", "Sans plinthes"]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "epaisseur_carrelage_mm": {}
+          }
+        },
+        "carrelage_murs": {
+          "label": "Carrelage murs / Faïence",
+          "types": {
+            "faience": {
+              "label": "Faïence",
+              "variantes": [
+                "20x20",
+                "20x50",
+                "25x33",
+                "30x60",
+                "60x120"
+              ]
+            },
+            "carrelage_sdb": {
+              "label": "Carrelage salle de bain",
+              "variantes": [
+                "Carrelage mural standard",
+                "Grand format",
+                "Carrelage décoratif"
+              ]
+            }
+          },
+          "options": {
+            "poses": [
+              "Pose droite",
+              "Pose verticale",
+              "Pose horizontale",
+              "Pose alignée",
+              "Pose décalée"
+            ],
+            "finition_bords": [
+              "Bords rectifiés",
+              "Bords non rectifiés"
+            ],
+            "etancheite_sdb": [
+              "SPEC – Système étanchéité sous carrelage",
+              "Bande d'angle + primaire",
+              "Aucune (hors zone humide)"
+            ]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "hauteur_pose_m": {}
+          }
+        },
+        "mosaique": {
+          "label": "Mosaïque",
+          "types": {
+            "mosaique_verre": {
+              "label": "Mosaïque verre",
+              "variantes": ["Carrée", "Rectangulaire", "Effet mixte"]
+            },
+            "mosaique_ceramique": {
+              "label": "Mosaïque céramique",
+              "variantes": ["Antidérapante", "Lisse", "Mate"]
+            }
+          },
+          "options": {
+            "zones": [
+              "Sol douche à l'italienne",
+              "Niche murale",
+              "Frise décorative",
+              "Mur complet"
+            ],
+            "joints": ["Ciment", "Époxy (étanche)"]
+          },
+          "dimensions": {
+            "surface_m2": {}
+          }
+        },
+        "pierre_naturelle": {
+          "label": "Pierre naturelle",
+          "types": {
+            "travertin": {
+              "label": "Travertin",
+              "variantes": ["1er choix", "2e choix", "Vieilli", "Brossé"]
+            },
+            "ardoise": {
+              "label": "Ardoise",
+              "variantes": ["Naturelle", "Sciée"]
+            },
+            "marbre": {
+              "label": "Marbre",
+              "variantes": ["Poli", "Mat", "Adouci"]
+            }
+          },
+          "options": {
+            "traitement": ["Hydrofuge", "Antitache", "Anti-glisse"],
+            "pose": ["Collée", "Scellée"]
+          },
+          "dimensions": {
+            "surface_m2": {}
+          }
+        },
+        "chapes": {
+          "label": "Chapes & Maçonnerie fine",
+          "types": {
+            "chape_traditionnelle": {
+              "label": "Chape traditionnelle",
+              "variantes": ["Pour carrelage", "Pour parquet", "Chape dosée spéciale"]
+            },
+            "chape_liquide": {
+              "label": "Chape liquide (anhydrite)",
+              "variantes": ["Auto-nivelante", "Chape fluide sur plancher chauffant"]
+            },
+            "ragréage": {
+              "label": "Ragréage",
+              "variantes": ["Fin", "Moyen", "Fort"]
+            }
+          },
+          "options": {
+            "epaisseurs_possibles": [
+              "3 cm",
+              "4 cm",
+              "5 cm",
+              "6 cm",
+              "≥ 7 cm"
+            ],
+            "armatures": ["Sable + ciment", "Treillis soudé", "Fibres"]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "epaisseur_cm": {}
+          }
+        }
+      },
+      "options": {
+        "colles": [
+          "Colle C1",
+          "Colle C2",
+          "Colle flex",
+          "Colle spéciale grand format"
+        ],
+        "joints": [
+          "Ciment",
+          "Époxy",
+          "Hydrofuge"
+        ],
+        "finitions": [
+          "Plinthes assorties",
+          "Profilés alu",
+          "Profilés PVC",
+          "Joints de dilatation"
+        ],
+        "marques": [
+          "Mapei",
+          "Weber",
+          "Parex",
+          "PCI",
+          "Schlüter"
+        ]
+      }
+    },
+    "cuisine_amenagement_interieur": {
+      "label": "Cuisine – Aménagement intérieur",
+      "categories": {
+        "cuisine_complete": {
+          "label": "Cuisine complète",
+          "types": {
+            "implantation": {
+              "label": "Implantation",
+              "variantes": [
+                "Linéaire",
+                "En L",
+                "En U",
+                "Avec îlot",
+                "Avec péninsule"
+              ]
+            },
+            "caissons": {
+              "label": "Caissons / Modules",
+              "variantes": [
+                "Meuble bas",
+                "Meuble haut",
+                "Colonne four",
+                "Colonne frigo",
+                "Meuble d'angle",
+                "Meuble évier"
+              ]
+            },
+            "portes_tiroirs": {
+              "label": "Portes & tiroirs",
+              "variantes": [
+                "Porte simple",
+                "Tiroir simple",
+                "Tiroir double",
+                "Tiroir casserolier",
+                "Porte coulissante"
+              ]
+            }
+          },
+          "options": {
+            "materiaux_facades": [
+              "Mélaminé",
+              "Laqué mat",
+              "Laqué brillant",
+              "Fenix",
+              "Bois massif",
+              "Stratifié"
+            ],
+            "poignees": [
+              "Sans poignée (gola)",
+              "Poignée profil alu",
+              "Poignée classique",
+              "Bouton"
+            ],
+            "charnières": [
+              "Soft-close",
+              "Classique",
+              "Ouverture 165°",
+              "Push-to-open"
+            ]
+          },
+          "dimensions": {
+            "largeur_element_mm": {},
+            "profondeur_element_mm": {},
+            "hauteur_element_mm": {}
+          }
+        },
+        "plans_de_travail": {
+          "label": "Plans de travail",
+          "types": {
+            "stratifie": {
+              "label": "Stratifié",
+              "variantes": [
+                "28 mm",
+                "38 mm"
+              ]
+            },
+            "bois_massif": {
+              "label": "Bois massif",
+              "variantes": [
+                "Chêne",
+                "Hêtre",
+                "Noyer"
+              ]
+            },
+            "ceramique": {
+              "label": "Céramique",
+              "variantes": [
+                "6 mm",
+                "12 mm"
+              ]
+            },
+            "quartzc": {
+              "label": "Quartz",
+              "variantes": [
+                "20 mm",
+                "30 mm"
+              ]
+            },
+            "granite": {
+              "label": "Granite",
+              "variantes": [
+                "20 mm",
+                "30 mm"
+              ]
+            }
+          },
+          "options": {
+            "decoupes": [
+              "Découpe évier",
+              "Découpe plaque",
+              "Découpe robinetterie",
+              "Rainurage égouttoir",
+              "Bord arrondi",
+              "Bord droit"
+            ],
+            "finitions_bords": [
+              "Chanfrein",
+              "Droit",
+              "Arrondi",
+              "Biseauté"
+            ]
+          },
+          "dimensions": {
+            "longueur_mm": {},
+            "profondeur_mm": {},
+            "epaisseur_mm": {}
+          }
+        },
+        "credences": {
+          "label": "Crédences",
+          "types": {
+            "stratifie": {
+              "label": "Stratifié",
+              "variantes": ["Standard", "Décor bois", "Unis"]
+            },
+            "verre": {
+              "label": "Verre",
+              "variantes": ["Laqué", "Transparent", "Dépoli"]
+            },
+            "inox": {
+              "label": "Inox",
+              "variantes": ["Brossé", "Brillant"]
+            },
+            "ceramique": {
+              "label": "Carrelage / Céramique",
+              "variantes": ["Carrelage classique", "Grand format"]
+            }
+          },
+          "options": {
+            "fixation": ["Collée", "Vissée", "Sur mesure"],
+            "epaisseur": ["4 mm", "6 mm", "8 mm"]
+          },
+          "dimensions": {
+            "longueur_mm": {},
+            "hauteur_mm": {}
+          }
+        },
+        "electromenager": {
+          "label": "Électroménager",
+          "types": {
+            "four": {
+              "label": "Four",
+              "variantes": [
+                "Chaleur tournante",
+                "Pyrolyse",
+                "Catalyse",
+                "Compact micro-ondes"
+              ]
+            },
+            "plaque_cuisson": {
+              "label": "Plaque de cuisson",
+              "variantes": [
+                "Induction",
+                "Vitrocéramique",
+                "Gaz",
+                "Mixte"
+              ]
+            },
+            "hotte": {
+              "label": "Hotte",
+              "variantes": [
+                "Murale",
+                "Encastrée",
+                "Plan de travail",
+                "Îlot"
+              ]
+            },
+            "refrigerateur": {
+              "label": "Réfrigérateur",
+              "variantes": [
+                "Encastrable",
+                "Pose libre",
+                "Combiné",
+                "Américain"
+              ]
+            },
+            "lave_vaisselle": {
+              "label": "Lave-vaisselle",
+              "variantes": [
+                "Integrable",
+                "Semi-intégrable",
+                "45 cm",
+                "60 cm"
+              ]
+            }
+          },
+          "options": {
+            "marques": [
+              "Bosch",
+              "Siemens",
+              "Samsung",
+              "LG",
+              "Whirlpool",
+              "Miele"
+            ],
+            "couleurs": ["Inox", "Noir", "Blanc"]
+          }
+        },
+        "rangements": {
+          "label": "Dressing – Placards – Agencements",
+          "types": {
+            "dressing_ouvert": {
+              "label": "Dressing ouvert",
+              "variantes": [
+                "Étagères",
+                "Penderie",
+                "Tiroirs",
+                "Colonnes"
+              ]
+            },
+            "dressing_portes": {
+              "label": "Dressing avec portes",
+              "variantes": [
+                "Portes battantes",
+                "Portes coulissantes",
+                "Portes miroirs"
+              ]
+            },
+            "placard_sur_mesure": {
+              "label": "Placard sur mesure",
+              "variantes": [
+                "Penderie",
+                "Étagères",
+                "Mixte",
+                "Colonne"
+              ]
+            }
+          },
+          "options": {
+            "materiaux_facades": [
+              "Mélaminé",
+              "Laqué",
+              "Bois",
+              "Verre"
+            ],
+            "poignees": [
+              "Sans poignée",
+              "Profil alu",
+              "Poignée classique"
+            ],
+            "amenagements": [
+              "Penderie",
+              "Tiroirs",
+              "Étagères",
+              "Panier coulissant",
+              "Range-chaussures"
+            ]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {},
+            "profondeur_mm": {}
+          }
+        }
+      },
+      "options": {
+        "couleurs_generales": [
+          "Blanc",
+          "Noir",
+          "Anthracite",
+          "Bois clair",
+          "Bois foncé",
+          "Palette RAL sur demande"
+        ],
+        "finitions_generales": [
+          "Mat",
+          "Satiné",
+          "Brillant",
+          "Texturé"
+        ],
+        "marques_generales": [
+          "Ikea",
+          "Schmidt",
+          "Mobalpa",
+          "Nobilia",
+          "Leroy Merlin",
+          "Cuisine Plus"
+        ]
+      }
+    },
+    "salle_de_bain_etancheite": {
+      "label": "Salle de bain – Étanchéité",
+      "categories": {
+        "receveurs": {
+          "label": "Receveurs de douche",
+          "types": {
+            "receveur_classique": {
+              "label": "Receveur classique",
+              "variantes": [
+                "Acrylique",
+                "Céramique",
+                "Résine",
+                "Extra-plat"
+              ]
+            },
+            "receveur_resine": {
+              "label": "Receveur résine",
+              "variantes": [
+                "Effet pierre",
+                "Antidérapant",
+                "Coloris personnalisés"
+              ]
+            },
+            "receveur_a_carreler": {
+              "label": "Receveur à carreler",
+              "variantes": [
+                "Standard",
+                "Ultra-plat",
+                "Avec pente intégrée"
+              ]
+            },
+            "douche_italienne": {
+              "label": "Douche à l'italienne",
+              "variantes": [
+                "Caniveau inox",
+                "Siphon extra-plat",
+                "Siphon vertical",
+                "Pente naturelle au sol"
+              ]
+            }
+          },
+          "options": {
+            "siphons": [
+              "Siphon extra-plat",
+              "Siphon classique",
+              "Caniveau inox",
+              "Caniveau noir mat"
+            ],
+            "antiderapant": ["Oui", "Non"],
+            "couleurs": ["Blanc", "Anthracite", "Noir mat", "Beige", "Effet pierre"]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "longueur_mm": {},
+            "hauteur_mm": {}
+          }
+        },
+        "etancheite": {
+          "label": "Étanchéité (SPEC – SEL)",
+          "types": {
+            "spec": {
+              "label": "SPEC (Système d'Étanchéité Sous Carrelage)",
+              "variantes": [
+                "SPEC murs",
+                "SPEC sols",
+                "SPEC douche complète"
+              ]
+            },
+            "sel": {
+              "label": "SEL (Système d'Étanchéité Liquide)",
+              "variantes": [
+                "SEL sol",
+                "SEL mural",
+                "SEL douche"
+              ]
+            }
+          },
+          "options": {
+            "bandes": ["Bandes d'angles", "Bandes périphériques", "Aucune"],
+            "primaire": ["Oui", "Non"],
+            "renforts": ["Renforts siphon", "Renforts angles", "Renforts parois"]
+          },
+          "dimensions": {
+            "surface_m2": {}
+          }
+        },
+        "parois_douche": {
+          "label": "Parois & vitrages",
+          "types": {
+            "porte_coulissante": {
+              "label": "Porte coulissante",
+              "variantes": [
+                "6 mm",
+                "8 mm",
+                "10 mm"
+              ]
+            },
+            "porte_pivotante": {
+              "label": "Porte pivotante",
+              "variantes": [
+                "Transparent",
+                "Dépolie",
+                "Anticalcaire"
+              ]
+            },
+            "paroi_fixe": {
+              "label": "Paroi fixe",
+              "variantes": [
+                "Walk-in",
+                "Walk-in noir mat",
+                "Walk-in avec barre de stabilisation"
+              ]
+            },
+            "paroi_combinee": {
+              "label": "Paroi combinée",
+              "variantes": [
+                "Angle",
+                "U",
+                "Demi-paroi"
+              ]
+            }
+          },
+          "options": {
+            "verres": [
+              "Transparent",
+              "Dépoli",
+              "Fumé",
+              "Sérigraphié"
+            ],
+            "traitement_anticalcaire": ["Oui", "Non"],
+            "profils": ["Chrome", "Noir mat", "Blanc"]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {}
+          }
+        },
+        "meubles": {
+          "label": "Meubles & rangements",
+          "types": {
+            "meuble_simple_vasque": {
+              "label": "Meuble simple vasque",
+              "variantes": [
+                "Suspendu",
+                "Posé au sol",
+                "Avec rangement"
+              ]
+            },
+            "meuble_double_vasque": {
+              "label": "Meuble double vasque",
+              "variantes": [
+                "120 cm",
+                "140 cm",
+                "160 cm"
+              ]
+            },
+            "armoire_miroir": {
+              "label": "Armoire miroir",
+              "variantes": [
+                "Miroir simple",
+                "Miroir LED",
+                "Miroir anti-buée"
+              ]
+            }
+          },
+          "options": {
+            "finitions": [
+              "Blanc brillant",
+              "Blanc mat",
+              "Bois clair",
+              "Bois foncé",
+              "Noir mat"
+            ],
+            "poignees": ["Sans poignée (push)", "Poignée chrome", "Poignée noire"]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {},
+            "profondeur_mm": {}
+          }
+        },
+        "vasques_robinetterie": {
+          "label": "Vasques & Robinetterie",
+          "types": {
+            "vasques": {
+              "label": "Vasques",
+              "variantes": [
+                "Vasque à poser",
+                "Vasque encastrée",
+                "Plan vasque",
+                "Double vasque"
+              ]
+            },
+            "robinetterie": {
+              "label": "Robinetterie",
+              "variantes": [
+                "Mitigeur classique",
+                "Mitigeur thermostatique",
+                "Robinet mural",
+                "Mitigeur cascade"
+              ]
+            }
+          },
+          "options": {
+            "couleurs": ["Chrome", "Inox", "Noir mat", "Blanc"],
+            "vidage": ["Avec vidage", "Sans vidage", "Clique-clac"],
+            "hauteur_bec": ["Bas", "Moyen", "Haut"]
+          }
+        },
+        "wc_sdb": {
+          "label": "WC spécifiques salle de bain",
+          "types": {
+            "wc_suspendu": {
+              "label": "WC suspendu",
+              "variantes": [
+                "Avec bâti-support",
+                "Sans bride",
+                "Avec plaque design"
+              ]
+            },
+            "wc_classique": {
+              "label": "WC classique",
+              "variantes": [
+                "Sortie horizontale",
+                "Sortie verticale"
+              ]
+            }
+          }
+        },
+        "equipements_pmr": {
+          "label": "Équipements PMR",
+          "types": {
+            "barres_appui": {
+              "label": "Barres d'appui",
+              "variantes": [
+                "Barre droite",
+                "Barre coudée",
+                "Barre relevable"
+              ]
+            },
+            "siege_douche": {
+              "label": "Siège de douche",
+              "variantes": [
+                "Relevable",
+                "Murale",
+                "Antidérapante"
+              ]
+            },
+            "receveur_pmr": {
+              "label": "Receveur PMR",
+              "variantes": [
+                "Ultra-plat",
+                "Receveur affleurant",
+                "Douche italienne PMR"
+              ]
+            }
+          }
+        }
+      },
+      "options": {
+        "marques": [
+          "Jacob Delafon",
+          "Grohe",
+          "Hansgrohe",
+          "Kinedo",
+          "Villeroy & Boch",
+          "Schlüter",
+          "Wedi"
+        ],
+        "finitions_generales": [
+          "Blanc",
+          "Noir mat",
+          "Anthracite",
+          "Effet pierre",
+          "Bois"
+        ],
+        "types_etancheite": [
+          "SPEC",
+          "SEL",
+          "Bande d'étanchéité",
+          "Système complet douche italienne"
+        ]
+      }
+    },
+    "sols_exterieurs_amenagements": {
+      "label": "Sols extérieurs – Aménagements",
+      "categories": {
+        "resine_sol": {
+          "label": "Résine de sol",
+          "types": {
+            "resine_epoxy": {
+              "label": "Résine époxy",
+              "variantes": [
+                "Monocouche",
+                "Bicouche",
+                "Antidérapante",
+                "Haute résistance"
+              ]
+            },
+            "resine_polyurethane": {
+              "label": "Résine polyuréthane",
+              "variantes": [
+                "Souple",
+                "Étanche",
+                "Finition satinée",
+                "Finition mate"
+              ]
+            },
+            "moquette_de_pierre": {
+              "label": "Moquette de pierre",
+              "variantes": [
+                "Granulométrie fine",
+                "Granulométrie moyenne",
+                "Avec bordures aluminium"
+              ]
+            }
+          },
+          "options": {
+            "couleurs": [
+              "Beige",
+              "Gris clair",
+              "Gris foncé",
+              "Noir",
+              "Effets marbrés"
+            ],
+            "preparation_support": [
+              "Ponçage",
+              "Primaire d'accroche",
+              "Ragréage",
+              "Réparation fissures"
+            ]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "epaisseur_mm": {}
+          }
+        },
+        "beton_cire": {
+          "label": "Béton ciré / Micro-mortier extérieur",
+          "types": {
+            "micro_mortier": {
+              "label": "Micro-mortier",
+              "variantes": [
+                "Finition mate",
+                "Finition satinée",
+                "Finition texturée"
+              ]
+            },
+            "beton_cire": {
+              "label": "Béton ciré",
+              "variantes": [
+                "Aspect lisse",
+                "Aspect nuagé",
+                "Coloré"
+              ]
+            }
+          },
+          "options": {
+            "couleurs": ["Nuancier béton", "Anthracite", "Beige", "Blanc", "Terracotta"],
+            "protection": ["Vernis", "Résine PU", "Hydrofuge"],
+            "preparation": ["Ragréage", "Ponçage", "Primaire"]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "epaisseur_mm": {}
+          }
+        },
+        "dallage_exterieur": {
+          "label": "Dallage extérieur",
+          "types": {
+            "dalles_beton": {
+              "label": "Dalles béton",
+              "variantes": [
+                "50x50",
+                "40x40",
+                "60x60",
+                "Antidérapant",
+                "Pierre reconstituée"
+              ]
+            },
+            "pierre_naturelle": {
+              "label": "Pierre naturelle",
+              "variantes": [
+                "Travertin",
+                "Grès cérame extérieur",
+                "Ardoise",
+                "Granit"
+              ]
+            },
+            "pavage": {
+              "label": "Pavage",
+              "variantes": [
+                "Pavé béton",
+                "Pavé pierre",
+                "Pavé autobloquant"
+              ]
+            }
+          },
+          "options": {
+            "pose": [
+              "Pose sur lit de sable",
+              "Pose collée",
+              "Pose sur plots",
+              "Pose sur chape"
+            ],
+            "finition": [
+              "Joints ciment",
+              "Joints polymère",
+              "Sans joints (plots)"
+            ]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "epaisseur_dalles_mm": {}
+          }
+        },
+        "terrasses_bois": {
+          "label": "Terrasses bois / Composite",
+          "types": {
+            "bois_naturel": {
+              "label": "Bois naturel",
+              "variantes": [
+                "Pin autoclave",
+                "Douglas",
+                "Ipé",
+                "Cumaru"
+              ]
+            },
+            "composite": {
+              "label": "Composite",
+              "variantes": [
+                "Lame creuse",
+                "Lame pleine",
+                "Rainurée",
+                "Lisse"
+              ]
+            }
+          },
+          "options": {
+            "fixation": [
+              "Clips invisible",
+              "Vis inox",
+              "Fixation latérale"
+            ],
+            "structure": [
+              "Lambourdes bois",
+              "Lambourdes alu",
+              "Plots PVC réglables"
+            ],
+            "couleurs": [
+              "Naturel",
+              "Gris clair",
+              "Gris foncé",
+              "Anthracite",
+              "Brun"
+            ]
+          },
+          "dimensions": {
+            "surface_m2": {},
+            "hauteur_structure_mm": {}
+          }
+        },
+        "amenagements_exterieurs": {
+          "label": "Aménagements extérieurs",
+          "types": {
+            "bordures": {
+              "label": "Bordures",
+              "variantes": [
+                "Bordure béton",
+                "Bordure granit",
+                "Bordure pierre naturelle"
+              ]
+            },
+            "marches": {
+              "label": "Marches",
+              "variantes": [
+                "Béton",
+                "Pierre",
+                "Carrelage extérieur"
+              ]
+            },
+            "seuils": {
+              "label": "Seuils & relevés",
+              "variantes": [
+                "Seuil béton",
+                "Seuil pierre",
+                "Relevé étanchéité"
+              ]
+            },
+            "petite_maconnerie": {
+              "label": "Petite maçonnerie",
+              "variantes": [
+                "Muret",
+                "Dallage localisé",
+                "Reprise fissure",
+                "Seuil de porte"
+              ]
+            }
+          },
+          "options": {
+            "finitions": [
+              "Bouchardé",
+              "Scié",
+              "Adouci",
+              "Rugueux"
+            ]
+          },
+          "dimensions": {
+            "longueur_ml": {},
+            "hauteur_mm": {}
+          }
+        }
+      },
+      "options": {
+        "marques": [
+          "Weber",
+          "Mapei",
+          "Parex",
+          "Schlüter",
+          "Lithofin"
+        ],
+        "preparations_generales": [
+          "Décaissement",
+          "Compactage",
+          "Reprise pente",
+          "Drainage",
+          "Pose géotextile"
+        ],
+        "couleurs_generales": [
+          "Gris clair",
+          "Gris foncé",
+          "Anthracite",
+          "Beige",
+          "Pierre naturelle"
+        ]
+      }
+    },
+    "vitrerie_miroiterie": {
+      "label": "Vitrerie – Miroiterie",
+      "categories": {
+        "remplacement_vitrage": {
+          "label": "Remplacement de vitrage",
+          "types": {
+            "vitrage_simple": {
+              "label": "Vitrage simple",
+              "variantes": [
+                "3 mm",
+                "4 mm",
+                "5 mm",
+                "6 mm"
+              ]
+            },
+            "double_vitrage": {
+              "label": "Double vitrage",
+              "variantes": [
+                "4/16/4 standard",
+                "4/20/4",
+                "FE 44.2 / 4 (sécurité intérieur)",
+                "4 / FE 44.2 (sécurité extérieur)",
+                "Contrôle solaire",
+                "Acoustique renforcé"
+              ]
+            },
+            "triple_vitrage": {
+              "label": "Triple vitrage",
+              "variantes": [
+                "4/12/4/12/4",
+                "Feuilleté + triple"
+              ]
+            },
+            "vitrage_feuillete": {
+              "label": "Vitrage feuilleté",
+              "variantes": [
+                "33.2",
+                "44.2",
+                "44.4 (renforcé)",
+                "55.2",
+                "66.2"
+              ]
+            }
+          },
+          "options": {
+            "pose": [
+              "Dépose totale",
+              "Dépose partielle",
+              "Maintien par parcloses",
+              "Silicone",
+              "Mastic traditionnel"
+            ],
+            "performance": [
+              "Sécurité",
+              "Acoustique",
+              "Thermique",
+              "Contrôle solaire"
+            ]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {},
+            "epaisseur_mm": {}
+          }
+        },
+        "miroirs": {
+          "label": "Miroirs & verres décoratifs",
+          "types": {
+            "miroir_standard": {
+              "label": "Miroir standard",
+              "variantes": [
+                "Argenté",
+                "Sécurisé (feuilleté)",
+                "Anti-buée"
+              ]
+            },
+            "miroir_sur_mesure": {
+              "label": "Miroir sur mesure",
+              "variantes": [
+                "Bords polis",
+                "Bords rodés",
+                "Sans tain",
+                "Teinté bronze",
+                "Teinté gris"
+              ]
+            },
+            "miroir_deco": {
+              "label": "Miroirs décoratifs",
+              "variantes": [
+                "Rond",
+                "Biseauté",
+                "Organique",
+                "À facettes"
+              ]
+            }
+          },
+          "options": {
+            "fixation": [
+              "Collé",
+              "Clips",
+              "Rails",
+              "Vissé"
+            ],
+            "epaisseurs": [
+              "3 mm",
+              "4 mm",
+              "5 mm",
+              "6 mm"
+            ]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {},
+            "forme": ["Rectangulaire", "Carrée", "Ronde", "Ovale"]
+          }
+        },
+        "verrieres": {
+          "label": "Verrières",
+          "types": {
+            "verriere_atelier": {
+              "label": "Verrière atelier",
+              "variantes": [
+                "Verrière fixe",
+                "Verrière + soubassement",
+                "Verrière + porte battante",
+                "Verrière + porte coulissante"
+              ]
+            },
+            "verriere_moderne": {
+              "label": "Verrière moderne",
+              "variantes": [
+                "Profil fin alu",
+                "Acier laqué",
+                "Noir mat",
+                "Blanc"
+              ]
+            }
+          },
+          "options": {
+            "vitrage": [
+              "Clair 33.2",
+              "Clair 44.2",
+              "Dépoli",
+              "Fumé gris",
+              "Fumé bronze"
+            ],
+            "montants": ["2 traverses", "3 traverses", "4 traverses"]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {},
+            "épaisseur_verre_mm": {}
+          }
+        },
+        "vitrages_speciaux": {
+          "label": "Vitrages spéciaux",
+          "types": {
+            "securite": {
+              "label": "Vitrages de sécurité",
+              "variantes": [
+                "Feuilleté 44.2",
+                "Feuilleté 44.4",
+                "Anti-effraction P2A",
+                "Anti-effraction P5A"
+              ]
+            },
+            "decoratif": {
+              "label": "Verre décoratif",
+              "variantes": [
+                "Delta clair",
+                "Delta mat",
+                "Givré",
+                "Martelé",
+                "Chinchilla"
+              ]
+            },
+            "trempe": {
+              "label": "Verre trempé",
+              "variantes": [
+                "8 mm",
+                "10 mm",
+                "12 mm"
+              ]
+            }
+          },
+          "options": {
+            "teintes": ["Clair", "Bronze", "Gris fumé", "Extra-clair"],
+            "bords": ["Polis", "Rodés", "Brut"]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {}
+          }
+        },
+        "douche_vitree": {
+          "label": "Douches vitrées / Portes en verre",
+          "types": {
+            "paroi_fixee": {
+              "label": "Paroi fixe",
+              "variantes": [
+                "Walk-in 8 mm",
+                "Walk-in 10 mm",
+                "Profil noir",
+                "Profil chromé"
+              ]
+            },
+            "porte_douche": {
+              "label": "Porte de douche",
+              "variantes": [
+                "Coulissante",
+                "Pivotante",
+                "Battante"
+              ]
+            }
+          },
+          "options": {
+            "verre": [
+              "Transparent",
+              "Dépolie",
+              "Sérigraphié",
+              "Fumé gris",
+              "Fumé bronze"
+            ],
+            "anticalcaire": ["Oui", "Non"]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {}
+          }
+        },
+        "garde_corps": {
+          "label": "Garde-corps vitrées",
+          "types": {
+            "panneaux_verre": {
+              "label": "Garde-corps panneaux verre",
+              "variantes": [
+                "Verre feuilleté 44.2",
+                "Verre feuilleté 55.2",
+                "Verre feuilleté 66.2",
+                "Verre extra-clair"
+              ]
+            },
+            "garde_corps_alu_verre": {
+              "label": "Garde-corps alu + verre",
+              "variantes": [
+                "Main courante alu",
+                "Main courante inox",
+                "Sans main courante"
+              ]
+            }
+          },
+          "options": {
+            "fixation": [
+              "À la française (sol)",
+              "À l'anglaise (latéral)",
+              "Profil continu",
+              "Pinces inox"
+            ],
+            "verre_opaque": ["Oui", "Non"]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {}
+          }
+        }
+      },
+      "options": {
+        "verre_couleurs": ["Clair", "Extra-clair", "Bronze", "Gris", "Dépoli"],
+        "traitements": ["Anticalcaire", "Hydrofuge", "Anti-rayure"],
+        "marques": [
+          "Saint-Gobain",
+          "Pilkington",
+          "Verceral",
+          "AGC Glass"
+        ]
+      }
+    },
+    "automatismes_portails": {
+      "label": "Automatismes – Portails",
+      "categories": {
+        "portails": {
+          "label": "Portails",
+          "types": {
+            "battant": {
+              "label": "Portail battant",
+              "variantes": [
+                "1 vantail",
+                "2 vantaux",
+                "Battant aluminium",
+                "Battant acier",
+                "Battant PVC",
+                "Plein",
+                "Semi-ajouré",
+                "Ajouré"
+              ]
+            },
+            "coulissant": {
+              "label": "Portail coulissant",
+              "variantes": [
+                "Sur rail",
+                "Autoportant",
+                "Coulissant aluminium",
+                "Coulissant acier",
+                "Plein",
+                "Semi-ajouré",
+                "Ajouré"
+              ]
+            }
+          },
+          "options": {
+            "marques": [
+              "Somfy",
+              "Nice",
+              "CAME",
+              "FAAC",
+              "BFT"
+            ],
+            "hauteurs": ["1200 mm", "1400 mm", "1600 mm", "1800 mm", "2000 mm"],
+            "couleurs": [
+              "Blanc",
+              "Noir",
+              "Anthracite",
+              "Vert",
+              "RAL personnalisé"
+            ]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {}
+          }
+        },
+        "motorisations": {
+          "label": "Motorisations",
+          "types": {
+            "battant_bras": {
+              "label": "Motorisation battant – Bras articulé",
+              "variantes": [
+                "Bras standard",
+                "Bras long",
+                "Bras renforcé"
+              ]
+            },
+            "battant_verin": {
+              "label": "Motorisation battant – Vérin",
+              "variantes": [
+                "Vérin électromécanique",
+                "Vérin hydraulique",
+                "Usage intensif"
+              ]
+            },
+            "battant_enterre": {
+              "label": "Motorisation battant – Enterrée",
+              "variantes": [
+                "Caisson standard",
+                "Caisson inox",
+                "Usage intensif"
+              ]
+            },
+            "coulissant_cremaillere": {
+              "label": "Motorisation coulissant – Crémaillère",
+              "variantes": [
+                "Jusqu'à 300 kg",
+                "Jusqu'à 500 kg",
+                "Jusqu'à 800 kg",
+                "≥ 1000 kg"
+              ]
+            }
+          },
+          "options": {
+            "alimentation": [
+              "230V",
+              "24V",
+              "Panneau solaire"
+            ],
+            "securites": [
+              "Photocellules",
+              "Arrêt obstacle",
+              "Amortissement fin de course"
+            ],
+            "commandes": [
+              "Télécommandes",
+              "Clavier digicode",
+              "Badges",
+              "Contact sec domotique"
+            ]
+          }
+        },
+        "portillons": {
+          "label": "Portillons",
+          "types": {
+            "portillon_classique": {
+              "label": "Portillon",
+              "variantes": [
+                "Battant aluminium",
+                "Battant acier",
+                "Plein",
+                "Semi-ajouré",
+                "Ajouré"
+              ]
+            }
+          },
+          "options": {
+            "serrures": [
+              "Serrure manuelle",
+              "Gâche électrique",
+              "Serrure 3 points"
+            ],
+            "marques": [
+              "Somfy",
+              "Nice",
+              "CAME"
+            ]
+          },
+          "dimensions": {
+            "largeur_mm": {},
+            "hauteur_mm": {}
+          }
+        },
+        "portes_garage": {
+          "label": "Automatisation portes de garage",
+          "types": {
+            "porte_sectionnelle": {
+              "label": "Porte sectionnelle",
+              "variantes": [
+                "Motorisation plafond",
+                "Motorisation intégrée"
+              ]
+            },
+            "porte_enroulable": {
+              "label": "Porte enroulable",
+              "variantes": [
+                "Motorisation axe",
+                "Radio intégrée"
+              ]
+            }
+          },
+          "options": {
+            "marques": [
+              "Somfy",
+              "Hormann",
+              "Novoferm",
+              "Nice"
+            ],
+            "commandes": [
+              "Télécommande",
+              "Clavier extérieur",
+              "Ouverture d'urgence intérieure",
+              "Ouverture d'urgence extérieure"
+            ]
+          }
+        },
+        "accessoires": {
+          "label": "Accessoires & Sécurités",
+          "types": {
+            "telecommandes": {
+              "label": "Télécommandes",
+              "variantes": [
+                "1 canal",
+                "2 canaux",
+                "4 canaux"
+              ]
+            },
+            "digicodes": {
+              "label": "Digicodes",
+              "variantes": [
+                "Filaires",
+                "Radio"
+              ]
+            },
+            "visiophones": {
+              "label": "Visiophones",
+              "variantes": [
+                "Filaire",
+                "Wifi",
+                "Connecté (app smartphone)"
+              ]
+            },
+            "photocellules": {
+              "label": "Photocellules",
+              "variantes": [
+                "Standard",
+                "Longue portée"
+              ]
+            },
+            "feux_clignotants": {
+              "label": "Feu clignotant",
+              "variantes": [
+                "LED",
+                "Classique"
+              ]
+            }
+          }
+        },
+        "clotures": {
+          "label": "Clôtures & occultations",
+          "types": {
+            "cloture_panneaux": {
+              "label": "Clôture panneaux rigides",
+              "variantes": [
+                "Panneaux verts",
+                "Panneaux gris",
+                "Panneaux noirs",
+                "Avec occultation PVC",
+                "Avec occultation composite"
+              ]
+            },
+            "cloture_composite": {
+              "label": "Clôture composite",
+              "variantes": [
+                "Lames pleines",
+                "Lames alvéolaires",
+                "Cadre alu"
+              ]
+            }
+          },
+          "options": {
+            "hauteurs": ["1000 mm", "1200 mm", "1500 mm", "1800 mm"],
+            "couleurs": [
+              "Vert",
+              "Noir",
+              "Anthracite",
+              "Blanc"
+            ]
+          },
+          "dimensions": {
+            "longueur_ml": {},
+            "hauteur_mm": {}
+          }
+        }
+      },
+      "options": {
+        "marques_generales": [
+          "Somfy",
+          "Nice",
+          "CAME",
+          "FAAC",
+          "Hormann",
+          "BFT"
+        ],
+        "couleurs_generales": [
+          "Blanc",
+          "Noir",
+          "Anthracite",
+          "Vert",
+          "RAL au choix"
+        ],
+        "alimentations": [
+          "230V",
+          "24V",
+          "Solaire"
+        ]
+      }
+    }
+  }
+}

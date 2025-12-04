@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.crysal.workit</string>
+	<string>com.workit.app</string>
 	<key>PROJECT_ID</key>
 	<string>workit-1daa1</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:408329565311:ios:9f8da35cd36fbb232b3b4a</string>
+	<string>1:408329565311:ios:e102873ef2b07da72b3b4a</string>
 </dict>
 </plist>

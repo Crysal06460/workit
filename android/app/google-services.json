@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:408329565311:android:ac8fc282c58679e62b3b4a",
+        "mobilesdk_app_id": "1:408329565311:android:31252aa4e2c1a53b2b3b4a",
         "android_client_info": {
-          "package_name": "com.example.workit"
+          "package_name": "com.workit.app"
         }
       },
       "oauth_client": [],

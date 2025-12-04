@@ -2,7 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
-import 'screens/welcome_screen.dart';
+import 'screens/entry_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,7 +25,7 @@ class WorkItApp extends StatelessWidget {
     return MaterialApp(
       title: 'WorkIt',
       theme: theme,
-      home: const WelcomeScreen(),
+      home: const EntryScreen(),
     );
   }
 }

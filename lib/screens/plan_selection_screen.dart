@@ -32,44 +32,112 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Choisir un abonnement')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Bienvenue ${widget.data.companyName}',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Sélectionnez votre forfait WorkIt. Vous pourrez modifier ou augmenter vos sièges plus tard.',
-            ),
-            const SizedBox(height: 24),
-            Expanded(
-              child: ListView.separated(
-                itemCount: plans.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 16),
-                itemBuilder: (context, index) {
-                  final plan = plans[index];
-                  final isSelected = plan.id == selectedPlan.id;
-                  return InkWell(
-                    onTap: () => setState(() => selectedPlan = plan),
-                    child: PlanCard(plan: plan, isSelected: isSelected),
-                  );
-                },
+      backgroundColor: const Color(0xFF07090D),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          'Choisir votre configuration',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0E1726), Color(0xFF0A1A2F)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                ),
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: const Icon(
+                        Icons.verified,
+                        color: Color(0xFF00E676),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Quelle configuration vous correspond ?',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Choisissez simplement la configuration adaptée, vous pourrez ajuster celle-ci plus tard.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _continue,
-                child: Text('Continuer avec ${selectedPlan.name}'),
+              const SizedBox(height: 18),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: plans.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final plan = plans[index];
+                    final isSelected = plan.id == selectedPlan.id;
+                    return InkWell(
+                      onTap: () => setState(() => selectedPlan = plan),
+                      borderRadius: BorderRadius.circular(18),
+                      child: PlanCard(plan: plan, isSelected: isSelected),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF00E676),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: _continue,
+                  child: Text('Continuer avec ${selectedPlan.name}'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -84,19 +152,34 @@ class PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = isSelected ? Theme.of(context).colorScheme.primary : Colors.grey.shade300;
+    final theme = Theme.of(context);
+    final borderColor = isSelected ? const Color(0xFF00E676) : Colors.white24;
+    final titleColor = Colors.white;
+    final subtitleColor = Colors.white70;
     final seatBadges = plan.seatsByRole.entries.map((entry) {
       final seatLabel = plan.seatLabelForRole(entry.key);
       final pluralLabel = roleDisplayNamePlural(entry.key);
+      final singularLabel = roleDisplayName(entry.key);
+      final isUnlimited = plan.seatForRole(entry.key) == null;
+      final value = plan.seatForRole(entry.key);
+      final display = isUnlimited
+          ? '$pluralLabel illimités'
+          : value == 1
+              ? '$seatLabel $singularLabel'
+              : '$seatLabel $pluralLabel';
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+          color: Colors.white.withOpacity(0.08),
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white24),
         ),
         child: Text(
-          '$seatLabel $pluralLabel',
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          display,
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
         ),
       );
     }).toList();
@@ -105,7 +188,8 @@ class PlanCard extends StatelessWidget {
         side: BorderSide(color: borderColor, width: 1.4),
         borderRadius: BorderRadius.circular(16),
       ),
-      elevation: isSelected ? 4 : 0,
+      color: const Color(0xFF0F1422),
+      elevation: isSelected ? 6 : 0,
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -121,38 +205,51 @@ class PlanCard extends StatelessWidget {
                         plan.name,
                         style: const TextStyle(
                           fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         plan.price,
-                        style: const TextStyle(color: Colors.black54),
+                        style: const TextStyle(color: Colors.white70),
                       ),
                     ],
                   ),
                 ),
+                if (isSelected)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00E676).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF00E676).withOpacity(0.6),
+                      ),
+                    ),
+                    child: const Text(
+                      'Choisi',
+                      style: TextStyle(
+                        color: Color(0xFF00E676),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 16),
-            Wrap(spacing: 8, runSpacing: 8, children: seatBadges),
-            const SizedBox(height: 12),
-            for (final feature in plan.features)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(feature)),
-                  ],
-                ),
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final badge in seatBadges) ...[
+                  badge,
+                  const SizedBox(height: 10),
+                ],
+              ],
+            ),
           ],
         ),
       ),

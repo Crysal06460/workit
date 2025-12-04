@@ -19,6 +19,9 @@ class WorkspaceRepository {
     if (plan == null) {
       throw StateError('Aucun forfait sélectionné.');
     }
+    if (data.adminUid.isEmpty) {
+      throw StateError('Admin non authentifié, création impossible.');
+    }
 
     final workspaceRef = _firestore.collection('workspaces').doc();
     final serverTimestamp = FieldValue.serverTimestamp();
@@ -41,10 +44,17 @@ class WorkspaceRepository {
       'address': data.address,
       'postalCode': data.postalCode,
       'city': data.city,
+      'adminEmail': data.adminEmail.toLowerCase(),
+      'adminUid': data.adminUid,
+      'createdByEmail': data.adminEmail.toLowerCase(),
+      'createdByUid': data.adminUid,
       'journeyType': data.journeyType,
       'trialSessionId': data.trialSessionId,
       'plan': planMap,
       'seatUsage': data.seatUsageForFirestore,
+      'creatorUsesWorkit': data.creatorUsesWorkit,
+      'creatorRole': data.creatorRoleKey,
+      'creatorRoles': data.creatorRoles,
       'joinCodes': data.generatedCodes,
       'totalInvites': data.totalInvites,
       'status': 'trial', // trial | expired | active
@@ -68,6 +78,7 @@ class WorkspaceRepository {
           'email': trimmedEmail.toLowerCase(),
           'role': role,
           'status': 'pending',
+          'workspaceId': workspaceRef.id,
           'createdAt': serverTimestamp,
           'updatedAt': serverTimestamp,
         });

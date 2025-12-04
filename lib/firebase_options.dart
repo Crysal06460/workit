@@ -34,7 +34,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDsRvMUQRAGfHjNU3bQjgaPQkX3pvgm6s8',
-    appId: '1:408329565311:android:ac8fc282c58679e62b3b4a',
+    appId: '1:408329565311:android:31252aa4e2c1a53b2b3b4a',
     messagingSenderId: '408329565311',
     projectId: 'workit-1daa1',
     storageBucket: 'workit-1daa1.firebasestorage.app',
@@ -42,11 +42,11 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyBF05P2nxeZwnadCgem3gzpIRAGO8VYO1w',
-    appId: '1:408329565311:ios:9f8da35cd36fbb232b3b4a',
+    appId: '1:408329565311:ios:e102873ef2b07da72b3b4a',
     messagingSenderId: '408329565311',
     projectId: 'workit-1daa1',
     storageBucket: 'workit-1daa1.firebasestorage.app',
-    iosBundleId: 'com.crysal.workit',
+    iosBundleId: 'com.workit.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
