@@ -15,21 +15,15 @@
       "fields": {
         "type_chantier": {
           "type": "dropdown",
-          "choices": ["Neuf", "Rénovation légère", "Rénovation complète", "Dépannage"]
+          "choices": ["Neuf", "Rénovation"]
         },
-        "urgence": {
+        "type_habitation": {
           "type": "dropdown",
-          "choices": ["Non urgent", "48h", "24h", "Intervention immédiate"]
+          "choices": ["Maison", "Appartement"]
         },
         "site_accessibilite": {
           "type": "dropdown",
-          "choices": [
-            "Accès facile",
-            "Accès difficile",
-            "Échelle nécessaire",
-            "Nacelle nécessaire",
-            "Accès intérieur uniquement"
-          ]
+          "choices": ["Accès facile", "Accès difficile"]
         },
         "commentaires_generaux": { "type": "textarea", "required": false }
       }

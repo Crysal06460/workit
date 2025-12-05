@@ -54,11 +54,7 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
   void _goToHome() {
     final roleKey = widget.data.creatorRoleKey;
     final usesApp = widget.data.creatorUsesWorkit;
-    if (!usesApp || roleKey == null) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
-      return;
-    }
-    final home = _homeForRole(roleKey);
+    final home = (!usesApp || roleKey == null) ? const CommercialHomeScreen() : _homeForRole(roleKey);
     if (home == null) {
       Navigator.of(context).popUntil((route) => route.isFirst);
       return;
@@ -184,8 +180,8 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _StatTile(
-                      label: 'Essai',
-                      value: '7 jours • statut : essai',
+                      label: 'Métier',
+                      value: data.tradeKey != null ? roleDisplayName(data.tradeKey!) : 'Non défini',
                     ),
                   ),
                 ],
@@ -195,7 +191,7 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
                 children: [
                   Expanded(
                     child: _StatTile(
-                      label: 'Admin',
+                      label: 'Email de l’admin',
                       value: data.adminEmail.isEmpty
                           ? 'Non défini'
                           : data.adminEmail,
@@ -371,6 +367,10 @@ class _CreatorAccessCard extends StatelessWidget {
     final usesApp = data.creatorUsesWorkit;
     final selectedRoles = data.creatorRoles.map(roleDisplayName).toList();
     final roleLabel = data.creatorRoleLabel ?? 'Tableau de bord global';
+    final fullName = [
+      data.creatorFirstName?.trim() ?? '',
+      data.creatorLastName?.trim() ?? '',
+    ].where((e) => e.isNotEmpty).join(' ');
     final description = usesApp
         ? 'Vous serez assigné en tant que $roleLabel. Vous gardez aussi le tableau de bord global.'
         : 'Vous suivrez les devis et métrés depuis le tableau de bord global.';
@@ -410,6 +410,10 @@ class _CreatorAccessCard extends StatelessWidget {
                     fontSize: 16,
                   ),
                 ),
+                if (fullName.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(fullName, style: const TextStyle(color: Colors.white70)),
+                ],
                 const SizedBox(height: 6),
                 Text(
                   description,

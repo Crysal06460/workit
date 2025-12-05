@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'commercial_home_screen.dart';
 import 'metreur_home_screen.dart';
@@ -58,6 +59,7 @@ class _SignInScreenState extends State<SignInScreen> {
       }
 
       final data = workspaceSnap.docs.first.data();
+      final workspaceId = workspaceSnap.docs.first.id;
       final usesApp = data['creatorUsesWorkit'] == true;
       String? roleKey;
       final roles = data['creatorRoles'];
@@ -75,6 +77,14 @@ class _SignInScreenState extends State<SignInScreen> {
         );
         return;
       }
+
+      // Stocke le contexte d’entreprise pour isoler les données.
+      await _persistWorkspaceContext(
+        workspaceId,
+        data['companyName']?.toString() ?? '',
+        data['creatorFirstName']?.toString(),
+        data['creatorLastName']?.toString(),
+      );
 
       final home = _homeForRole(roleKey);
       if (home == null) {
@@ -97,6 +107,19 @@ class _SignInScreenState extends State<SignInScreen> {
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
+  }
+
+  Future<void> _persistWorkspaceContext(
+    String workspaceId,
+    String companyName,
+    String? firstName,
+    String? lastName,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('workit_workspace_id', workspaceId);
+    await prefs.setString('workit_workspace_name', companyName);
+    if (firstName != null) await prefs.setString('workit_user_first_name', firstName);
+    if (lastName != null) await prefs.setString('workit_user_last_name', lastName);
   }
 
   String _humanError(FirebaseAuthException error) {

@@ -17,9 +17,13 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
   final formKey = GlobalKey<FormState>();
   bool creatorUsesWorkit = false;
   String? creatorRoleKey;
+  final TextEditingController creatorFirstNameController = TextEditingController();
+  final TextEditingController creatorLastNameController = TextEditingController();
 
   @override
   void dispose() {
+    creatorFirstNameController.dispose();
+    creatorLastNameController.dispose();
     for (final controller in controllers.values) {
       controller.dispose();
     }
@@ -34,6 +38,8 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
     };
     creatorUsesWorkit = widget.data.creatorUsesWorkit;
     creatorRoleKey = widget.data.creatorRoleKey;
+    creatorFirstNameController.text = widget.data.creatorFirstName ?? '';
+    creatorLastNameController.text = widget.data.creatorLastName ?? '';
     for (final role in onboardingRoles) {
       final existing = widget.data.invites[role];
       if (existing != null && existing.isNotEmpty) {
@@ -46,7 +52,9 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
     if (!formKey.currentState!.validate()) return;
     widget.data
       ..creatorUsesWorkit = creatorUsesWorkit
-      ..creatorRoleKey = creatorUsesWorkit ? creatorRoleKey : null;
+      ..creatorRoleKey = creatorUsesWorkit ? creatorRoleKey : null
+      ..creatorFirstName = creatorFirstNameController.text.trim()
+      ..creatorLastName = creatorLastNameController.text.trim();
 
     for (final role in onboardingRoles) {
       widget.data.invites[role] = _splitEmails(controllers[role]!.text);
@@ -69,6 +77,20 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
 
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => AdminSummaryScreen(data: widget.data)),
+    );
+  }
+
+  void _capitalizeFirstLetter(TextEditingController controller) {
+    final text = controller.text;
+    if (text.isEmpty) return;
+    final capitalized = text[0].toUpperCase() + text.substring(1);
+    if (capitalized == text) return;
+    final selectionIndex = controller.selection.baseOffset;
+    controller.value = controller.value.copyWith(
+      text: capitalized,
+      selection: TextSelection.collapsed(
+        offset: selectionIndex.clamp(0, capitalized.length),
+      ),
     );
   }
 
@@ -142,7 +164,9 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
                         creatorRoleKey = null;
                         widget.data
                           ..creatorUsesWorkit = false
-                          ..creatorRoleKey = null;
+                          ..creatorRoleKey = null
+                          ..creatorFirstName = creatorFirstNameController.text.trim()
+                          ..creatorLastName = creatorLastNameController.text.trim();
                       } else {
                         widget.data.creatorUsesWorkit = true;
                       }
@@ -159,6 +183,60 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
                     });
                   },
                   showHybridRole: widget.data.plan?.id == 'abonnement_2',
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: creatorFirstNameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Prénom',
+                          labelStyle: const TextStyle(color: Colors.white),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.06),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF00E676), width: 1.5),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) return 'Prénom requis';
+                          return null;
+                        },
+                        onChanged: (_) => _capitalizeFirstLetter(creatorFirstNameController),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextFormField(
+                        controller: creatorLastNameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Nom',
+                          labelStyle: const TextStyle(color: Colors.white),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.06),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFF00E676), width: 1.5),
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) return 'Nom requis';
+                          return null;
+                        },
+                        onChanged: (_) => _capitalizeFirstLetter(creatorLastNameController),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 for (final role in onboardingRoles) ...[

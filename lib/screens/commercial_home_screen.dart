@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +32,12 @@ const Map<String, String> _metierOptions = {
 const Color _commercialBg = Color(0xFF07090D);
 const Color _commercialCard = Color(0xFF0F1422);
 const Color _commercialAccent = Color(0xFF00F795);
+const String _quotesPrefsKey = 'workit_saved_quotes';
+const String _workspaceIdKey = 'workit_workspace_id';
+const String _workspaceNameKey = 'workit_workspace_name';
+const String _userFirstNameKey = 'workit_user_first_name';
+const String _userLastNameKey = 'workit_user_last_name';
+const String _storageBucket = 'gs://workit-1daa1.firebasestorage.app';
 
 class CommercialHomeScreen extends StatefulWidget {
   const CommercialHomeScreen({super.key});
@@ -40,19 +48,35 @@ class CommercialHomeScreen extends StatefulWidget {
 
 class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
   final List<_QuoteItem> _newItems = [];
+  final _firestore = FirebaseFirestore.instance;
+  String? _workspaceId;
+  String? _workspaceName;
+  String? _userFirstName;
+  String? _userLastName;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadWorkspaceContext();
+    await _loadSavedQuotes();
+  }
+
+  String get _workspaceQuotesKey => '${_quotesPrefsKey}_${_workspaceId ?? 'none'}';
+
+  String _greetingName() {
+    final hasFirst = _userFirstName?.trim().isNotEmpty == true;
+    final hasLast = _userLastName?.trim().isNotEmpty == true;
+    if (hasFirst && hasLast) return '${_userFirstName!.trim()} ${_userLastName!.trim()}';
+    if (hasFirst) return _userFirstName!.trim();
+    return '';
+  }
 
   @override
   Widget build(BuildContext context) {
-
-    final waitingItems = const [
-      _QuoteItem(
-        client: 'Société Vernet',
-        address: '8 quai du Port, Marseille',
-        number: '#8399',
-        date: 'Envoyé il y a 2h',
-        tag: 'Transmission envoyée',
-      ),
-    ];
 
     final measuringItems = const [
       _MeasureItem(
@@ -63,18 +87,38 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
       ),
     ];
 
-    final validatedItems = const [
+    final commandeItems = const [
       _QuoteItem(
         client: 'Opti Veranda',
         address: 'Rue des Fleurs, Nantes',
         number: '#8320',
-        date: 'Validé hier',
-        tag: 'Validé',
+        date: 'Commande en cours',
+        tag: 'Commande',
+      ),
+    ];
+
+    final poseItems = const [
+      _QuoteItem(
+        client: 'Immo Basset',
+        address: '12 rue du Parc, Toulouse',
+        number: '#8455',
+        date: 'Pose prévue mardi',
+        tag: 'Planifié',
+      ),
+    ];
+
+    final terminesItems = const [
+      _QuoteItem(
+        client: 'Maison Dubois',
+        address: 'Chemin des Pins, Grenoble',
+        number: '#8420',
+        date: 'Clôturé hier',
+        tag: 'Terminé',
       ),
     ];
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: _commercialBg,
         appBar: AppBar(
@@ -83,19 +127,19 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
           titleSpacing: 0,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Text(
-                'Bonjour, Alex',
-                style: TextStyle(
+                _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()}' : 'Bonjour',
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
                   fontSize: 20,
                 ),
               ),
-              SizedBox(height: 2),
+              const SizedBox(height: 2),
               Text(
                 'Commercial',
-                style: TextStyle(color: Colors.white70, fontSize: 13),
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
               ),
             ],
           ),
@@ -129,7 +173,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                   tabs: [
                     Tab(
                       child: _TabPill(
-                        label: 'Nouveaux',
+                        label: 'En attente',
                         count: _newItems.length,
                         color: Colors.deepPurpleAccent,
                         icon: Icons.upload_file,
@@ -137,24 +181,32 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                     ),
                     Tab(
                       child: _TabPill(
-                        label: 'En attente',
-                        count: waitingItems.length,
-                        color: Colors.amberAccent,
-                        icon: Icons.schedule_send,
-                      ),
-                    ),
-                    Tab(
-                      child: _TabPill(
-                        label: 'En cours',
+                        label: 'En cours de métré',
                         count: measuringItems.length,
-                        color: Colors.lightBlueAccent,
+                        color: Colors.amberAccent,
                         icon: Icons.straighten,
                       ),
                     ),
                     Tab(
                       child: _TabPill(
-                        label: 'Validés',
-                        count: validatedItems.length,
+                        label: 'En commande',
+                        count: commandeItems.length,
+                        color: Colors.lightBlueAccent,
+                        icon: Icons.shopping_bag_outlined,
+                      ),
+                    ),
+                    Tab(
+                      child: _TabPill(
+                        label: 'En pose',
+                        count: poseItems.length,
+                        color: _commercialAccent,
+                        icon: Icons.home_repair_service_outlined,
+                      ),
+                    ),
+                    Tab(
+                      child: _TabPill(
+                        label: 'Terminés',
+                        count: terminesItems.length,
                         color: _commercialAccent,
                         icon: Icons.verified_outlined,
                       ),
@@ -178,10 +230,13 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                   child: _AddQuoteButton(
                     onPressed: () async {
                       final newItem = await Navigator.of(context).push<_QuoteItem>(
-                        MaterialPageRoute(builder: (_) => const _AddQuoteScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const _AddQuoteScreen(),
+                        ),
                       );
                       if (newItem != null) {
                         setState(() => _newItems.add(newItem));
+                        await _saveQuotes();
                       }
                     },
                   ),
@@ -196,20 +251,27 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                           items: _newItems,
                           onDelete: (item) {
                             setState(() => _newItems.remove(item));
+                            _saveQuotes();
                           },
                           onEdit: (item) async {
-                            final edited = await _showEditDialog(context, item);
+                            final edited = await Navigator.of(context).push<_QuoteItem>(
+                              MaterialPageRoute(
+                                builder: (_) => _AddQuoteScreen(existingItem: item),
+                              ),
+                            );
                             if (edited != null) {
                               setState(() {
                                 final idx = _newItems.indexOf(item);
                                 if (idx >= 0) _newItems[idx] = edited;
                               });
+                              await _saveQuotes();
                             }
                           },
                         ),
-                        _WaitingForMeasureList(items: waitingItems),
                         _MeasuringList(items: measuringItems),
-                        _ValidatedList(items: validatedItems),
+                        _ValidatedList(items: commandeItems),
+                        _ValidatedList(items: poseItems),
+                        _ValidatedList(items: terminesItems),
                       ],
                     ),
                 ),
@@ -221,58 +283,131 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
     );
   }
 
-  Future<_QuoteItem?> _showEditDialog(BuildContext context, _QuoteItem item) async {
-    final clientController = TextEditingController(text: item.client);
-    final addressController = TextEditingController(text: item.address);
-    return showDialog<_QuoteItem>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: _commercialCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Modifier le devis', style: TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: clientController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Client',
-                  labelStyle: TextStyle(color: Colors.white70),
-                ),
-              ),
-              TextField(
-                controller: addressController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Adresse',
-                  labelStyle: TextStyle(color: Colors.white70),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Annuler'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: _commercialAccent, foregroundColor: Colors.black),
-              onPressed: () {
-                Navigator.of(ctx).pop(
-                  item.copyWith(
-                    client: clientController.text.trim().isEmpty ? item.client : clientController.text.trim(),
-                    address: addressController.text.trim().isEmpty ? item.address : addressController.text.trim(),
-                  ),
-                );
-              },
-              child: const Text('Enregistrer'),
-            ),
-          ],
-        );
-      },
-    );
+  Future<void> _loadSavedQuotes() async {
+    if (_workspaceId == null) return;
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final remote = await _firestore
+            .collection('workspaces')
+            .doc(_workspaceId)
+            .collection('devis')
+            .where('workspaceId', isEqualTo: _workspaceId)
+            .orderBy('createdAt', descending: true)
+            .get();
+        final cloudItems = remote.docs.map((doc) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          return _QuoteItem.fromMap(data);
+        }).toList();
+        if (cloudItems.isNotEmpty) {
+          setState(() {
+            _newItems
+              ..clear()
+              ..addAll(cloudItems);
+          });
+          return;
+        }
+      }
+    } catch (_) {
+      // fall back to local prefs if cloud fails
+    }
+
+    // Local fallback
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_workspaceQuotesKey);
+    if (raw == null) return;
+    try {
+      final decoded = json.decode(raw) as List<dynamic>;
+      final loaded = decoded.whereType<Map<String, dynamic>>().map((e) {
+        final item = _QuoteItem.fromMap(e);
+        return item.tag.trim() == 'À classer' ? item.copyWith(tag: '') : item;
+      }).toList(growable: true);
+      if (mounted) {
+        setState(() {
+          _newItems
+            ..clear()
+            ..addAll(loaded);
+        });
+      }
+    } catch (_) {
+      // ignore malformed data
+    }
+  }
+
+  Future<void> _saveQuotes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = json.encode(_newItems.map((e) => e.toMap()).toList());
+    await prefs.setString(_workspaceQuotesKey, payload);
+    await _persistQuotesToCloud();
+  }
+
+  Future<void> _persistQuotesToCloud() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || _workspaceId == null) return;
+    try {
+      final col = _firestore.collection('workspaces').doc(_workspaceId).collection('devis');
+      final batch = _firestore.batch();
+      final existing = await col.get();
+      for (final doc in existing.docs) {
+        batch.delete(doc.reference);
+      }
+      for (final quote in _newItems) {
+        final sanitizedNumber = quote.number.replaceAll('#', '');
+        final docId = (quote.id?.isNotEmpty == true)
+            ? quote.id!
+            : (sanitizedNumber.isNotEmpty
+                ? sanitizedNumber
+                : 'quote_${DateTime.now().millisecondsSinceEpoch}');
+        final ref = col.doc(docId);
+        batch.set(ref, {
+          ...quote.toMap(),
+          'userId': uid,
+          'workspaceId': _workspaceId,
+          'createdAt': quote.createdAt != null
+              ? Timestamp.fromDate(quote.createdAt!)
+              : FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    } catch (_) {
+      // silently ignore cloud errors for now
+    }
+  }
+
+  Future<void> _loadWorkspaceContext() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _workspaceId = prefs.getString(_workspaceIdKey);
+      _workspaceName = prefs.getString(_workspaceNameKey);
+      _userFirstName = prefs.getString(_userFirstNameKey);
+      _userLastName = prefs.getString(_userLastNameKey);
+    });
+    await _maybeFetchWorkspaceUserName();
+  }
+
+  Future<void> _maybeFetchWorkspaceUserName() async {
+    if (_workspaceId == null) return;
+    try {
+      final doc = await _firestore.collection('workspaces').doc(_workspaceId).get();
+      if (!doc.exists) return;
+      final data = doc.data();
+      if (data == null) return;
+      final first = data['creatorFirstName']?.toString();
+      final last = data['creatorLastName']?.toString();
+      if (first?.isEmpty != false && last?.isEmpty != false) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_userFirstNameKey, first ?? '');
+      await prefs.setString(_userLastNameKey, last ?? '');
+      if (mounted) {
+        setState(() {
+          _userFirstName = first;
+          _userLastName = last;
+        });
+      }
+    } catch (_) {
+      // ignore fetch errors, fallback to defaults
+    }
   }
 }
 
@@ -352,26 +487,12 @@ class _NewQuotesList extends StatelessWidget {
         return _QuoteCard(
           title: item.client,
           subtitle: item.address,
-          meta: '${item.number} • ${item.date}',
+          meta: item.date,
           badgeLabel: item.tag,
           badgeColor: Colors.deepPurpleAccent,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit, color: Colors.white70, size: 18),
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                onPressed: () => onEdit(item),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.white70, size: 18),
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints.tightFor(width: 32, height: 32),
-                onPressed: () => onDelete(item),
-              ),
-            ],
-          ),
+          thumbnailUrl: item.uploadUrl,
+          onEdit: () => onEdit(item),
+          onDelete: () => onDelete(item),
         );
       },
     );
@@ -454,7 +575,9 @@ class _ValidatedList extends StatelessWidget {
 }
 
 class _AddQuoteScreen extends StatefulWidget {
-  const _AddQuoteScreen();
+  const _AddQuoteScreen({this.existingItem});
+
+  final _QuoteItem? existingItem;
 
   @override
   State<_AddQuoteScreen> createState() => _AddQuoteScreenState();
@@ -474,6 +597,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   final quantiteController = TextEditingController(text: '1');
   final largeurController = TextEditingController();
   final hauteurController = TextEditingController();
+  String? uploadedFileUrl;
   int currentStep = 0;
   Map<String, dynamic>? dictionary;
   bool loadingDictionary = true;
@@ -482,7 +606,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   String? tradeLabel;
   List<String> selectedFiles = [];
   String? chantierType;
-  String? urgence;
+  String? typeHabitation;
   String? accessibilite;
   DateTime? selectedDate;
   List<_ProductFormData> products = [const _ProductFormData()];
@@ -506,6 +630,10 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     super.initState();
     _loadDictionary();
     _loadTradeFromPrefs();
+    _applyDraft(widget.existingItem?.draft);
+    if (widget.existingItem != null && widget.existingItem!.draft == null) {
+      _applyQuoteFallback(widget.existingItem!);
+    }
   }
 
   Future<void> _loadDictionary() async {
@@ -515,6 +643,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         dictionary = json.decode(raw) as Map<String, dynamic>;
         loadingDictionary = false;
       });
+      _ensureDefaultCategoryForProducts();
     } catch (_) {
       setState(() {
         dictionary = {};
@@ -531,6 +660,141 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       tradeLabel = _metierOptions[key] ?? key;
       loadingTrade = false;
     });
+    _ensureDefaultCategoryForProducts();
+  }
+
+  void _applyDraft(_QuoteDraft? draft) {
+    if (draft == null) return;
+    clientNameController.text = draft.clientName ?? '';
+    clientFirstNameController.text = draft.clientFirstName ?? '';
+    clientStreetController.text = draft.street ?? '';
+    clientPostalController.text = draft.postal ?? '';
+    clientCityController.text = draft.city ?? '';
+    phoneController.text = draft.phone ?? '';
+    emailController.text = draft.email ?? '';
+    chantierNotesController.text = draft.chantierNotes ?? '';
+    commentaireController.text = draft.commentaire ?? '';
+    chantierType = draft.chantierType;
+    typeHabitation = draft.typeHabitation;
+    accessibilite = draft.accessibilite;
+    selectedDate = draft.date;
+    products = draft.products.isNotEmpty ? draft.products : products;
+    _ensureDefaultCategoryForProducts();
+    setState(() {});
+  }
+
+  void _applyQuoteFallback(_QuoteItem item) {
+    // Reconstitute fields from the minimal data we have for older quotes without draft.
+    final clientParts = item.client.trim().split(RegExp(r'\\s+'));
+    if (clientParts.length > 1) {
+      clientNameController.text = clientParts.first;
+      clientFirstNameController.text = clientParts.sublist(1).join(' ');
+    } else {
+      clientNameController.text = item.client;
+    }
+
+    final segments = item.address.split(',');
+    if (segments.isNotEmpty) {
+      clientStreetController.text = segments.first.trim();
+    }
+    if (segments.length > 1) {
+      final tail = segments.sublist(1).join(',').trim();
+      final postalMatch = RegExp(r'(\\d{5})').firstMatch(tail);
+      if (postalMatch != null) {
+        clientPostalController.text = postalMatch.group(1) ?? '';
+        final city = tail.replaceFirst(postalMatch.group(0) ?? '', '').trim();
+        if (city.isNotEmpty) clientCityController.text = city;
+      } else {
+        clientCityController.text = tail;
+      }
+    }
+
+    chantierNotesController.clear();
+    commentaireController.clear();
+    phoneController.clear();
+    emailController.clear();
+    products = const [_ProductFormData(quantite: 1)];
+    _ensureDefaultCategoryForProducts();
+  }
+
+  void _capitalizeFirstLetter(TextEditingController controller) {
+    final text = controller.text;
+    if (text.isEmpty) return;
+    final capitalized = text[0].toUpperCase() + text.substring(1);
+    if (capitalized == text) return;
+    final selectionIndex = controller.selection.baseOffset;
+    controller.value = controller.value.copyWith(
+      text: capitalized,
+      selection: TextSelection.collapsed(
+        offset: selectionIndex.clamp(0, capitalized.length),
+      ),
+    );
+  }
+
+  String? _colorDetailLabel(String? choice) {
+    switch (choice) {
+      case 'RAL Aluminium':
+        return 'RAL :';
+      case 'Couleur PVC':
+        return 'Couleur :';
+      case 'Essence de Bois':
+        return 'Essence :';
+      default:
+        return null;
+    }
+  }
+
+  void _ensureDefaultCategoryForProducts() {
+    final categories = _categoryChoices();
+    if (categories.isEmpty) return;
+    final defaultCategory = categories.first.key;
+    var changed = false;
+    final updated = <_ProductFormData>[];
+
+    if (products.isEmpty) {
+      updated.add(_ProductFormData(categoryKey: defaultCategory));
+      changed = true;
+    } else {
+      for (final product in products) {
+        if (product.categoryKey == null) {
+          updated.add(product.copyWith(categoryKey: defaultCategory));
+          changed = true;
+        } else {
+          updated.add(product);
+        }
+      }
+    }
+
+    if (changed) {
+      setState(() {
+        products = updated;
+      });
+    }
+  }
+
+  _ProductFormData _newProductWithDefaultCategory() {
+    final categories = _categoryChoices();
+    final defaultCategory = categories.isNotEmpty ? categories.first.key : null;
+    return _ProductFormData(categoryKey: defaultCategory);
+  }
+
+  _QuoteDraft _buildDraft() {
+    return _QuoteDraft(
+      clientName: clientNameController.text,
+      clientFirstName: clientFirstNameController.text,
+      street: clientStreetController.text,
+      postal: clientPostalController.text,
+      city: clientCityController.text,
+      phone: phoneController.text,
+      email: emailController.text,
+      commentaire: commentaireController.text,
+      chantierNotes: chantierNotesController.text,
+      chantierType: chantierType,
+      typeHabitation: typeHabitation,
+      accessibilite: accessibilite,
+      date: selectedDate,
+      products: products,
+    );
   }
 
   @override
@@ -548,15 +812,6 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     largeurController.dispose();
     hauteurController.dispose();
     super.dispose();
-  }
-
-  List<String> _ralChoices() {
-    final trade = _currentTradeNode();
-    final couleurs = trade?['options']?['couleurs'] ?? dictionary?['couleurs'];
-    if (couleurs is Map && couleurs['ral'] is List) {
-      return (couleurs['ral'] as List).map((e) => 'RAL $e').toList();
-    }
-    return const [];
   }
 
   Map<String, dynamic>? _currentTradeNode() {
@@ -775,9 +1030,30 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     try {
       setState(() => uploadLabel = 'Envoi du devis…');
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_${p.basename(path)}';
-      final ref = FirebaseStorage.instance.ref().child('devis_uploads/$fileName');
-      await ref.putFile(File(path));
-      await ref.getDownloadURL();
+      final storage = FirebaseStorage.instanceFor(bucket: _storageBucket);
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final prefs = await SharedPreferences.getInstance();
+      final workspace = prefs.getString(_workspaceIdKey);
+      if (uid == null || workspace == null) {
+        throw Exception('Utilisateur ou workspace manquant pour sécuriser le fichier.');
+      }
+      final ref = storage.ref().child('devis_uploads/$workspace/$uid/$fileName');
+
+      // Certaines sélections (bibliothèque photos) nécessitent une lecture en mémoire.
+      final file = File(path);
+      final bytes = await file.readAsBytes();
+      final uploadTask = await ref.putData(bytes);
+      final success = uploadTask.bytesTransferred > 0;
+      if (!success) throw Exception('Téléversement incomplet.');
+
+      // Tente d’obtenir l’URL sans bloquer l’utilisateur si le bucket refuse.
+      try {
+        final url = await ref.getDownloadURL();
+        uploadedFileUrl = url;
+      } catch (_) {
+        uploadedFileUrl = null;
+      }
+
       setState(() => uploadLabel = 'Devis stocké pour le reste de l’équipe.');
     } catch (e) {
       _showPickerError(context, 'Envoi impossible : $e');
@@ -879,11 +1155,13 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           controller: clientNameController,
           keyboardType: TextInputType.name,
           required: true,
+          onChanged: (_) => _capitalizeFirstLetter(clientNameController),
         ),
         _LabeledField(
           label: 'Prénom',
           controller: clientFirstNameController,
           keyboardType: TextInputType.name,
+          onChanged: (_) => _capitalizeFirstLetter(clientFirstNameController),
         ),
         _LabeledField(
           label: 'Adresse (rue)',
@@ -931,6 +1209,12 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           label: 'Email',
           controller: emailController,
           keyboardType: TextInputType.emailAddress,
+          validator: (value) {
+            final text = value?.trim() ?? '';
+            if (text.isEmpty) return null;
+            final isValid = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text);
+            return isValid ? null : 'Email invalide';
+          },
         ),
       ],
     );
@@ -941,7 +1225,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         as Map<String, dynamic>? ??
         {};
     String? typeChantier = chantierType;
-    String? urgenceVal = urgence;
+    String? habitationVal = typeHabitation;
     String? accessVal = accessibilite;
 
     return Column(
@@ -973,10 +1257,10 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           onChanged: (v) => setState(() => chantierType = v),
         ),
         DynamicDropdownField(
-          label: 'Urgence',
-          value: urgenceVal,
-          choices: fields['urgence']?['choices']?.cast<String>() ?? const [],
-          onChanged: (v) => setState(() => urgence = v),
+          label: "Type d'habitation",
+          value: habitationVal,
+          choices: fields['type_habitation']?['choices']?.cast<String>() ?? const [],
+          onChanged: (v) => setState(() => typeHabitation = v),
         ),
         DynamicDropdownField(
           label: 'Accessibilité',
@@ -1000,7 +1284,11 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     final sousCategories = _sousCategories(product.categoryKey);
     final types = _typeChoices(product.categoryKey);
     final variants = _variantForType(product.categoryKey, product.typeProduit);
-    final ral = _ralChoices();
+    const couleurs = ['RAL Aluminium', 'Couleur PVC', 'Essence de Bois'];
+    final colorDetailLabel = _colorDetailLabel(product.couleur);
+    final bool showDecorOptions = tradeKey == 'menuiserie_aluminium';
+    final bool showDimensions = tradeKey == 'menuiserie_aluminium';
+    final bool showVariant = tradeKey == 'menuiserie_aluminium';
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -1052,47 +1340,84 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
             items: types,
             onChanged: (v) => setState(() => products[index] = products[index].copyWith(typeProduit: v, variante: null)),
           ),
-          _DropdownField(
-            label: 'Spécificité / variante',
-            value: product.variante,
-            items: variants.isEmpty ? const ['Standard'] : variants,
-            onChanged: (v) => setState(() => products[index] = products[index].copyWith(variante: v)),
-          ),
-         _DropdownField(
-            label: 'Couleur',
-            value: product.couleur,
-            items: ral.isEmpty ? const ['Standard'] : ral,
-            onChanged: (v) => setState(() => products[index] = products[index].copyWith(couleur: v)),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _IntField(
-                  label: 'Largeur',
-                  value: product.largeur,
-                  onChanged: (v) => setState(() => products[index] = products[index].copyWith(largeur: v)),
+          if (showVariant)
+            _DropdownField(
+              label: 'Spécificité / variante',
+              value: product.variante,
+              items: variants.isEmpty ? const ['Standard'] : variants,
+              onChanged: (v) => setState(() => products[index] = products[index].copyWith(variante: v)),
+            ),
+          if (showDecorOptions) ...[
+            _DropdownField(
+              label: 'Couleur',
+              value: product.couleur,
+              items: couleurs,
+              onChanged: (v) => setState(() => products[index] = products[index].copyWith(couleur: v, couleurDetail: null)),
+            ),
+            if (colorDetailLabel != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(colorDetailLabel, style: const TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: TextEditingController(text: product.couleurDetail ?? '')
+                        ..selection = TextSelection.collapsed(offset: (product.couleurDetail ?? '').length),
+                      style: const TextStyle(color: Colors.white),
+                      onChanged: (text) => setState(() => products[index] = products[index].copyWith(couleurDetail: text)),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.04),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.white12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: _commercialAccent, width: 1.3),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _IntField(
-                  label: 'Hauteur',
-                  value: product.hauteur,
-                  onChanged: (v) => setState(() => products[index] = products[index].copyWith(hauteur: v)),
+          ],
+          if (showDimensions)
+            Row(
+              children: [
+                Expanded(
+                  child: _IntField(
+                    label: 'Largeur',
+                    value: product.largeur,
+                    onChanged: (v) => setState(() => products[index] = products[index].copyWith(largeur: v)),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 80,
-                child: _DropdownField(
-                  label: 'Unité',
-                  value: product.unite,
-                  items: const ['mm', 'cm', 'm'],
-                  onChanged: (v) => setState(() => products[index] = products[index].copyWith(unite: v ?? 'mm')),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _IntField(
+                    label: 'Hauteur',
+                    value: product.hauteur,
+                    onChanged: (v) => setState(() => products[index] = products[index].copyWith(hauteur: v)),
+                  ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 80,
+                  child: _DropdownField(
+                    label: 'Unité',
+                    value: product.unite,
+                    items: const ['mm', 'cm', 'm'],
+                    onChanged: (v) => setState(() => products[index] = products[index].copyWith(unite: v ?? 'mm')),
+                  ),
+                ),
+              ],
+            ),
           _IntField(
             label: 'Quantité',
             value: product.quantite,
@@ -1118,13 +1443,13 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         ...List.generate(products.length, _productCard),
         Align(
           alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () => setState(() => products.add(const _ProductFormData())),
-            icon: const Icon(Icons.add, color: _commercialAccent),
-            label: const Text(
-              'Ajouter un élément',
-              style: TextStyle(color: _commercialAccent, fontWeight: FontWeight.w700),
-            ),
+      child: TextButton.icon(
+        onPressed: () => setState(() => products.add(_newProductWithDefaultCategory())),
+        icon: const Icon(Icons.add, color: _commercialAccent),
+        label: const Text(
+          'Ajouter un élément',
+          style: TextStyle(color: _commercialAccent, fontWeight: FontWeight.w700),
+        ),
           ),
         ),
       ],
@@ -1342,22 +1667,28 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                               setState(() {});
                               return;
                             }
-                          final newItem = _QuoteItem(
-                            client: clientNameController.text.isNotEmpty
-                                ? '${clientNameController.text}${clientFirstNameController.text.isNotEmpty ? ' ${clientFirstNameController.text}' : ''}'
-                                : 'Nouveau client',
-                            address: '${clientStreetController.text}, ${clientPostalController.text} ${clientCityController.text}',
-                            number: '#${DateTime.now().millisecondsSinceEpoch % 10000}',
-                            date: 'Ajouté aujourd’hui',
-                            tag: 'À classer',
-                          );
-                          Navigator.of(context).pop(newItem);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Devis enregistré et partagé avec l’équipe.'),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
+                            final draft = _buildDraft();
+                            final existing = widget.existingItem;
+                            final newItem = _QuoteItem(
+                              client: clientNameController.text.isNotEmpty
+                                  ? '${clientNameController.text}${clientFirstNameController.text.isNotEmpty ? ' ${clientFirstNameController.text}' : ''}'
+                                  : 'Nouveau client',
+                              address: '${clientStreetController.text}, ${clientPostalController.text} ${clientCityController.text}',
+                          number: existing?.number ?? '#${DateTime.now().millisecondsSinceEpoch % 10000}',
+                          date: existing?.date ?? 'Ajouté aujourd’hui',
+                          tag: '',
+                          draft: draft,
+                          id: existing?.id,
+                          createdAt: existing?.createdAt ?? DateTime.now(),
+                          uploadUrl: uploadedFileUrl ?? existing?.uploadUrl,
+                        );
+                            Navigator.of(context).pop(newItem);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Devis enregistré et partagé avec l’équipe.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
                           },
                           child: Text(currentStep == steps.length - 1 ? 'Soumettre' : 'Suivant'),
                         ),
@@ -1534,6 +1865,7 @@ class _LabeledField extends StatelessWidget {
     this.onTap,
     this.hintText,
     this.inputFormatters,
+    this.validator,
   });
 
   final String label;
@@ -1547,6 +1879,7 @@ class _LabeledField extends StatelessWidget {
   final VoidCallback? onTap;
   final String? hintText;
   final List<TextInputFormatter>? inputFormatters;
+  final String? Function(String?)? validator;
 
   @override
   Widget build(BuildContext context) {
@@ -1560,7 +1893,7 @@ class _LabeledField extends StatelessWidget {
             style: const TextStyle(color: Colors.white70),
           ),
           const SizedBox(height: 6),
-          TextField(
+          TextFormField(
             controller: controller,
             keyboardType: keyboardType,
             maxLines: maxLines,
@@ -1570,12 +1903,15 @@ class _LabeledField extends StatelessWidget {
             readOnly: readOnly,
             onTap: onTap,
             inputFormatters: inputFormatters,
+            validator: validator,
+            autovalidateMode: validator != null ? AutovalidateMode.onUserInteraction : null,
             decoration: InputDecoration(
               filled: true,
               fillColor: Colors.white.withOpacity(0.04),
               hintText: hintText,
               hintStyle: const TextStyle(color: Colors.white38),
               counterText: maxLength != null ? '' : null,
+              errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: Colors.white12),
@@ -1587,6 +1923,14 @@ class _LabeledField extends StatelessWidget {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: const BorderSide(color: _commercialAccent, width: 1.3),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.redAccent, width: 1.3),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.redAccent, width: 1.3),
               ),
             ),
           ),
@@ -1677,7 +2021,9 @@ class _IntField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller = TextEditingController(text: value?.toString() ?? '');
+    final text = value?.toString() ?? '';
+    final controller = TextEditingController(text: text)
+      ..selection = TextSelection.collapsed(offset: text.length);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
@@ -1724,6 +2070,7 @@ class _ProductFormData {
     this.typeProduit,
     this.variante,
     this.couleur,
+    this.couleurDetail,
     this.largeur,
     this.hauteur,
     this.quantite,
@@ -1735,6 +2082,7 @@ class _ProductFormData {
   final String? typeProduit;
   final String? variante;
   final String? couleur;
+  final String? couleurDetail;
   final int? largeur;
   final int? hauteur;
   final int? quantite;
@@ -1746,6 +2094,7 @@ class _ProductFormData {
     String? typeProduit,
     String? variante,
     String? couleur,
+    String? couleurDetail,
     int? largeur,
     int? hauteur,
     int? quantite,
@@ -1757,10 +2106,122 @@ class _ProductFormData {
       typeProduit: typeProduit ?? this.typeProduit,
       variante: variante ?? this.variante,
       couleur: couleur ?? this.couleur,
+      couleurDetail: couleurDetail ?? this.couleurDetail,
       largeur: largeur ?? this.largeur,
       hauteur: hauteur ?? this.hauteur,
       quantite: quantite ?? this.quantite,
       unite: unite ?? this.unite,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'categoryKey': categoryKey,
+      'sousCategorie': sousCategorie,
+      'typeProduit': typeProduit,
+      'variante': variante,
+      'couleur': couleur,
+      'couleurDetail': couleurDetail,
+      'largeur': largeur,
+      'hauteur': hauteur,
+      'quantite': quantite,
+      'unite': unite,
+    };
+  }
+
+  factory _ProductFormData.fromMap(Map<String, dynamic> map) {
+    return _ProductFormData(
+      categoryKey: map['categoryKey']?.toString(),
+      sousCategorie: map['sousCategorie']?.toString(),
+      typeProduit: map['typeProduit']?.toString(),
+      variante: map['variante']?.toString(),
+      couleur: map['couleur']?.toString(),
+      couleurDetail: map['couleurDetail']?.toString(),
+      largeur: map['largeur'] is int ? map['largeur'] as int : int.tryParse(map['largeur']?.toString() ?? ''),
+      hauteur: map['hauteur'] is int ? map['hauteur'] as int : int.tryParse(map['hauteur']?.toString() ?? ''),
+      quantite: map['quantite'] is int ? map['quantite'] as int : int.tryParse(map['quantite']?.toString() ?? ''),
+      unite: map['unite']?.toString() ?? 'mm',
+    );
+  }
+}
+
+class _QuoteDraft {
+  const _QuoteDraft({
+    this.clientName,
+    this.clientFirstName,
+    this.street,
+    this.postal,
+    this.city,
+    this.phone,
+    this.email,
+    this.commentaire,
+    this.chantierNotes,
+    this.chantierType,
+    this.typeHabitation,
+    this.accessibilite,
+    this.date,
+    this.products = const [],
+  });
+
+  final String? clientName;
+  final String? clientFirstName;
+  final String? street;
+  final String? postal;
+  final String? city;
+  final String? phone;
+  final String? email;
+  final String? commentaire;
+  final String? chantierNotes;
+  final String? chantierType;
+  final String? typeHabitation;
+  final String? accessibilite;
+  final DateTime? date;
+  final List<_ProductFormData> products;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'clientName': clientName,
+      'clientFirstName': clientFirstName,
+      'street': street,
+      'postal': postal,
+      'city': city,
+      'phone': phone,
+      'email': email,
+      'commentaire': commentaire,
+      'chantierNotes': chantierNotes,
+      'chantierType': chantierType,
+      'typeHabitation': typeHabitation,
+      'accessibilite': accessibilite,
+      'date': date?.toIso8601String(),
+      'products': products.map((e) => e.toMap()).toList(),
+    };
+  }
+
+  factory _QuoteDraft.fromMap(Map<String, dynamic> map) {
+    return _QuoteDraft(
+      clientName: map['clientName']?.toString(),
+      clientFirstName: map['clientFirstName']?.toString(),
+      street: map['street']?.toString(),
+      postal: map['postal']?.toString(),
+      city: map['city']?.toString(),
+      phone: map['phone']?.toString(),
+      email: map['email']?.toString(),
+      commentaire: map['commentaire']?.toString(),
+      chantierNotes: map['chantierNotes']?.toString(),
+      chantierType: map['chantierType']?.toString(),
+      typeHabitation: map['typeHabitation']?.toString(),
+      accessibilite: map['accessibilite']?.toString(),
+      date: map['date'] != null ? DateTime.tryParse(map['date'].toString()) : null,
+      products: map['products'] is List
+          ? (map['products'] as List)
+              .map((e) {
+                if (e is Map<String, dynamic>) return _ProductFormData.fromMap(e);
+                if (e is Map) return _ProductFormData.fromMap(Map<String, dynamic>.from(e));
+                return null;
+              })
+              .whereType<_ProductFormData>()
+              .toList()
+          : const [],
     );
   }
 }
@@ -1849,6 +2310,10 @@ class _QuoteItem {
     required this.number,
     required this.date,
     required this.tag,
+    this.draft,
+    this.id,
+    this.createdAt,
+    this.uploadUrl,
   });
 
   final String client;
@@ -1856,6 +2321,10 @@ class _QuoteItem {
   final String number;
   final String date;
   final String tag;
+  final _QuoteDraft? draft;
+  final String? id;
+  final DateTime? createdAt;
+  final String? uploadUrl;
 
   _QuoteItem copyWith({
     String? client,
@@ -1863,6 +2332,10 @@ class _QuoteItem {
     String? number,
     String? date,
     String? tag,
+    _QuoteDraft? draft,
+    String? id,
+    DateTime? createdAt,
+    String? uploadUrl,
   }) {
     return _QuoteItem(
       client: client ?? this.client,
@@ -1870,6 +2343,40 @@ class _QuoteItem {
       number: number ?? this.number,
       date: date ?? this.date,
       tag: tag ?? this.tag,
+      draft: draft ?? this.draft,
+      id: id ?? this.id,
+      createdAt: createdAt ?? this.createdAt,
+      uploadUrl: uploadUrl ?? this.uploadUrl,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'client': client,
+      'address': address,
+      'number': number,
+      'date': date,
+      'tag': tag,
+      'draft': draft?.toMap(),
+      'createdAt': createdAt?.toIso8601String(),
+      'uploadUrl': uploadUrl,
+    };
+  }
+
+  factory _QuoteItem.fromMap(Map<String, dynamic> map) {
+    return _QuoteItem(
+      id: map['id']?.toString(),
+      client: map['client']?.toString() ?? 'Client',
+      address: map['address']?.toString() ?? '',
+      number: map['number']?.toString() ?? '',
+      date: map['date']?.toString() ?? '',
+      tag: map['tag']?.toString() ?? '',
+      draft: map['draft'] is Map<String, dynamic> ? _QuoteDraft.fromMap(map['draft'] as Map<String, dynamic>) : null,
+      createdAt: map['createdAt'] is Timestamp
+          ? (map['createdAt'] as Timestamp).toDate()
+          : (map['createdAt'] != null ? DateTime.tryParse(map['createdAt'].toString()) : null),
+      uploadUrl: map['uploadUrl']?.toString(),
     );
   }
 }
@@ -1895,17 +2402,23 @@ class _QuoteCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.meta,
-    required this.badgeLabel,
+    this.badgeLabel,
     required this.badgeColor,
     this.trailing,
+    this.thumbnailUrl,
+    this.onEdit,
+    this.onDelete,
   });
 
   final String title;
   final String subtitle;
   final String meta;
-  final String badgeLabel;
+  final String? badgeLabel;
   final Color badgeColor;
   final Widget? trailing;
+  final String? thumbnailUrl;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1939,36 +2452,70 @@ class _QuoteCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          const SizedBox(width: 10),
+          if (thumbnailUrl != null && thumbnailUrl!.isNotEmpty)
+            GestureDetector(
+              onTap: () => _showPreview(context, thumbnailUrl!),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 70,
+                  height: 70,
                   decoration: BoxDecoration(
-                    color: badgeColor.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.white24),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    badgeLabel,
-                    style: TextStyle(color: badgeColor, fontWeight: FontWeight.w800, fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
+                  child: Image.network(
+                    thumbnailUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.picture_as_pdf, color: Colors.white54),
                   ),
                 ),
-                if (trailing != null) ...[
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: trailing!,
-                    ),
-                  ),
-                ],
-              ],
+              ),
             ),
+          const SizedBox(width: 10),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (onEdit != null)
+                IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.white70),
+                  onPressed: onEdit,
+                  visualDensity: VisualDensity.compact,
+                ),
+              if (onDelete != null)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.white70),
+                  onPressed: onDelete,
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPreview(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black87,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          child: InteractiveViewer(
+            child: Image.network(
+              url,
+              errorBuilder: (_, __, ___) => const SizedBox(
+                height: 200,
+                child: Center(
+                  child: Icon(Icons.picture_as_pdf, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -55,6 +55,8 @@ class WorkspaceRepository {
       'creatorUsesWorkit': data.creatorUsesWorkit,
       'creatorRole': data.creatorRoleKey,
       'creatorRoles': data.creatorRoles,
+      'creatorFirstName': data.creatorFirstName,
+      'creatorLastName': data.creatorLastName,
       'joinCodes': data.generatedCodes,
       'totalInvites': data.totalInvites,
       'status': 'trial', // trial | expired | active
