@@ -23,7 +23,10 @@ class WorkspaceRepository {
       throw StateError('Admin non authentifié, création impossible.');
     }
 
-    final workspaceRef = _firestore.collection('workspaces').doc();
+    final workspaceRef = data.workspaceId == null
+        ? _firestore.collection('workspaces').doc()
+        : _firestore.collection('workspaces').doc(data.workspaceId);
+    data.workspaceId = workspaceRef.id;
     final serverTimestamp = FieldValue.serverTimestamp();
 
     final planMap = {
@@ -57,6 +60,7 @@ class WorkspaceRepository {
       'creatorRoles': data.creatorRoles,
       'creatorFirstName': data.creatorFirstName,
       'creatorLastName': data.creatorLastName,
+      'tradeKey': data.tradeKey,
       'joinCodes': data.generatedCodes,
       'totalInvites': data.totalInvites,
       'status': 'trial', // trial | expired | active
@@ -79,6 +83,7 @@ class WorkspaceRepository {
         batch.set(inviteRef, {
           'email': trimmedEmail.toLowerCase(),
           'role': role,
+          'tradeKey': data.tradeKey,
           'status': 'pending',
           'workspaceId': workspaceRef.id,
           'createdAt': serverTimestamp,

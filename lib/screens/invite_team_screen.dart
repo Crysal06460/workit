@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../models/onboarding_models.dart';
 import 'admin_summary_screen.dart';
+import 'invite_activation_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'sign_in_screen.dart';
 
 class InviteTeamScreen extends StatefulWidget {
   const InviteTeamScreen({super.key, required this.data});
@@ -75,9 +80,23 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
       return;
     }
 
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Invitations enregistrées.')),
+    );
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => AdminSummaryScreen(data: widget.data)),
     );
+  }
+
+  String? _companyId() {
+    if (widget.data.workspaceId != null && widget.data.workspaceId!.isNotEmpty) {
+      return widget.data.workspaceId;
+    }
+    final siret = widget.data.siret.trim();
+    if (siret.isNotEmpty) return siret;
+    final name = widget.data.companyName.trim();
+    if (name.isNotEmpty) return name;
+    return null;
   }
 
   void _capitalizeFirstLetter(TextEditingController controller) {
@@ -139,11 +158,39 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF00E676)),
         title: const Text(
           'Inviter mon équipe',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Color(0xFF00E676)),
+            tooltip: 'Se déconnecter',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const SignInScreen()),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.lock_outline, color: Colors.white70),
+            tooltip: 'Admin (comptes créés)',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminProvisionedAccountsScreen(
+                    companyId: _companyId(),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -270,7 +317,7 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
                       ),
                     ),
                     onPressed: _continue,
-                    child: const Text('Envoyer les invitations'),
+                    child: const Text('Créer l’espace et provisionner les comptes'),
                   ),
                 ),
               ],
@@ -278,6 +325,148 @@ class _InviteTeamScreenState extends State<InviteTeamScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class AdminProvisionedAccountsScreen extends StatelessWidget {
+  const AdminProvisionedAccountsScreen({super.key, required this.companyId});
+
+  final String? companyId;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF07090D),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF00E676)),
+        title: const Text(
+          'Admin · Comptes créés',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Color(0xFF00E676)),
+            tooltip: 'Se déconnecter',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const SignInScreen()),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+        ],
+      ),
+      body: companyId == null
+          ? const Center(
+              child: Text(
+                'Aucun identifiant entreprise.',
+                style: TextStyle(color: Colors.white70),
+              ),
+            )
+          : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('provisioned_accounts')
+                  .where('companyId', isEqualTo: companyId)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Erreur: ${snapshot.error}',
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
+                  );
+                }
+                final docs = List.of(snapshot.data?.docs ?? []);
+                docs.sort((a, b) {
+                  final ta = a.data()['createdAt'];
+                  final tb = b.data()['createdAt'];
+                  if (ta is Timestamp && tb is Timestamp) {
+                    return tb.compareTo(ta);
+                  }
+                  return 0;
+                });
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'Aucun compte provisionné pour cette entreprise.',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  itemCount: docs.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (_, index) {
+                    final data = docs[index].data();
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F1422),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  data['email']?.toString() ?? '',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () {
+                                  final text = 'Email: ${data['email']}\n'
+                                      'Rôle: ${data['role']}\n'
+                                      'Mot de passe: ${data['tempPassword'] ?? '-'}';
+                                  Clipboard.setData(ClipboardData(text: text));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Détails copiés')),
+                                  );
+                                },
+                                icon: const Icon(Icons.copy, color: Colors.white70, size: 18),
+                                tooltip: 'Copier',
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Rôle: ${data['role'] ?? '-'}',
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                          if (data['tempPassword'] != null)
+                            Text(
+                              'Mot de passe temporaire: ${data['tempPassword']}',
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          if (data['status'] != null)
+                            Text(
+                              'Statut: ${data['status']}',
+                              style: const TextStyle(color: Colors.white54),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
     );
   }
 }
@@ -632,7 +821,7 @@ class _HeroCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Envoyez les invitations',
+                  'Provisionnez vos comptes',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -641,7 +830,7 @@ class _HeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '$planName. \nAjoutez vos collaborateurs, WorkIt enverra un lien d’invitation.\nVous aurez la possibilité d\'envoyer les invitations par la suite.',
+                  '$planName. \nAjoutez vos collaborateurs : WorkIt créera leurs comptes et mots de passe temporaires.\nVous pourrez les partager ensuite.',
                   style: const TextStyle(color: Colors.white70),
                 ),
               ],
@@ -671,13 +860,9 @@ class _HowItWorksCard extends StatelessWidget {
             style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
           ),
           SizedBox(height: 10),
-          _StepRow('1. WorkIt envoie un email avec un lien Invitation.'),
-          _StepRow(
-            '2. Si l’app est installée, ouverture directe sur l’activation.',
-          ),
-          _StepRow(
-            '3. Sinon, installation puis rattachement automatique au compte entreprise.',
-          ),
+          _StepRow('1. WorkIt crée les comptes avec un mot de passe temporaire.'),
+          _StepRow('2. L’admin partage les accès (ou copie les mots de passe).'),
+          _StepRow('3. À la première connexion, l’utilisateur change son mot de passe.'),
         ],
       ),
     );

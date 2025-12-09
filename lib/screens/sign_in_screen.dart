@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'commercial_home_screen.dart';
@@ -43,13 +44,71 @@ class _SignInScreenState extends State<SignInScreen> {
         );
       }
 
-      final workspaceSnap = await FirebaseFirestore.instance
+      // Cherche workspace par admin; sinon, par companyId depuis users/{uid}
+      QuerySnapshot<Map<String, dynamic>> workspaceSnap = await FirebaseFirestore.instance
           .collection('workspaces')
           .where('adminUid', isEqualTo: uid)
           .limit(1)
           .get();
 
+      String? workspaceId;
+      Map<String, dynamic>? data;
+      String? roleKey;
+      bool isAdmin = false;
+      Map<String, dynamic>? userData;
+
       if (workspaceSnap.docs.isEmpty) {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        userData = userDoc.data();
+        final companyId = userData?['companyId']?.toString();
+        roleKey = userData?['role']?.toString();
+        if (companyId != null && companyId.isNotEmpty) {
+          // 1) Essai par docId
+          final ws = await FirebaseFirestore.instance.collection('workspaces').doc(companyId).get();
+          if (ws.exists) {
+            workspaceId = ws.id;
+            data = ws.data();
+          } else {
+            // 2) Essai par siret ou companyName
+            final bySiret = await FirebaseFirestore.instance
+                .collection('workspaces')
+                .where('siret', isEqualTo: companyId)
+                .limit(1)
+                .get();
+            if (bySiret.docs.isNotEmpty) {
+              workspaceId = bySiret.docs.first.id;
+              data = bySiret.docs.first.data();
+            } else {
+              final byName = await FirebaseFirestore.instance
+                  .collection('workspaces')
+                  .where('companyName', isEqualTo: companyId)
+                  .limit(1)
+                  .get();
+              if (byName.docs.isNotEmpty) {
+                workspaceId = byName.docs.first.id;
+                data = byName.docs.first.data();
+              }
+            }
+          }
+        }
+      } else {
+        workspaceId = workspaceSnap.docs.first.id;
+        data = workspaceSnap.docs.first.data();
+        isAdmin = true;
+        final roles = data?['creatorRoles'];
+        if (roles is List && roles.isNotEmpty) {
+          roleKey = roles.first?.toString();
+        } else if (data?['creatorRole'] != null) {
+          roleKey = data?['creatorRole'].toString();
+        }
+        if (userData == null) {
+          final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          userData = userDoc.data();
+          roleKey ??= userData?['role']?.toString();
+        }
+      }
+
+      if (workspaceId == null || data == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Espace introuvable pour cet utilisateur.'),
@@ -58,35 +117,52 @@ class _SignInScreenState extends State<SignInScreen> {
         return;
       }
 
-      final data = workspaceSnap.docs.first.data();
-      final workspaceId = workspaceSnap.docs.first.id;
       final usesApp = data['creatorUsesWorkit'] == true;
-      String? roleKey;
-      final roles = data['creatorRoles'];
-      if (roles is List && roles.isNotEmpty) {
-        roleKey = roles.first?.toString();
-      } else if (data['creatorRole'] != null) {
-        roleKey = data['creatorRole'].toString();
+      isAdmin = isAdmin || (data['adminUid']?.toString() == uid);
+      roleKey ??= data['role']?.toString();
+
+      final mustChangePassword = userData?['mustChangePassword'] == true;
+
+      if (mustChangePassword) {
+        final completed = await Navigator.of(context).push<Map<String, dynamic>?>(
+          MaterialPageRoute(
+            builder: (_) => CompleteProfileScreen(
+              email: email,
+              currentRole: roleKey,
+              userDoc: userData,
+            ),
+          ),
+        );
+        if (completed != null) {
+          roleKey = completed['role']?.toString() ?? roleKey;
+          userData = userData ?? {};
+          userData.addAll(completed);
+        } else {
+          return;
+        }
       }
 
-      if (!usesApp || roleKey == null) {
+      if (!usesApp && roleKey == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Accès admin uniquement, aucun rôle terrain défini.'),
+            content: Text('Accès admin uniquement, aucun rôle défini.'),
           ),
         );
         return;
       }
 
       // Stocke le contexte d’entreprise pour isoler les données.
+      final tradeKey = (userData?['tradeKey'] ?? data['tradeKey'])?.toString();
       await _persistWorkspaceContext(
         workspaceId,
         data['companyName']?.toString() ?? '',
-        data['creatorFirstName']?.toString(),
-        data['creatorLastName']?.toString(),
+        userData?['firstName']?.toString() ?? data['creatorFirstName']?.toString(),
+        userData?['lastName']?.toString() ?? data['creatorLastName']?.toString(),
+        isAdmin,
+        tradeKey,
       );
 
-      final home = _homeForRole(roleKey);
+      final home = _homeForRole(roleKey ?? 'commercial');
       if (home == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Rôle non supporté ($roleKey).')),
@@ -114,12 +190,18 @@ class _SignInScreenState extends State<SignInScreen> {
     String companyName,
     String? firstName,
     String? lastName,
+    bool isAdmin,
+    String? tradeKey,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('workit_workspace_id', workspaceId);
     await prefs.setString('workit_workspace_name', companyName);
     if (firstName != null) await prefs.setString('workit_user_first_name', firstName);
     if (lastName != null) await prefs.setString('workit_user_last_name', lastName);
+    await prefs.setBool('workit_is_admin', isAdmin);
+    if (tradeKey != null && tradeKey.isNotEmpty) {
+      await prefs.setString('workit_trade_key', tradeKey);
+    }
   }
 
   String _humanError(FirebaseAuthException error) {
@@ -130,10 +212,35 @@ class _SignInScreenState extends State<SignInScreen> {
         return 'Utilisateur introuvable.';
       case 'invalid-email':
         return 'Email invalide.';
+      case 'invalid-credential':
+        return 'Identifiants invalides ou expirés.';
       case 'network-request-failed':
         return 'Connexion réseau impossible.';
       default:
         return 'Connexion impossible : ${error.message ?? error.code}';
+    }
+  }
+
+  Future<void> _sendReset() async {
+    final email = emailController.text.trim();
+    if (email.isEmpty || !email.contains('@') || !email.contains('.')) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saisissez un email valide avant de réinitialiser.')),
+      );
+      return;
+    }
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email de réinitialisation envoyé.')),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Impossible d’envoyer le mail.')),
+      );
     }
   }
 
@@ -287,7 +394,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: () {},
+                          onPressed: _sendReset,
                           child: const Text(
                             'Mot de passe oublié ?',
                             style: TextStyle(
@@ -322,6 +429,288 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class CompleteProfileScreen extends StatefulWidget {
+  const CompleteProfileScreen({super.key, required this.email, this.currentRole, this.userDoc});
+
+  final String email;
+  final String? currentRole;
+  final Map<String, dynamic>? userDoc;
+
+  @override
+  State<CompleteProfileScreen> createState() => _CompleteProfileScreenState();
+}
+
+class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _firstController = TextEditingController();
+  final _lastController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  String? _role;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _role = widget.currentRole;
+    final data = widget.userDoc;
+    _firstController.text = data?['firstName']?.toString() ?? '';
+    _lastController.text = data?['lastName']?.toString() ?? '';
+    _phoneController.text = data?['phone']?.toString() ?? '';
+  }
+
+  @override
+  void dispose() {
+    _firstController.dispose();
+    _lastController.dispose();
+    _phoneController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_role == null && widget.currentRole == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choisissez un rôle.')),
+      );
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw FirebaseAuthException(code: 'user-null', message: 'Utilisateur non connecté');
+
+      if (_newPasswordController.text != _confirmPasswordController.text) {
+        throw FirebaseAuthException(code: 'password-mismatch', message: 'Les mots de passe ne correspondent pas');
+      }
+
+      await user.updatePassword(_newPasswordController.text);
+
+      final uid = user.uid;
+      await FirebaseFirestore.instance.collection('users').doc(uid).set(
+        {
+          'firstName': _firstController.text.trim(),
+          'lastName': _lastController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'role': _role ?? widget.currentRole,
+          'tradeKey': widget.userDoc?['tradeKey'],
+          'mustChangePassword': false,
+          'status': 'active',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      // Nettoie les accès provisoires côté admin
+      final provSnap = await FirebaseFirestore.instance
+          .collection('provisioned_accounts')
+          .where('uid', isEqualTo: uid)
+          .get();
+      for (final doc in provSnap.docs) {
+        await doc.reference.set(
+          {
+            'status': 'activated',
+            'tempPassword': FieldValue.delete(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pop<Map<String, dynamic>>({
+        'firstName': _firstController.text.trim(),
+        'lastName': _lastController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'role': _role ?? widget.currentRole,
+        'mustChangePassword': false,
+      });
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? e.code)),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Impossible de mettre à jour : $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF00E676);
+    return Scaffold(
+      backgroundColor: const Color(0xFF07090D),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Sécuriser votre compte', style: TextStyle(color: Colors.white)),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Merci de définir votre mot de passe et vos informations avant d’accéder à votre espace.',
+                  style: TextStyle(color: Colors.white70, height: 1.3),
+                ),
+                const SizedBox(height: 18),
+                _input(
+                  controller: _firstController,
+                  label: 'Prénom',
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Prénom requis' : null,
+                ),
+                const SizedBox(height: 12),
+                _input(
+                  controller: _lastController,
+                  label: 'Nom',
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Nom requis' : null,
+                ),
+                const SizedBox(height: 12),
+                _input(
+                  controller: _phoneController,
+                  label: 'Téléphone',
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Téléphone requis';
+                    if (v.trim().length != 10) return '10 chiffres requis';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                _roleSelector(),
+                const SizedBox(height: 12),
+                _input(
+                  controller: _newPasswordController,
+                  label: 'Nouveau mot de passe',
+                  obscure: true,
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Mot de passe requis';
+                    final hasUpper = v.contains(RegExp('[A-Z]'));
+                    final hasDigit = v.contains(RegExp('[0-9]'));
+                    if (v.length < 6 || !hasUpper || !hasDigit) {
+                      return '6 caractères, 1 majuscule et 1 chiffre requis';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                _input(
+                  controller: _confirmPasswordController,
+                  label: 'Confirmer le mot de passe',
+                  obscure: true,
+                  validator: (v) => v != _newPasswordController.text ? 'Les mots de passe diffèrent' : null,
+                ),
+                const SizedBox(height: 22),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _loading ? null : _save,
+                    child: Text(_loading ? 'Enregistrement…' : 'Continuer'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _roleSelector() {
+    const accent = Color(0xFF00E676);
+    final roles = {
+      'commercial': 'Commercial',
+      'metreur': 'Métreur',
+      'poseur': 'Poseur',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Rôle', style: TextStyle(color: Colors.white70)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: roles.entries.map((entry) {
+            final selected = _role == entry.key;
+            return SizedBox(
+              width: 130,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: selected ? accent : Colors.white24),
+                  backgroundColor: selected ? accent.withOpacity(0.12) : const Color(0xFF0F1524),
+                ),
+                onPressed: () => setState(() => _role = entry.key),
+                child: Text(
+                  entry.value,
+                  style: TextStyle(
+                    color: selected ? accent : Colors.white70,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _input({
+    required TextEditingController controller,
+    required String label,
+    bool obscure = false,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      keyboardType: keyboardType,
+      validator: validator,
+      inputFormatters: inputFormatters,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.white70),
+        filled: true,
+        fillColor: const Color(0xFF0F1524),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.white24),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF00E676), width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
     );
   }

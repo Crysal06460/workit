@@ -1,11 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../data/workspace_repository.dart';
 import '../models/onboarding_models.dart';
 import 'commercial_home_screen.dart';
 import 'metreur_home_screen.dart';
 import 'poseurs_home_screen.dart';
+import 'sign_in_screen.dart';
 
 class AdminSummaryScreen extends StatefulWidget {
   const AdminSummaryScreen({super.key, required this.data});
@@ -30,11 +35,21 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
     setState(() => isSaving = true);
     try {
       final result = await repository.createWorkspace(widget.data);
+      widget.data.workspaceId = result.workspaceId;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('workit_workspace_id', result.workspaceId);
+      await prefs.setString('workit_workspace_name', widget.data.companyName);
+      await prefs.setString('workit_user_first_name', widget.data.creatorFirstName ?? '');
+      await prefs.setString('workit_user_last_name', widget.data.creatorLastName ?? '');
+      await prefs.setBool('workit_is_admin', true);
+
+      final provisioned = await _provisionAccounts(result.workspaceId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Espace créé (ID: ${result.workspaceId}) · Invitations: ${result.invitesCreated}',
+            'Espace créé. Comptes provisionnés: ${provisioned.length}. Retrouver les accès dans l’onglet Admin (icône cadenas).',
           ),
         ),
       );
@@ -50,6 +65,36 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
       }
     }
   }
+
+  Future<List<Map<String, dynamic>>> _provisionAccounts(String workspaceId) async {
+    final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
+    final callable = functions.httpsCallable('provisionAccounts');
+    final payload = <Map<String, String>>[];
+
+    widget.data.invites.forEach((role, emails) {
+      for (final email in emails) {
+        final trimmed = email.trim();
+        if (trimmed.isEmpty) continue;
+        payload.add({
+          'email': trimmed,
+          'role': role,
+          'companyId': workspaceId,
+          'tradeKey': widget.data.tradeKey ?? '',
+        });
+      }
+    });
+
+    if (payload.isEmpty) return const [];
+
+    final res = await callable.call({'accounts': payload});
+    final data = res.data as Map;
+    final accounts = (data['accounts'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    return accounts;
+  }
+
 
   void _goToHome() {
     final roleKey = widget.data.creatorRoleKey;
@@ -89,11 +134,26 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF00E676)),
         title: const Text(
           'Espace prêt !',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Color(0xFF00E676)),
+            tooltip: 'Se déconnecter',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => SignInScreen()),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -199,15 +259,29 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _StatTile(
-                      label: 'Invitations',
-                      value: '${data.totalInvites}',
-                    ),
-                  ),
-                ],
+                child: _StatTile(
+                  label: 'Invitations',
+                  value: '${data.totalInvites}',
+                ),
               ),
-              const SizedBox(height: 14),
-              _CreatorAccessCard(data: data),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: const Text(
+              'Les accès provisoires sont disponibles dans l’onglet Admin (icône cadenas).',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _CreatorAccessCard(data: data),
               const SizedBox(height: 14),
               Text(
                 'Synthèse par rôle',
@@ -345,7 +419,7 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
                   child: Text(
                     isSaving
                         ? 'Création en cours…'
-                        : 'Créer l’espace et envoyer les invitations',
+                        : 'Finaliser et accéder à WorkIt',
                   ),
                 ),
               ),

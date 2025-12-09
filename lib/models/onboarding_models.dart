@@ -148,6 +148,7 @@ class OnboardingData {
   PlanOption? plan;
   String adminEmail = '';
   String adminUid = '';
+  String? workspaceId;
   bool creatorUsesWorkit = false;
   String? creatorRoleKey; // commercial | metreur | commercial_metreur
   String? creatorFirstName;

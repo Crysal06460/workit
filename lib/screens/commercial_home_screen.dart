@@ -12,6 +12,8 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'invite_team_screen.dart';
+import 'sign_in_screen.dart';
 import 'widgets/dynamic_dropdown_field.dart';
 
 const Map<String, String> _metierOptions = {
@@ -37,6 +39,7 @@ const String _workspaceIdKey = 'workit_workspace_id';
 const String _workspaceNameKey = 'workit_workspace_name';
 const String _userFirstNameKey = 'workit_user_first_name';
 const String _userLastNameKey = 'workit_user_last_name';
+const String _isAdminKey = 'workit_is_admin';
 const String _storageBucket = 'gs://workit-1daa1.firebasestorage.app';
 
 class CommercialHomeScreen extends StatefulWidget {
@@ -53,6 +56,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
   String? _workspaceName;
   String? _userFirstName;
   String? _userLastName;
+  bool _isAdmin = false;
 
   @override
   void initState() {
@@ -68,10 +72,12 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
   String get _workspaceQuotesKey => '${_quotesPrefsKey}_${_workspaceId ?? 'none'}';
 
   String _greetingName() {
-    final hasFirst = _userFirstName?.trim().isNotEmpty == true;
-    final hasLast = _userLastName?.trim().isNotEmpty == true;
-    if (hasFirst && hasLast) return '${_userFirstName!.trim()} ${_userLastName!.trim()}';
-    if (hasFirst) return _userFirstName!.trim();
+    if (_userFirstName?.trim().isNotEmpty == true) {
+      return _userFirstName!.trim();
+    }
+    if (_userLastName?.trim().isNotEmpty == true) {
+      return _userLastName!.trim();
+    }
     return '';
   }
 
@@ -122,14 +128,15 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
       child: Scaffold(
         backgroundColor: _commercialBg,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          titleSpacing: 0,
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()}' : 'Bonjour',
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        titleSpacing: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()}' : 'Bonjour',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -143,6 +150,22 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
               ),
             ],
           ),
+          actions: [
+            if (_isAdmin && _workspaceId != null)
+              IconButton(
+                icon: const Icon(Icons.lock_outline, color: Colors.white70),
+                tooltip: 'Admin (comptes créés)',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => AdminProvisionedAccountsScreen(
+                        companyId: _workspaceId,
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(110),
             child: Padding(
@@ -342,6 +365,62 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
     await _persistQuotesToCloud();
   }
 
+  // Résolution minimale du libellé de catégorie (fallback sur la clé).
+  Map<String, dynamic>? _currentTradeNode() {
+    // Cet écran ne charge pas le dictionnaire complet pour l'instant.
+    return null;
+  }
+
+  String _categoryLabelFromKey(String? categoryKey) {
+    if (categoryKey == null) return '';
+    final trade = _currentTradeNode();
+    final cat = trade?['categories']?[categoryKey];
+    if (cat is Map && cat['label'] != null) return cat['label'].toString();
+    return categoryKey;
+  }
+
+  List<Map<String, dynamic>> _buildSummaryFromDraft(_QuoteDraft draft) {
+    final entries = <Map<String, dynamic>>[];
+    void addEntry(String label, String? value) {
+      final clean = value?.trim();
+      if (clean != null && clean.isNotEmpty) {
+        entries.add({'label': label, 'value': clean});
+      }
+    }
+
+    addEntry('Type de chantier', draft.chantierType);
+    addEntry('Type d’habitation', draft.typeHabitation);
+    addEntry('Accessibilité', draft.accessibilite);
+    addEntry('Commentaires chantier', draft.chantierNotes);
+
+    for (var i = 0; i < draft.products.length; i++) {
+      final p = draft.products[i];
+      final catLabel = _categoryLabelFromKey(p.categoryKey);
+      final buffer = StringBuffer();
+      buffer.write(catLabel);
+      if (p.sousCategorie?.isNotEmpty == true) buffer.write(' • ${p.sousCategorie}');
+      if (p.typeProduit?.isNotEmpty == true) buffer.write(' • ${p.typeProduit}');
+      if (p.variante?.isNotEmpty == true) buffer.write(' • ${p.variante}');
+      if (p.couleur?.isNotEmpty == true) buffer.write(' • Couleur: ${p.couleur}');
+      final dimParts = <String>[];
+      if (p.largeur != null) dimParts.add('${p.largeur}');
+      if (p.hauteur != null) dimParts.add('${p.hauteur}');
+      if (dimParts.isNotEmpty) {
+        buffer.write(' • Dim: ${dimParts.join(' x ')} ${p.unite}');
+      }
+      if (p.quantite != null) buffer.write(' • Qté: ${p.quantite}');
+      addEntry('Élément ${i + 1}', buffer.toString());
+    }
+
+    if (draft.date != null) {
+      final d = draft.date!;
+      final formatted = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+      addEntry('Chantier prévu', formatted);
+    }
+
+    return entries;
+  }
+
   Future<void> _persistQuotesToCloud() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || _workspaceId == null) return;
@@ -360,10 +439,37 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                 ? sanitizedNumber
                 : 'quote_${DateTime.now().millisecondsSinceEpoch}');
         final ref = col.doc(docId);
+        String? categoryLabel;
+        final firstProduct = quote.draft?.products.isNotEmpty == true ? quote.draft!.products.first : null;
+        if (firstProduct != null) {
+          categoryLabel = _categoryLabelFromKey(firstProduct.categoryKey);
+        }
+        final summary = quote.draft != null ? _buildSummaryFromDraft(quote.draft!) : <Map<String, dynamic>>[];
+        final attachments = <Map<String, dynamic>>[];
+        if (quote.uploadUrl != null && quote.uploadUrl!.isNotEmpty) {
+          attachments.add({
+            'label': 'Devis du commercial',
+            'icon': Icons.picture_as_pdf.codePoint,
+            'thumbnailUrl': quote.uploadUrl,
+          });
+        }
+        final combinedClientName = [
+          quote.draft?.clientFirstName?.trim() ?? '',
+          quote.draft?.clientName?.trim() ?? '',
+        ].where((e) => e.isNotEmpty).join(' ').trim();
         batch.set(ref, {
           ...quote.toMap(),
           'userId': uid,
           'workspaceId': _workspaceId,
+          'metreurId': quote.assignedMetreurId,
+          'metreurStatus': 'Nouvelle demande',
+          'category': categoryLabel,
+          'phone': quote.draft?.phone,
+          'updated': 'À l’instant',
+          'note': quote.draft?.commentaire ?? quote.draft?.chantierNotes ?? '',
+          'summary': summary,
+          'attachments': attachments,
+          if (combinedClientName.isNotEmpty) 'client': combinedClientName,
           'createdAt': quote.createdAt != null
               ? Timestamp.fromDate(quote.createdAt!)
               : FieldValue.serverTimestamp(),
@@ -382,12 +488,16 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
       _workspaceName = prefs.getString(_workspaceNameKey);
       _userFirstName = prefs.getString(_userFirstNameKey);
       _userLastName = prefs.getString(_userLastNameKey);
+      _isAdmin = prefs.getBool(_isAdminKey) ?? false;
     });
     await _maybeFetchWorkspaceUserName();
   }
 
   Future<void> _maybeFetchWorkspaceUserName() async {
     if (_workspaceId == null) return;
+    // Ne pas écraser le nom déjà stocké pour l’utilisateur courant.
+    final hasLocalName = (_userFirstName?.isNotEmpty == true) || (_userLastName?.isNotEmpty == true);
+    if (hasLocalName) return;
     try {
       final doc = await _firestore.collection('workspaces').doc(_workspaceId).get();
       if (!doc.exists) return;
@@ -597,6 +707,10 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   final quantiteController = TextEditingController(text: '1');
   final largeurController = TextEditingController();
   final hauteurController = TextEditingController();
+  final List<_MetreurOption> _metreurs = [];
+  bool loadingMetreurs = true;
+  String? _selectedMetreurId;
+  String? _selectedMetreurName;
   String? uploadedFileUrl;
   int currentStep = 0;
   Map<String, dynamic>? dictionary;
@@ -604,6 +718,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   bool loadingTrade = true;
   String? tradeKey;
   String? tradeLabel;
+  String? _workspaceId;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<String> selectedFiles = [];
   String? chantierType;
   String? typeHabitation;
@@ -628,11 +744,60 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   @override
   void initState() {
     super.initState();
+    _loadWorkspaceFromPrefs();
     _loadDictionary();
     _loadTradeFromPrefs();
+    _loadMetreurs();
     _applyDraft(widget.existingItem?.draft);
     if (widget.existingItem != null && widget.existingItem!.draft == null) {
       _applyQuoteFallback(widget.existingItem!);
+    }
+  }
+
+  Future<void> _loadWorkspaceFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _workspaceId = prefs.getString(_workspaceIdKey);
+    });
+    await _loadMetreurs();
+  }
+
+  Future<void> _loadMetreurs() async {
+    if (_workspaceId == null) {
+      setState(() => loadingMetreurs = false);
+      return;
+    }
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .where('companyId', isEqualTo: _workspaceId)
+          .where('role', isEqualTo: 'metreur')
+          .get();
+      _metreurs
+        ..clear()
+        ..addAll(snap.docs.map((doc) {
+          final data = doc.data();
+          final first = data['firstName']?.toString().trim() ?? '';
+          final last = data['lastName']?.toString().trim() ?? '';
+          final name = [first, last].where((e) => e.isNotEmpty).join(' ');
+          return _MetreurOption(
+            id: doc.id,
+            name: name.isNotEmpty ? name : (data['email']?.toString() ?? 'Métreur'),
+            email: data['email']?.toString(),
+          );
+        }));
+      if (_metreurs.length == 1 && _selectedMetreurId == null) {
+        _selectedMetreurId = _metreurs.first.id;
+        _selectedMetreurName = _metreurs.first.name;
+      }
+      if (_metreurs.isNotEmpty && _selectedMetreurId == null) {
+        _selectedMetreurId = 'any';
+        _selectedMetreurName = 'Peu importe';
+      }
+    } catch (_) {
+      // ignore
+    } finally {
+      if (mounted) setState(() => loadingMetreurs = false);
     }
   }
 
@@ -654,7 +819,38 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
 
   Future<void> _loadTradeFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    _workspaceId = prefs.getString(_workspaceIdKey);
     final key = prefs.getString('workit_trade_key');
+    if (key != null) {
+      setState(() {
+        tradeKey = key;
+        tradeLabel = _metierOptions[key] ?? key;
+        loadingTrade = false;
+      });
+      _ensureDefaultCategoryForProducts();
+      return;
+    }
+
+    if (_workspaceId != null) {
+      try {
+        final doc = await _firestore.collection('workspaces').doc(_workspaceId).get();
+        final data = doc.data();
+        final workspaceTrade = data?['tradeKey']?.toString();
+        if (workspaceTrade != null && workspaceTrade.isNotEmpty) {
+          await prefs.setString('workit_trade_key', workspaceTrade);
+          setState(() {
+            tradeKey = workspaceTrade;
+            tradeLabel = _metierOptions[workspaceTrade] ?? workspaceTrade;
+            loadingTrade = false;
+          });
+          _ensureDefaultCategoryForProducts();
+          return;
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
     setState(() {
       tradeKey = key;
       tradeLabel = _metierOptions[key] ?? key;
@@ -678,6 +874,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     typeHabitation = draft.typeHabitation;
     accessibilite = draft.accessibilite;
     selectedDate = draft.date;
+    _selectedMetreurId = draft.assignedMetreurId;
+    _selectedMetreurName = draft.assignedMetreurName;
     products = draft.products.isNotEmpty ? draft.products : products;
     _ensureDefaultCategoryForProducts();
     setState(() {});
@@ -713,6 +911,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     commentaireController.clear();
     phoneController.clear();
     emailController.clear();
+    _selectedMetreurId = item.assignedMetreurId;
+    _selectedMetreurName = item.assignedMetreurName;
     products = const [_ProductFormData(quantite: 1)];
     _ensureDefaultCategoryForProducts();
   }
@@ -794,6 +994,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       accessibilite: accessibilite,
       date: selectedDate,
       products: products,
+      assignedMetreurId: _selectedMetreurId == 'any' ? null : _selectedMetreurId,
+      assignedMetreurName: _selectedMetreurName,
     );
   }
 
@@ -866,6 +1068,56 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       return (type['variantes'] as List).map((e) => e.toString()).toList();
     }
     return const [];
+  }
+
+  String _categoryLabelFromKey(String? categoryKey) {
+    if (categoryKey == null) return '';
+    final trade = _currentTradeNode();
+    final cat = trade?['categories']?[categoryKey];
+    if (cat is Map && cat['label'] != null) return cat['label'].toString();
+    return categoryKey;
+  }
+
+  List<Map<String, dynamic>> _buildSummaryFromDraft(_QuoteDraft draft) {
+    final entries = <Map<String, dynamic>>[];
+    void addEntry(String label, String? value) {
+      final clean = value?.trim();
+      if (clean != null && clean.isNotEmpty) {
+        entries.add({'label': label, 'value': clean});
+      }
+    }
+
+    addEntry('Type de chantier', draft.chantierType);
+    addEntry('Type d’habitation', draft.typeHabitation);
+    addEntry('Accessibilité', draft.accessibilite);
+    addEntry('Commentaires chantier', draft.chantierNotes);
+
+    for (var i = 0; i < draft.products.length; i++) {
+      final p = draft.products[i];
+      final catLabel = _categoryLabelFromKey(p.categoryKey);
+      final buffer = StringBuffer();
+      buffer.write(catLabel);
+      if (p.sousCategorie?.isNotEmpty == true) buffer.write(' • ${p.sousCategorie}');
+      if (p.typeProduit?.isNotEmpty == true) buffer.write(' • ${p.typeProduit}');
+      if (p.variante?.isNotEmpty == true) buffer.write(' • ${p.variante}');
+      if (p.couleur?.isNotEmpty == true) buffer.write(' • Couleur: ${p.couleur}');
+      final dimParts = <String>[];
+      if (p.largeur != null) dimParts.add('${p.largeur}');
+      if (p.hauteur != null) dimParts.add('${p.hauteur}');
+      if (dimParts.isNotEmpty) {
+        buffer.write(' • Dim: ${dimParts.join(' x ')} ${p.unite}');
+      }
+      if (p.quantite != null) buffer.write(' • Qté: ${p.quantite}');
+      addEntry('Élément ${i + 1}', buffer.toString());
+    }
+
+    if (draft.date != null) {
+      final d = draft.date!;
+      final formatted = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+      addEntry('Chantier prévu', formatted);
+    }
+
+    return entries;
   }
 
   Future<void> _onPostalCodeChanged(String value) async {
@@ -1246,6 +1498,18 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                 ),
                 backgroundColor: _commercialAccent.withOpacity(0.85),
               ),
+            IconButton(
+              icon: const Icon(Icons.logout, color: _commercialAccent),
+              tooltip: 'Se déconnecter',
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+                if (!mounted) return;
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const SignInScreen()),
+                  (route) => false,
+                );
+              },
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1532,6 +1796,72 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     );
   }
 
+  Widget _metreurStep() {
+    if (loadingMetreurs) {
+      return const Center(child: CircularProgressIndicator(color: _commercialAccent));
+    }
+    if (_metreurs.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          color: _commercialCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white12),
+        ),
+        padding: const EdgeInsets.all(16),
+        child: const Text(
+          'Aucun métreur disponible dans l’entreprise.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
+    }
+
+    final options = [
+      ..._metreurs,
+      const _MetreurOption(id: 'any', name: 'Peu importe', email: null),
+    ];
+    final groupValue = _selectedMetreurId ?? 'any';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _commercialCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white12),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Attribuer à un métreur',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 10),
+          ...options.map((m) {
+            final selected = groupValue == m.id;
+            return RadioListTile<String>(
+              value: m.id,
+              groupValue: groupValue,
+              onChanged: (value) {
+                setState(() {
+                  _selectedMetreurId = value;
+                  _selectedMetreurName = value == 'any' ? 'Peu importe' : m.name;
+                });
+              },
+              activeColor: _commercialAccent,
+              title: Text(
+                m.name,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+              subtitle: m.email != null ? Text(m.email!, style: const TextStyle(color: Colors.white60)) : null,
+              tileColor: selected ? Colors.white.withOpacity(0.05) : Colors.transparent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
   Widget _uploadStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1588,6 +1918,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       _chantierForm(),
       _productForm(),
       _dateForm(),
+      _metreurStep(),
       _commentsForm(),
       _uploadStep(),
     ]
@@ -1616,90 +1947,94 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
             : loadingTrade
                 ? const Center(child: CircularProgressIndicator(color: _commercialAccent))
                 : Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _stepHeader(),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: PageView(
-                        controller: pageController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        children: steps,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (currentStep > 0)
-                          OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white38),
-                            ),
-                            onPressed: () {
-                              currentStep = (currentStep - 1).clamp(0, steps.length - 1);
-                              pageController.animateToPage(
-                                currentStep,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOut,
-                              );
-                              setState(() {});
-                            },
-                            child: const Text('Précédent'),
+                        _stepHeader(),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: PageView(
+                            controller: pageController,
+                            physics: const NeverScrollableScrollPhysics(),
+                            children: steps,
                           ),
-                        const Spacer(),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _commercialAccent,
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                          ),
-                          onPressed: () {
-                            if (currentStep < steps.length - 1) {
-                              currentStep++;
-                              pageController.animateToPage(
-                                currentStep,
-                                duration: const Duration(milliseconds: 250),
-                                curve: Curves.easeInOut,
-                              );
-                              setState(() {});
-                              return;
-                            }
-                            final draft = _buildDraft();
-                            final existing = widget.existingItem;
-                            final newItem = _QuoteItem(
-                              client: clientNameController.text.isNotEmpty
-                                  ? '${clientNameController.text}${clientFirstNameController.text.isNotEmpty ? ' ${clientFirstNameController.text}' : ''}'
-                                  : 'Nouveau client',
-                              address: '${clientStreetController.text}, ${clientPostalController.text} ${clientCityController.text}',
-                          number: existing?.number ?? '#${DateTime.now().millisecondsSinceEpoch % 10000}',
-                          date: existing?.date ?? 'Ajouté aujourd’hui',
-                          tag: '',
-                          draft: draft,
-                          id: existing?.id,
-                          createdAt: existing?.createdAt ?? DateTime.now(),
-                          uploadUrl: uploadedFileUrl ?? existing?.uploadUrl,
-                        );
-                            Navigator.of(context).pop(newItem);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Devis enregistré et partagé avec l’équipe.'),
-                                behavior: SnackBarBehavior.floating,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (currentStep > 0)
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.white,
+                                  side: const BorderSide(color: Colors.white38),
+                                ),
+                                onPressed: () {
+                                  currentStep = (currentStep - 1).clamp(0, steps.length - 1);
+                                  pageController.animateToPage(
+                                    currentStep,
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeInOut,
+                                  );
+                                  setState(() {});
+                                },
+                                child: const Text('Précédent'),
                               ),
-                            );
-                          },
-                          child: Text(currentStep == steps.length - 1 ? 'Soumettre' : 'Suivant'),
+                            const Spacer(),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _commercialAccent,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                              ),
+                              onPressed: () {
+                                if (currentStep < steps.length - 1) {
+                                  currentStep++;
+                                  pageController.animateToPage(
+                                    currentStep,
+                                    duration: const Duration(milliseconds: 250),
+                                    curve: Curves.easeInOut,
+                                  );
+                                  setState(() {});
+                                  return;
+                                }
+                                final draft = _buildDraft();
+                                final existing = widget.existingItem;
+                                final newItem = _QuoteItem(
+                                  client: clientNameController.text.isNotEmpty
+                                      ? '${clientNameController.text}${clientFirstNameController.text.isNotEmpty ? ' ${clientFirstNameController.text}' : ''}'
+                                      : 'Nouveau client',
+                                  address:
+                                      '${clientStreetController.text}, ${clientPostalController.text} ${clientCityController.text}',
+                                  number: existing?.number ?? '#${DateTime.now().millisecondsSinceEpoch % 10000}',
+                                  date: existing?.date ?? 'Ajouté aujourd’hui',
+                                  tag: '',
+                                  assignedMetreurId: _selectedMetreurId == 'any' ? null : _selectedMetreurId,
+                                  assignedMetreurName: _selectedMetreurName,
+                                  draft: draft,
+                                  id: existing?.id,
+                                  createdAt: existing?.createdAt ?? DateTime.now(),
+                                  uploadUrl: uploadedFileUrl ?? existing?.uploadUrl,
+                                );
+                                Navigator.of(context).pop(newItem);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Devis enregistré et partagé avec l’équipe.'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                              child: Text(currentStep == steps.length - 1 ? 'Soumettre' : 'Suivant'),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
       ),
     );
   }
+
 }
 
 class _ActionTile extends StatelessWidget {
@@ -2161,6 +2496,8 @@ class _QuoteDraft {
     this.accessibilite,
     this.date,
     this.products = const [],
+    this.assignedMetreurId,
+    this.assignedMetreurName,
   });
 
   final String? clientName;
@@ -2177,6 +2514,8 @@ class _QuoteDraft {
   final String? accessibilite;
   final DateTime? date;
   final List<_ProductFormData> products;
+  final String? assignedMetreurId;
+  final String? assignedMetreurName;
 
   Map<String, dynamic> toMap() {
     return {
@@ -2194,6 +2533,8 @@ class _QuoteDraft {
       'accessibilite': accessibilite,
       'date': date?.toIso8601String(),
       'products': products.map((e) => e.toMap()).toList(),
+      'assignedMetreurId': assignedMetreurId,
+      'assignedMetreurName': assignedMetreurName,
     };
   }
 
@@ -2222,6 +2563,8 @@ class _QuoteDraft {
               .whereType<_ProductFormData>()
               .toList()
           : const [],
+      assignedMetreurId: map['assignedMetreurId']?.toString(),
+      assignedMetreurName: map['assignedMetreurName']?.toString(),
     );
   }
 }
@@ -2303,6 +2646,13 @@ class _Choice {
   final String label;
 }
 
+class _MetreurOption {
+  const _MetreurOption({required this.id, required this.name, required this.email});
+  final String id;
+  final String name;
+  final String? email;
+}
+
 class _QuoteItem {
   const _QuoteItem({
     required this.client,
@@ -2310,6 +2660,8 @@ class _QuoteItem {
     required this.number,
     required this.date,
     required this.tag,
+    this.assignedMetreurId,
+    this.assignedMetreurName,
     this.draft,
     this.id,
     this.createdAt,
@@ -2321,6 +2673,8 @@ class _QuoteItem {
   final String number;
   final String date;
   final String tag;
+  final String? assignedMetreurId;
+  final String? assignedMetreurName;
   final _QuoteDraft? draft;
   final String? id;
   final DateTime? createdAt;
@@ -2332,6 +2686,8 @@ class _QuoteItem {
     String? number,
     String? date,
     String? tag,
+    String? assignedMetreurId,
+    String? assignedMetreurName,
     _QuoteDraft? draft,
     String? id,
     DateTime? createdAt,
@@ -2343,6 +2699,8 @@ class _QuoteItem {
       number: number ?? this.number,
       date: date ?? this.date,
       tag: tag ?? this.tag,
+      assignedMetreurId: assignedMetreurId ?? this.assignedMetreurId,
+      assignedMetreurName: assignedMetreurName ?? this.assignedMetreurName,
       draft: draft ?? this.draft,
       id: id ?? this.id,
       createdAt: createdAt ?? this.createdAt,
@@ -2358,6 +2716,8 @@ class _QuoteItem {
       'number': number,
       'date': date,
       'tag': tag,
+      'assignedMetreurId': assignedMetreurId,
+      'assignedMetreurName': assignedMetreurName,
       'draft': draft?.toMap(),
       'createdAt': createdAt?.toIso8601String(),
       'uploadUrl': uploadUrl,
@@ -2372,6 +2732,8 @@ class _QuoteItem {
       number: map['number']?.toString() ?? '',
       date: map['date']?.toString() ?? '',
       tag: map['tag']?.toString() ?? '',
+      assignedMetreurId: map['assignedMetreurId']?.toString(),
+      assignedMetreurName: map['assignedMetreurName']?.toString(),
       draft: map['draft'] is Map<String, dynamic> ? _QuoteDraft.fromMap(map['draft'] as Map<String, dynamic>) : null,
       createdAt: map['createdAt'] is Timestamp
           ? (map['createdAt'] as Timestamp).toDate()
