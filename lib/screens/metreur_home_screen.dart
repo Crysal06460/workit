@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'measurement_form_screen.dart';
 import 'sign_in_screen.dart';
 
 const Color _metreurBg = Color(0xFF07090D);
@@ -536,6 +538,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
           onAccept: () => _acceptRequest(context, data),
           onAskInfo: () => _askForInfo(context, data),
           onSchedule: () => _scheduleMeeting(data),
+          onRefresh: _loadRequests,
         ),
       ),
     );
@@ -546,7 +549,8 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
     final navigator = Navigator.of(context);
     setState(() {
       _newRequests.removeWhere((e) => e.id == data.id);
-      if (!_acceptedRequests.contains(data)) {
+      final alreadyAccepted = _acceptedRequests.any((e) => e.id == data.id);
+      if (!alreadyAccepted) {
         _acceptedRequests.add(
           data.copyWith(
             status: 'Acceptée',
@@ -986,6 +990,7 @@ class _MeasureCardData {
     this.commercialId,
     this.metreurId,
     this.workspaceId,
+    this.draft,
   });
 
   final String id;
@@ -1002,6 +1007,7 @@ class _MeasureCardData {
   final String? commercialId;
   final String? metreurId;
   final String? workspaceId;
+  final _QuoteDraft? draft;
 
   _MeasureCardData copyWith({
     String? id,
@@ -1018,6 +1024,7 @@ class _MeasureCardData {
     String? commercialId,
     String? metreurId,
     String? workspaceId,
+    _QuoteDraft? draft,
   }) {
     return _MeasureCardData(
       id: id ?? this.id,
@@ -1034,6 +1041,7 @@ class _MeasureCardData {
       commercialId: commercialId ?? this.commercialId,
       metreurId: metreurId ?? this.metreurId,
       workspaceId: workspaceId ?? this.workspaceId,
+      draft: draft ?? this.draft,
     );
   }
 
@@ -1053,6 +1061,7 @@ class _MeasureCardData {
       'commercialId': commercialId,
       'metreurId': metreurId,
       'workspaceId': workspaceId,
+      'draft': draft?.toMap(),
     };
   }
 
@@ -1087,10 +1096,48 @@ class _MeasureCardData {
       commercialId: map['userId']?.toString(),
       metreurId: (map['metreurId'] ?? map['assignedMetreurId'])?.toString(),
       workspaceId: map['workspaceId']?.toString(),
+      draft: map['draft'] is Map<String, dynamic> ? _QuoteDraft.fromMap(map['draft'] as Map<String, dynamic>) : null,
     );
   }
 }
 
+class _TabPill extends StatelessWidget {
+  const _TabPill({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
+
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircleAvatar(
+          backgroundColor: color.withOpacity(0.18),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 8),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.18),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text('$count', style: const TextStyle(fontWeight: FontWeight.w800)),
+        ),
+      ],
+    );
+  }
+}
 class _SummaryEntry {
   const _SummaryEntry({required this.label, required this.value});
   final String label;
@@ -1128,24 +1175,34 @@ class _AttachmentData {
       );
 }
 
-void _callNumber(BuildContext context, String number) {
-  // TODO: branch to url_launcher when available; temporary feedback only.
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Appel vers $number'),
-      behavior: SnackBarBehavior.floating,
-    ),
-  );
+void _callNumber(BuildContext context, String number) async {
+  final uri = Uri.parse('tel:$number');
+  if (await canLaunchUrl(uri)) {
+    await launchUrl(uri);
+  } else {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Impossible d’appeler $number'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 }
 
-void _openAttachment(BuildContext context, _AttachmentData data) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text('Ouverture de ${data.label}'),
-      behavior: SnackBarBehavior.floating,
-    ),
-  );
-  // TODO: remplacer par l’ouverture réelle du PDF/JPG du devis.
+void _openAttachment(BuildContext context, _AttachmentData data) async {
+  if (data.thumbnailUrl != null && await canLaunchUrl(Uri.parse(data.thumbnailUrl!))) {
+    await launchUrl(Uri.parse(data.thumbnailUrl!), mode: LaunchMode.inAppWebView);
+  } else {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Impossible d’ouvrir ${data.label}'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
 }
 
 String _formatMeeting(DateTime dt) {
@@ -1199,40 +1256,183 @@ class _StatusList extends StatelessWidget {
   }
 }
 
-class _TabPill extends StatelessWidget {
-  const _TabPill({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.icon,
+class _ProductFormData {
+  const _ProductFormData({
+    this.categoryKey,
+    this.sousCategorie,
+    this.typeProduit,
+    this.variante,
+    this.couleur,
+    this.couleurDetail,
+    this.largeur,
+    this.hauteur,
+    this.quantite,
+    this.unite = 'mm',
+    // Measurement fields
+    this.largeurReelle,
+    this.hauteurReelle,
+    this.cjHaut,
+    this.cjBas,
+    this.cjGauche,
+    this.cjDroite,
+    this.note,
+    this.ref,
   });
 
-  final String label;
-  final int count;
-  final Color color;
-  final IconData icon;
+  final String? categoryKey;
+  final String? sousCategorie;
+  final String? typeProduit;
+  final String? variante;
+  final String? couleur;
+  final String? couleurDetail;
+  final int? largeur;
+  final int? hauteur;
+  final int? quantite;
+  final String unite;
+  // Measurement fields
+  final String? largeurReelle;
+  final String? hauteurReelle;
+  final String? cjHaut;
+  final String? cjBas;
+  final String? cjGauche;
+  final String? cjDroite;
+  final String? note;
+  final String? ref;
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withOpacity(0.18),
-          child: Icon(icon, color: color, size: 18),
-        ),
-        const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(width: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text('$count', style: const TextStyle(fontWeight: FontWeight.w800)),
-        ),
-      ],
+  Map<String, dynamic> toMap() {
+    return {
+      'categoryKey': categoryKey,
+      'sousCategorie': sousCategorie,
+      'typeProduit': typeProduit,
+      'variante': variante,
+      'couleur': couleur,
+      'couleurDetail': couleurDetail,
+      'largeur': largeur,
+      'hauteur': hauteur,
+      'quantite': quantite,
+      'unite': unite,
+      // Measurement fields
+      'largeurReelle': largeurReelle,
+      'hauteurReelle': hauteurReelle,
+      'cjHaut': cjHaut,
+      'cjBas': cjBas,
+      'cjGauche': cjGauche,
+      'cjDroite': cjDroite,
+      'note': note,
+      'ref': ref,
+    };
+  }
+
+  factory _ProductFormData.fromMap(Map<String, dynamic> map) {
+    return _ProductFormData(
+      categoryKey: map['categoryKey']?.toString(),
+      sousCategorie: map['sousCategorie']?.toString(),
+      typeProduit: map['typeProduit']?.toString(),
+      variante: map['variante']?.toString(),
+      couleur: map['couleur']?.toString(),
+      couleurDetail: map['couleurDetail']?.toString(),
+      largeur: map['largeur'] is int ? map['largeur'] as int : int.tryParse(map['largeur']?.toString() ?? ''),
+      hauteur: map['hauteur'] is int ? map['hauteur'] as int : int.tryParse(map['hauteur']?.toString() ?? ''),
+      quantite: map['quantite'] is int ? map['quantite'] as int : int.tryParse(map['quantite']?.toString() ?? ''),
+      unite: map['unite']?.toString() ?? 'mm',
+      // Measurement fields
+      largeurReelle: map['largeurReelle']?.toString(),
+      hauteurReelle: map['hauteurReelle']?.toString(),
+      cjHaut: map['cjHaut']?.toString(),
+      cjBas: map['cjBas']?.toString(),
+      cjGauche: map['cjGauche']?.toString(),
+      cjDroite: map['cjDroite']?.toString(),
+      note: map['note']?.toString(),
+      ref: map['ref']?.toString(),
+    );
+  }
+}
+
+class _QuoteDraft {
+  const _QuoteDraft({
+    this.clientName,
+    this.clientFirstName,
+    this.street,
+    this.postal,
+    this.city,
+    this.phone,
+    this.email,
+    this.commentaire,
+    this.chantierNotes,
+    this.chantierType,
+    this.typeHabitation,
+    this.accessibilite,
+    this.date,
+    this.products = const [],
+    this.assignedMetreurId,
+    this.assignedMetreurName,
+  });
+
+  final String? clientName;
+  final String? clientFirstName;
+  final String? street;
+  final String? postal;
+  final String? city;
+  final String? phone;
+  final String? email;
+  final String? commentaire;
+  final String? chantierNotes;
+  final String? chantierType;
+  final String? typeHabitation;
+  final String? accessibilite;
+  final DateTime? date;
+  final List<_ProductFormData> products;
+  final String? assignedMetreurId;
+  final String? assignedMetreurName;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'clientName': clientName,
+      'clientFirstName': clientFirstName,
+      'street': street,
+      'postal': postal,
+      'city': city,
+      'phone': phone,
+      'email': email,
+      'commentaire': commentaire,
+      'chantierNotes': chantierNotes,
+      'chantierType': chantierType,
+      'typeHabitation': typeHabitation,
+      'accessibilite': accessibilite,
+      'date': date?.toIso8601String(),
+      'products': products.map((e) => e.toMap()).toList(),
+      'assignedMetreurId': assignedMetreurId,
+      'assignedMetreurName': assignedMetreurName,
+    };
+  }
+
+  factory _QuoteDraft.fromMap(Map<String, dynamic> map) {
+    return _QuoteDraft(
+      clientName: map['clientName']?.toString(),
+      clientFirstName: map['clientFirstName']?.toString(),
+      street: map['street']?.toString(),
+      postal: map['postal']?.toString(),
+      city: map['city']?.toString(),
+      phone: map['phone']?.toString(),
+      email: map['email']?.toString(),
+      commentaire: map['commentaire']?.toString(),
+      chantierNotes: map['chantierNotes']?.toString(),
+      chantierType: map['chantierType']?.toString(),
+      typeHabitation: map['typeHabitation']?.toString(),
+      accessibilite: map['accessibilite']?.toString(),
+      date: map['date'] != null ? DateTime.tryParse(map['date'].toString()) : null,
+      products: map['products'] is List
+          ? (map['products'] as List)
+              .map((e) {
+                if (e is Map<String, dynamic>) return _ProductFormData.fromMap(e);
+                if (e is Map) return _ProductFormData.fromMap(Map<String, dynamic>.from(e));
+                return null;
+              })
+              .whereType<_ProductFormData>()
+              .toList()
+          : const [],
+      assignedMetreurId: map['assignedMetreurId']?.toString(),
+      assignedMetreurName: map['assignedMetreurName']?.toString(),
     );
   }
 }
@@ -1243,12 +1443,14 @@ class _MeasureRequestSummary extends StatefulWidget {
     required this.onAccept,
     required this.onAskInfo,
     required this.onSchedule,
+    this.onRefresh,
   });
 
   final _MeasureCardData data;
   final VoidCallback onAccept;
   final VoidCallback onAskInfo;
   final Future<DateTime?> Function() onSchedule;
+  final VoidCallback? onRefresh;
 
   @override
   State<_MeasureRequestSummary> createState() => _MeasureRequestSummaryState();
@@ -1271,6 +1473,10 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         title: const Text(
           'Demande de métré',
           style: TextStyle(
@@ -1355,7 +1561,106 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    if (data.summary.isNotEmpty)
+                    const SizedBox(height: 12),
+                    if (data.draft != null && data.draft!.products.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const // Section Title
+                          Text(
+                            'Éléments à métrer',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ...data.draft!.products.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            final p = entry.value;
+
+                            // Helper to build rows
+                            Widget _buildRow(String label, String value) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '$label : ',
+                                      style: const TextStyle(
+                                          color: Colors.white54, fontSize: 13),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        value,
+                                        style: const TextStyle(
+                                            color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.04),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.white12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: _metreurAccent.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          'Élément ${i + 1}',
+                                          style: const TextStyle(
+                                            color: _metreurAccent,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      if (p.quantite != null)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.white12),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            'Qté: ${p.quantite}',
+                                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  if (p.categoryKey != null) _buildRow('Catégorie', p.categoryKey!),
+                                  if (p.sousCategorie != null) _buildRow('Type', p.sousCategorie!),
+                                  if (p.typeProduit != null && p.typeProduit != p.sousCategorie) _buildRow('Produit', p.typeProduit!),
+                                  if (p.couleur != null) _buildRow('Couleur', p.couleur!),
+                                  if (p.largeur != null || p.hauteur != null)
+                                    _buildRow('Dim', '${p.largeur ?? '-'} x ${p.hauteur ?? '-'} ${p.unite}'),
+                                ],
+                              ),
+                            );
+                          }),
+                        ],
+                      )
+                    else if (data.summary.isNotEmpty)
                       _GlassCard(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1453,19 +1758,113 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _metreurAccent,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        elevation: 0,
+                  if (data.status != 'Acceptée')
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _metreurAccent,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 0,
+                        ),
+                        onPressed: widget.onAccept,
+                        child: const Text('Accepter la demande'),
                       ),
-                      onPressed: widget.onAccept,
-                      child: const Text('Accepter la demande'),
-                    ),
-                  ),
+                    )
+                  else
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _metreurAccent, // Green for action
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 4,
+                          shadowColor: _metreurAccent.withOpacity(0.4),
+                        ),
+                        onPressed: () async {
+                          // Navigate to Measurement Form and await result
+                          final updatedProducts = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MeasurementFormScreen(
+                                draftData: data.draft!.toMap(),
+                              ),
+                            ),
+                          );
+
+                          if (updatedProducts != null && updatedProducts is List) {
+                              // Update local state and Firestore
+                              final updatedDraft = _QuoteDraft.fromMap({
+                                ...data.draft!.toMap(),
+                                'products': updatedProducts,
+                              });
+
+                              try {
+                                final wsId = data.workspaceId; // Ensure we have a workspace ID
+                                if (wsId == null) throw 'Workspace ID missing';
+
+                                await FirebaseFirestore.instance
+                                    .collection('workspaces')
+                                    .doc(wsId)
+                                    .collection('devis')
+                                    .doc(data.id) 
+                                    .update({
+                                      'draft': updatedDraft.toMap(),
+                                      'updated': DateTime.now().toIso8601String(),
+                                      // Potentially update status to 'Métré effectué'? 
+                                      // For now, keep it simple.
+                                    });
+                                  
+                                if (mounted) {
+                                   ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Métré enregistré avec succès'),
+                                      backgroundColor: _metreurAccent,
+                                    ),
+                                  );
+                                  // Refresh the parent list to show updated status/button
+                                  if (widget.onRefresh != null) {
+                                    widget.onRefresh!(); 
+                                  }
+                                }
+                              } catch (e) {
+                                 debugPrint('Error saving measurements: $e');
+                                 if (mounted) {
+                                   ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Erreur lors de l\'enregistrement: $e'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                 }
+                              }
+                          }
+                        },
+                        child: Builder(
+                          builder: (context) {
+                            // Check if any product has measurements
+                            final hasMeasurements = data.draft?.products.any((p) => 
+                              (p.largeurReelle?.isNotEmpty == true) || 
+                              (p.hauteurReelle?.isNotEmpty == true) || 
+                              (p.note?.isNotEmpty == true) || 
+                              (p.cjHaut?.isNotEmpty == true)) ?? false;
+
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(hasMeasurements ? Icons.edit : Icons.play_arrow_rounded, color: Colors.black),
+                                const SizedBox(width: 8),
+                                Text(
+                                  hasMeasurements ? 'Modifier le métré' : 'Démarrer le métré',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    )
                 ],
               ),
             ),

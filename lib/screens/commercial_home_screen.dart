@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'admin_home_screen.dart';
 import 'invite_team_screen.dart';
 import 'sign_in_screen.dart';
 import 'widgets/dynamic_dropdown_field.dart';
@@ -50,7 +51,6 @@ class CommercialHomeScreen extends StatefulWidget {
 }
 
 class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
-  final List<_QuoteItem> _newItems = [];
   final _firestore = FirebaseFirestore.instance;
   String? _workspaceId;
   String? _workspaceName;
@@ -66,10 +66,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
 
   Future<void> _init() async {
     await _loadWorkspaceContext();
-    await _loadSavedQuotes();
   }
-
-  String get _workspaceQuotesKey => '${_quotesPrefsKey}_${_workspaceId ?? 'none'}';
 
   String _greetingName() {
     if (_userFirstName?.trim().isNotEmpty == true) {
@@ -83,60 +80,20 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-
-    final measuringItems = const [
-      _MeasureItem(
-        client: 'Hector Immobilier',
-        address: '45 bd Carnot, Nice',
-        status: 'Dimensions en saisie',
-        assignee: 'Léa Martin',
-      ),
-    ];
-
-    final commandeItems = const [
-      _QuoteItem(
-        client: 'Opti Veranda',
-        address: 'Rue des Fleurs, Nantes',
-        number: '#8320',
-        date: 'Commande en cours',
-        tag: 'Commande',
-      ),
-    ];
-
-    final poseItems = const [
-      _QuoteItem(
-        client: 'Immo Basset',
-        address: '12 rue du Parc, Toulouse',
-        number: '#8455',
-        date: 'Pose prévue mardi',
-        tag: 'Planifié',
-      ),
-    ];
-
-    final terminesItems = const [
-      _QuoteItem(
-        client: 'Maison Dubois',
-        address: 'Chemin des Pins, Grenoble',
-        number: '#8420',
-        date: 'Clôturé hier',
-        tag: 'Terminé',
-      ),
-    ];
-
     return DefaultTabController(
       length: 5,
       child: Scaffold(
         backgroundColor: _commercialBg,
         appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()}' : 'Bonjour',
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+          titleSpacing: 0,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()}' : 'Bonjour',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -154,12 +111,12 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
             if (_isAdmin && _workspaceId != null)
               IconButton(
                 icon: const Icon(Icons.lock_outline, color: Colors.white70),
-                tooltip: 'Admin (comptes créés)',
+                tooltip: 'Espace Admin',
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => AdminProvisionedAccountsScreen(
-                        companyId: _workspaceId,
+                      builder: (_) => AdminHomeScreen(
+                        workspaceId: _workspaceId,
                       ),
                     ),
                   );
@@ -181,60 +138,70 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                   border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                child: TabBar(
-                  isScrollable: true,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white70,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _commercialAccent.withOpacity(0.5)),
-                  ),
-                  indicatorPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  tabs: [
-                    Tab(
-                      child: _TabPill(
-                        label: 'En attente',
-                        count: _newItems.length,
-                        color: Colors.deepPurpleAccent,
-                        icon: Icons.upload_file,
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: _workspaceId == null
+                      ? const Stream.empty()
+                      : _firestore
+                          .collection('workspaces')
+                          .doc(_workspaceId)
+                          .collection('devis')
+                          // Removed redundant where clause to avoid index requirement
+                          .orderBy('createdAt', descending: true)
+                          .snapshots(),
+                  builder: (context, snapshot) {
+                    final docs = snapshot.data?.docs ?? [];
+                    
+                    final newItems = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final status = data['metreurStatus'] as String?;
+                      return status == null || status == 'Nouvelle demande' || status == 'À classer';
+                    }).toList();
+
+                    final measuringItems = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final status = data['metreurStatus'] as String?;
+                      return status == 'Acceptée' || status == 'En cours';
+                    }).toList();
+
+                    final commandeItems = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final status = data['metreurStatus'] as String?;
+                      return status == 'À commander' || status == 'Commande en cours';
+                    }).toList();
+
+                    final poseItems = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final status = data['metreurStatus'] as String?;
+                      return status == 'À planifier' || status == 'En pose';
+                    }).toList();
+
+                    final terminesItems = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final status = data['metreurStatus'] as String?;
+                      return status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé';
+                    }).toList();
+
+                    return TabBar(
+                      isScrollable: true,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.white70,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      indicator: BoxDecoration(
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _commercialAccent.withOpacity(0.5)),
                       ),
-                    ),
-                    Tab(
-                      child: _TabPill(
-                        label: 'En cours de métré',
-                        count: measuringItems.length,
-                        color: Colors.amberAccent,
-                        icon: Icons.straighten,
-                      ),
-                    ),
-                    Tab(
-                      child: _TabPill(
-                        label: 'En commande',
-                        count: commandeItems.length,
-                        color: Colors.lightBlueAccent,
-                        icon: Icons.shopping_bag_outlined,
-                      ),
-                    ),
-                    Tab(
-                      child: _TabPill(
-                        label: 'En pose',
-                        count: poseItems.length,
-                        color: _commercialAccent,
-                        icon: Icons.home_repair_service_outlined,
-                      ),
-                    ),
-                    Tab(
-                      child: _TabPill(
-                        label: 'Terminés',
-                        count: terminesItems.length,
-                        color: _commercialAccent,
-                        icon: Icons.verified_outlined,
-                      ),
-                    ),
-                  ],
+                      indicatorPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      tabs: [
+                        Tab(child: _TabPill(label: 'En attente', count: newItems.length, color: Colors.deepPurpleAccent, icon: Icons.upload_file)),
+                        Tab(child: _TabPill(label: 'En cours de métré', count: measuringItems.length, color: Colors.amberAccent, icon: Icons.straighten)),
+                        Tab(child: _TabPill(label: 'En commande', count: commandeItems.length, color: Colors.lightBlueAccent, icon: Icons.shopping_bag_outlined)),
+                        Tab(child: _TabPill(label: 'En pose', count: poseItems.length, color: _commercialAccent, icon: Icons.home_repair_service_outlined)),
+                        Tab(child: _TabPill(label: 'Terminés', count: terminesItems.length, color: _commercialAccent, icon: Icons.verified_outlined)),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -247,56 +214,111 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                 padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
                 child: _SearchBar(),
               ),
-                const SizedBox(height: 12),
-                Padding(
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _AddQuoteButton(
+                  onPressed: () async {
+                    await Navigator.of(context).push<_QuoteItem>(
+                      MaterialPageRoute(
+                        builder: (_) => const _AddQuoteScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _AddQuoteButton(
-                    onPressed: () async {
-                      final newItem = await Navigator.of(context).push<_QuoteItem>(
-                        MaterialPageRoute(
-                          builder: (_) => const _AddQuoteScreen(),
-                        ),
-                      );
-                      if (newItem != null) {
-                        setState(() => _newItems.add(newItem));
-                        await _saveQuotes();
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _workspaceId == null
+                        ? const Stream.empty()
+                        : _firestore
+                            .collection('workspaces')
+                            .doc(_workspaceId)
+                            .collection('devis')
+                            .orderBy('createdAt', descending: true)
+                            .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
                       }
+                      
+                      final docs = snapshot.data?.docs ?? [];
+                      
+                       final newItems = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final status = data['metreurStatus'] as String?;
+                        return status == null || status == 'Nouvelle demande' || status == 'À classer';
+                      }).map((doc) {
+                         final data = doc.data() as Map<String, dynamic>;
+                         data['id'] = doc.id;
+                         return _QuoteItem.fromMap(data);
+                      }).toList();
+
+                      final measuringItems = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final status = data['metreurStatus'] as String?;
+                        return status == 'Acceptée' || status == 'En cours';
+                      }).map((doc) {
+                         final data = doc.data() as Map<String, dynamic>;
+                         data['id'] = doc.id;
+                         return _MeasureItem.fromMap(data);
+                      }).toList();
+
+                      final commandeItems = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final status = data['metreurStatus'] as String?;
+                        return status == 'À commander' || status == 'Commande en cours';
+                      }).map((doc) {
+                         final data = doc.data() as Map<String, dynamic>;
+                         data['id'] = doc.id;
+                         return _QuoteItem.fromMap(data);
+                      }).toList();
+
+                      final poseItems = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                         final status = data['metreurStatus'] as String?;
+                        return status == 'À planifier' || status == 'En pose';
+                      }).map((doc) {
+                         final data = doc.data() as Map<String, dynamic>;
+                         data['id'] = doc.id;
+                         return _QuoteItem.fromMap(data);
+                      }).toList();
+
+                       final terminesItems = docs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final status = data['metreurStatus'] as String?;
+                        return status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé';
+                      }).map((doc) {
+                         final data = doc.data() as Map<String, dynamic>;
+                         data['id'] = doc.id;
+                         return _QuoteItem.fromMap(data);
+                      }).toList();
+
+
+                      return TabBarView(
+                        children: [
+                          _NewQuotesList(
+                            items: newItems,
+                            onDelete: (item) {}, // Deletion should optionally be done via a method but for now we skip implicit delete from list
+                            onEdit: (item) async {
+                               await Navigator.of(context).push<_QuoteItem>(
+                                MaterialPageRoute(
+                                  builder: (_) => _AddQuoteScreen(existingItem: item),
+                                ),
+                              );
+                            },
+                          ),
+                          _MeasuringList(items: measuringItems),
+                          _ValidatedList(items: commandeItems),
+                          _ValidatedList(items: poseItems),
+                          _ValidatedList(items: terminesItems),
+                        ],
+                      );
                     },
                   ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: TabBarView(
-                      children: [
-                        _NewQuotesList(
-                          items: _newItems,
-                          onDelete: (item) {
-                            setState(() => _newItems.remove(item));
-                            _saveQuotes();
-                          },
-                          onEdit: (item) async {
-                            final edited = await Navigator.of(context).push<_QuoteItem>(
-                              MaterialPageRoute(
-                                builder: (_) => _AddQuoteScreen(existingItem: item),
-                              ),
-                            );
-                            if (edited != null) {
-                              setState(() {
-                                final idx = _newItems.indexOf(item);
-                                if (idx >= 0) _newItems[idx] = edited;
-                              });
-                              await _saveQuotes();
-                            }
-                          },
-                        ),
-                        _MeasuringList(items: measuringItems),
-                        _ValidatedList(items: commandeItems),
-                        _ValidatedList(items: poseItems),
-                        _ValidatedList(items: terminesItems),
-                      ],
-                    ),
                 ),
               ),
             ],
@@ -304,181 +326,6 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _loadSavedQuotes() async {
-    if (_workspaceId == null) return;
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid != null) {
-        final remote = await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('devis')
-            .where('workspaceId', isEqualTo: _workspaceId)
-            .orderBy('createdAt', descending: true)
-            .get();
-        final cloudItems = remote.docs.map((doc) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          return _QuoteItem.fromMap(data);
-        }).toList();
-        if (cloudItems.isNotEmpty) {
-          setState(() {
-            _newItems
-              ..clear()
-              ..addAll(cloudItems);
-          });
-          return;
-        }
-      }
-    } catch (_) {
-      // fall back to local prefs if cloud fails
-    }
-
-    // Local fallback
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_workspaceQuotesKey);
-    if (raw == null) return;
-    try {
-      final decoded = json.decode(raw) as List<dynamic>;
-      final loaded = decoded.whereType<Map<String, dynamic>>().map((e) {
-        final item = _QuoteItem.fromMap(e);
-        return item.tag.trim() == 'À classer' ? item.copyWith(tag: '') : item;
-      }).toList(growable: true);
-      if (mounted) {
-        setState(() {
-          _newItems
-            ..clear()
-            ..addAll(loaded);
-        });
-      }
-    } catch (_) {
-      // ignore malformed data
-    }
-  }
-
-  Future<void> _saveQuotes() async {
-    final prefs = await SharedPreferences.getInstance();
-    final payload = json.encode(_newItems.map((e) => e.toMap()).toList());
-    await prefs.setString(_workspaceQuotesKey, payload);
-    await _persistQuotesToCloud();
-  }
-
-  // Résolution minimale du libellé de catégorie (fallback sur la clé).
-  Map<String, dynamic>? _currentTradeNode() {
-    // Cet écran ne charge pas le dictionnaire complet pour l'instant.
-    return null;
-  }
-
-  String _categoryLabelFromKey(String? categoryKey) {
-    if (categoryKey == null) return '';
-    final trade = _currentTradeNode();
-    final cat = trade?['categories']?[categoryKey];
-    if (cat is Map && cat['label'] != null) return cat['label'].toString();
-    return categoryKey;
-  }
-
-  List<Map<String, dynamic>> _buildSummaryFromDraft(_QuoteDraft draft) {
-    final entries = <Map<String, dynamic>>[];
-    void addEntry(String label, String? value) {
-      final clean = value?.trim();
-      if (clean != null && clean.isNotEmpty) {
-        entries.add({'label': label, 'value': clean});
-      }
-    }
-
-    addEntry('Type de chantier', draft.chantierType);
-    addEntry('Type d’habitation', draft.typeHabitation);
-    addEntry('Accessibilité', draft.accessibilite);
-    addEntry('Commentaires chantier', draft.chantierNotes);
-
-    for (var i = 0; i < draft.products.length; i++) {
-      final p = draft.products[i];
-      final catLabel = _categoryLabelFromKey(p.categoryKey);
-      final buffer = StringBuffer();
-      buffer.write(catLabel);
-      if (p.sousCategorie?.isNotEmpty == true) buffer.write(' • ${p.sousCategorie}');
-      if (p.typeProduit?.isNotEmpty == true) buffer.write(' • ${p.typeProduit}');
-      if (p.variante?.isNotEmpty == true) buffer.write(' • ${p.variante}');
-      if (p.couleur?.isNotEmpty == true) buffer.write(' • Couleur: ${p.couleur}');
-      final dimParts = <String>[];
-      if (p.largeur != null) dimParts.add('${p.largeur}');
-      if (p.hauteur != null) dimParts.add('${p.hauteur}');
-      if (dimParts.isNotEmpty) {
-        buffer.write(' • Dim: ${dimParts.join(' x ')} ${p.unite}');
-      }
-      if (p.quantite != null) buffer.write(' • Qté: ${p.quantite}');
-      addEntry('Élément ${i + 1}', buffer.toString());
-    }
-
-    if (draft.date != null) {
-      final d = draft.date!;
-      final formatted = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
-      addEntry('Chantier prévu', formatted);
-    }
-
-    return entries;
-  }
-
-  Future<void> _persistQuotesToCloud() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || _workspaceId == null) return;
-    try {
-      final col = _firestore.collection('workspaces').doc(_workspaceId).collection('devis');
-      final batch = _firestore.batch();
-      final existing = await col.get();
-      for (final doc in existing.docs) {
-        batch.delete(doc.reference);
-      }
-      for (final quote in _newItems) {
-        final sanitizedNumber = quote.number.replaceAll('#', '');
-        final docId = (quote.id?.isNotEmpty == true)
-            ? quote.id!
-            : (sanitizedNumber.isNotEmpty
-                ? sanitizedNumber
-                : 'quote_${DateTime.now().millisecondsSinceEpoch}');
-        final ref = col.doc(docId);
-        String? categoryLabel;
-        final firstProduct = quote.draft?.products.isNotEmpty == true ? quote.draft!.products.first : null;
-        if (firstProduct != null) {
-          categoryLabel = _categoryLabelFromKey(firstProduct.categoryKey);
-        }
-        final summary = quote.draft != null ? _buildSummaryFromDraft(quote.draft!) : <Map<String, dynamic>>[];
-        final attachments = <Map<String, dynamic>>[];
-        if (quote.uploadUrl != null && quote.uploadUrl!.isNotEmpty) {
-          attachments.add({
-            'label': 'Devis du commercial',
-            'icon': Icons.picture_as_pdf.codePoint,
-            'thumbnailUrl': quote.uploadUrl,
-          });
-        }
-        final combinedClientName = [
-          quote.draft?.clientFirstName?.trim() ?? '',
-          quote.draft?.clientName?.trim() ?? '',
-        ].where((e) => e.isNotEmpty).join(' ').trim();
-        batch.set(ref, {
-          ...quote.toMap(),
-          'userId': uid,
-          'workspaceId': _workspaceId,
-          'metreurId': quote.assignedMetreurId,
-          'metreurStatus': 'Nouvelle demande',
-          'category': categoryLabel,
-          'phone': quote.draft?.phone,
-          'updated': 'À l’instant',
-          'note': quote.draft?.commentaire ?? quote.draft?.chantierNotes ?? '',
-          'summary': summary,
-          'attachments': attachments,
-          if (combinedClientName.isNotEmpty) 'client': combinedClientName,
-          'createdAt': quote.createdAt != null
-              ? Timestamp.fromDate(quote.createdAt!)
-              : FieldValue.serverTimestamp(),
-        });
-      }
-      await batch.commit();
-    } catch (_) {
-      // silently ignore cloud errors for now
-    }
   }
 
   Future<void> _loadWorkspaceContext() async {
@@ -495,7 +342,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
 
   Future<void> _maybeFetchWorkspaceUserName() async {
     if (_workspaceId == null) return;
-    // Ne pas écraser le nom déjà stocké pour l’utilisateur courant.
+    // Ne pas écraser le nom déjà stocké pour l'utilisateur courant.
     final hasLocalName = (_userFirstName?.isNotEmpty == true) || (_userLastName?.isNotEmpty == true);
     if (hasLocalName) return;
     try {
@@ -589,6 +436,9 @@ class _NewQuotesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+     if (items.isEmpty) {
+        return const Center(child: Text("Aucun devis en attente", style: TextStyle(color: Colors.white54)));
+     }
     return ListView.separated(
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -642,6 +492,9 @@ class _MeasuringList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+      if (items.isEmpty) {
+        return const Center(child: Text("Aucun métré en cours", style: TextStyle(color: Colors.white54)));
+     }
     return ListView.separated(
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -666,6 +519,9 @@ class _ValidatedList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+      if (items.isEmpty) {
+        return const Center(child: Text("Aucune donnée pour l'instant", style: TextStyle(color: Colors.white54)));
+     }
     return ListView.separated(
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -1987,7 +1843,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                                 foregroundColor: Colors.black,
                                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                               ),
-                              onPressed: () {
+                              onPressed: () async {
                                 if (currentStep < steps.length - 1) {
                                   currentStep++;
                                   pageController.animateToPage(
@@ -1998,25 +1854,9 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                                   setState(() {});
                                   return;
                                 }
-                                final draft = _buildDraft();
-                                final existing = widget.existingItem;
-                                final newItem = _QuoteItem(
-                                  client: clientNameController.text.isNotEmpty
-                                      ? '${clientNameController.text}${clientFirstNameController.text.isNotEmpty ? ' ${clientFirstNameController.text}' : ''}'
-                                      : 'Nouveau client',
-                                  address:
-                                      '${clientStreetController.text}, ${clientPostalController.text} ${clientCityController.text}',
-                                  number: existing?.number ?? '#${DateTime.now().millisecondsSinceEpoch % 10000}',
-                                  date: existing?.date ?? 'Ajouté aujourd’hui',
-                                  tag: '',
-                                  assignedMetreurId: _selectedMetreurId == 'any' ? null : _selectedMetreurId,
-                                  assignedMetreurName: _selectedMetreurName,
-                                  draft: draft,
-                                  id: existing?.id,
-                                  createdAt: existing?.createdAt ?? DateTime.now(),
-                                  uploadUrl: uploadedFileUrl ?? existing?.uploadUrl,
-                                );
-                                Navigator.of(context).pop(newItem);
+                                await _saveQuoteToCloud();
+                                if (!mounted) return;
+                                Navigator.of(context).pop();
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('Devis enregistré et partagé avec l’équipe.'),
@@ -2033,6 +1873,91 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                   ),
       ),
     );
+  }
+
+  Future<void> _saveQuoteToCloud() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final prefs = await SharedPreferences.getInstance();
+    final workspaceId = prefs.getString('workit_workspace_id');
+
+    if (uid == null || workspaceId == null) return;
+
+    final draft = _buildDraft();
+    final existing = widget.existingItem;
+    
+    // Construct the quote item
+    final newItem = _QuoteItem(
+      client: clientNameController.text.isNotEmpty
+          ? '${clientNameController.text}${clientFirstNameController.text.isNotEmpty ? ' ${clientFirstNameController.text}' : ''}'
+          : 'Nouveau client',
+      address: '${clientStreetController.text}, ${clientPostalController.text} ${clientCityController.text}',
+      number: existing?.number ?? '#${DateTime.now().millisecondsSinceEpoch % 10000}',
+      date: existing?.date ?? 'Ajouté aujourd’hui',
+      tag: '',
+      assignedMetreurId: _selectedMetreurId == 'any' ? null : _selectedMetreurId,
+      assignedMetreurName: _selectedMetreurName,
+      draft: draft,
+      id: existing?.id,
+      createdAt: existing?.createdAt ?? DateTime.now(),
+      uploadUrl: uploadedFileUrl ?? existing?.uploadUrl,
+    );
+
+    try {
+        final col = FirebaseFirestore.instance.collection('workspaces').doc(workspaceId).collection('devis');
+        final sanitizedNumber = newItem.number.replaceAll('#', '');
+        final docId = (newItem.id?.isNotEmpty == true)
+            ? newItem.id!
+            : (sanitizedNumber.isNotEmpty
+                ? sanitizedNumber
+                : 'quote_${DateTime.now().millisecondsSinceEpoch}');
+        final ref = col.doc(docId);
+
+        String? categoryLabel;
+        final firstProduct = newItem.draft?.products.isNotEmpty == true ? newItem.draft!.products.first : null;
+        if (firstProduct != null) {
+          categoryLabel = _categoryLabelFromKey(firstProduct.categoryKey);
+        }
+
+        final summary = newItem.draft != null ? _buildSummaryFromDraft(newItem.draft!) : <Map<String, dynamic>>[];
+        final attachments = <Map<String, dynamic>>[];
+        if (newItem.uploadUrl != null && newItem.uploadUrl!.isNotEmpty) {
+          attachments.add({
+            'label': 'Devis du commercial',
+            'icon': Icons.picture_as_pdf.codePoint,
+            'thumbnailUrl': newItem.uploadUrl,
+          });
+        }
+
+        final combinedClientName = [
+          newItem.draft?.clientFirstName?.trim() ?? '',
+          newItem.draft?.clientName?.trim() ?? '',
+        ].where((e) => e.isNotEmpty).join(' ').trim();
+
+        await ref.set({
+          ...newItem.toMap(),
+          'userId': uid,
+          'workspaceId': workspaceId,
+          'metreurId': newItem.assignedMetreurId,
+          // Only set status to 'Nouvelle demande' if it's a new quote or doesn't have a status yet.
+          // If editing, we want to preserve the status ideally, but for now we might reset if not careful.
+          // However, existing Metreur workflow relies on status. 
+          // If existing item has status, keep it. 
+          'metreurStatus': existing?.status ?? 'Nouvelle demande', 
+          'category': categoryLabel,
+          'phone': newItem.draft?.phone,
+          'updated': 'À l’instant',
+          'note': newItem.draft?.commentaire ?? newItem.draft?.chantierNotes ?? '',
+          'summary': summary,
+          'attachments': attachments,
+          if (combinedClientName.isNotEmpty) 'client': combinedClientName,
+          'createdAt': newItem.createdAt != null
+              ? Timestamp.fromDate(newItem.createdAt!)
+              : FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Error saving quote: $e');
+      if (mounted) _showPickerError(context, 'Erreur sauvegarde: $e');
+    }
   }
 
 }
@@ -2666,6 +2591,7 @@ class _QuoteItem {
     this.id,
     this.createdAt,
     this.uploadUrl,
+    this.status,
   });
 
   final String client;
@@ -2679,6 +2605,7 @@ class _QuoteItem {
   final String? id;
   final DateTime? createdAt;
   final String? uploadUrl;
+  final String? status;
 
   _QuoteItem copyWith({
     String? client,
@@ -2692,6 +2619,7 @@ class _QuoteItem {
     String? id,
     DateTime? createdAt,
     String? uploadUrl,
+    String? status,
   }) {
     return _QuoteItem(
       client: client ?? this.client,
@@ -2705,6 +2633,7 @@ class _QuoteItem {
       id: id ?? this.id,
       createdAt: createdAt ?? this.createdAt,
       uploadUrl: uploadUrl ?? this.uploadUrl,
+      status: status ?? this.status,
     );
   }
 
@@ -2721,6 +2650,7 @@ class _QuoteItem {
       'draft': draft?.toMap(),
       'createdAt': createdAt?.toIso8601String(),
       'uploadUrl': uploadUrl,
+      'metreurStatus': status,
     };
   }
 
@@ -2739,6 +2669,7 @@ class _QuoteItem {
           ? (map['createdAt'] as Timestamp).toDate()
           : (map['createdAt'] != null ? DateTime.tryParse(map['createdAt'].toString()) : null),
       uploadUrl: map['uploadUrl']?.toString(),
+      status: map['metreurStatus']?.toString(),
     );
   }
 }
@@ -2757,6 +2688,16 @@ class _MeasureItem {
   final String status;
   final String assignee;
   final String? photoUrl;
+
+  factory _MeasureItem.fromMap(Map<String, dynamic> map) {
+    return _MeasureItem(
+      client: map['client']?.toString() ?? 'Client inconnu',
+      address: map['address']?.toString() ?? '',
+      status: map['metreurStatus']?.toString() ?? 'En cours',
+      assignee: map['assignedMetreurName']?.toString() ?? 'Non attribué',
+      photoUrl: map['uploadUrl']?.toString(),
+    );
+  }
 }
 
 class _QuoteCard extends StatelessWidget {
