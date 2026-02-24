@@ -1,0 +1,18 @@
+<!-- WorkIt - PORTILLON (1 vantail) | sobre, premium, currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Poteaux / montants extérieurs -->
+    <rect x="132" y="80" width="40" height="352" rx="12"/>
+    <rect x="340" y="80" width="40" height="352" rx="12"/>
+
+    <!-- Cadre du portillon -->
+    <rect x="172" y="104" width="168" height="304" rx="18"/>
+
+    <!-- Poignée/serrure (côté gauche, comme photo) -->
+    <line x1="192" y1="240" x2="192" y2="292"/>
+
+  </g>
+
+</svg>

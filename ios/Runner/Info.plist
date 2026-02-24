@@ -51,5 +51,7 @@
 		<string>http</string>
 		<string>tel</string>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Nous utilisons FaceID pour vous permettre de vous connecter rapidement et en toute sécurité à votre espace WorkIt.</string>
 </dict>
 </plist>

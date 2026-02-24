@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'commercial_home_screen.dart';
-import 'metreur_home_screen.dart';
-import 'poseurs_home_screen.dart';
+import '../models/onboarding_models.dart';
+import '../services/auth_navigation_service.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -20,6 +19,24 @@ class _SignInScreenState extends State<SignInScreen> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   bool isLoading = false;
+  bool rememberEmail = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail();
+  }
+
+  Future<void> _loadSavedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('workit_saved_email');
+    if (savedEmail != null) {
+      emailController.text = savedEmail;
+      setState(() {
+        rememberEmail = true;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -36,171 +53,37 @@ class _SignInScreenState extends State<SignInScreen> {
     try {
       final credential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: email, password: password);
-      final uid = credential.user?.uid;
-      if (uid == null) {
+      final user = credential.user;
+
+      if (user == null) {
         throw FirebaseAuthException(
           code: 'user-null',
           message: 'Utilisateur introuvable',
         );
       }
 
-      // Cherche workspace par admin; sinon, par companyId depuis users/{uid}
-      QuerySnapshot<Map<String, dynamic>> workspaceSnap = await FirebaseFirestore.instance
-          .collection('workspaces')
-          .where('adminUid', isEqualTo: uid)
-          .limit(1)
-          .get();
-
-      String? workspaceId;
-      Map<String, dynamic>? data;
-      String? roleKey;
-      bool isAdmin = false;
-      Map<String, dynamic>? userData;
-
-      if (workspaceSnap.docs.isEmpty) {
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-        userData = userDoc.data();
-        final companyId = userData?['companyId']?.toString();
-        roleKey = userData?['role']?.toString();
-        if (companyId != null && companyId.isNotEmpty) {
-          // 1) Essai par docId
-          final ws = await FirebaseFirestore.instance.collection('workspaces').doc(companyId).get();
-          if (ws.exists) {
-            workspaceId = ws.id;
-            data = ws.data();
-          } else {
-            // 2) Essai par siret ou companyName
-            final bySiret = await FirebaseFirestore.instance
-                .collection('workspaces')
-                .where('siret', isEqualTo: companyId)
-                .limit(1)
-                .get();
-            if (bySiret.docs.isNotEmpty) {
-              workspaceId = bySiret.docs.first.id;
-              data = bySiret.docs.first.data();
-            } else {
-              final byName = await FirebaseFirestore.instance
-                  .collection('workspaces')
-                  .where('companyName', isEqualTo: companyId)
-                  .limit(1)
-                  .get();
-              if (byName.docs.isNotEmpty) {
-                workspaceId = byName.docs.first.id;
-                data = byName.docs.first.data();
-              }
-            }
-          }
-        }
+      // Save or clear email based on checkbox
+      final prefs = await SharedPreferences.getInstance();
+      if (rememberEmail) {
+        await prefs.setString('workit_saved_email', email);
       } else {
-        workspaceId = workspaceSnap.docs.first.id;
-        data = workspaceSnap.docs.first.data();
-        isAdmin = true;
-        final roles = data?['creatorRoles'];
-        if (roles is List && roles.isNotEmpty) {
-          roleKey = roles.first?.toString();
-        } else if (data?['creatorRole'] != null) {
-          roleKey = data?['creatorRole'].toString();
-        }
-        if (userData == null) {
-          final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-          userData = userDoc.data();
-          roleKey ??= userData?['role']?.toString();
-        }
-      }
-
-      if (workspaceId == null || data == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Espace introuvable pour cet utilisateur.'),
-          ),
-        );
-        return;
-      }
-
-      final usesApp = data['creatorUsesWorkit'] == true;
-      isAdmin = isAdmin || (data['adminUid']?.toString() == uid);
-      roleKey ??= data['role']?.toString();
-
-      final mustChangePassword = userData?['mustChangePassword'] == true;
-
-      if (mustChangePassword) {
-        final completed = await Navigator.of(context).push<Map<String, dynamic>?>(
-          MaterialPageRoute(
-            builder: (_) => CompleteProfileScreen(
-              email: email,
-              currentRole: roleKey,
-              userDoc: userData,
-            ),
-          ),
-        );
-        if (completed != null) {
-          roleKey = completed['role']?.toString() ?? roleKey;
-          userData = userData ?? {};
-          userData.addAll(completed);
-        } else {
-          return;
-        }
-      }
-
-      if (!usesApp && roleKey == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Accès admin uniquement, aucun rôle défini.'),
-          ),
-        );
-        return;
-      }
-
-      // Stocke le contexte d’entreprise pour isoler les données.
-      final tradeKey = (userData?['tradeKey'] ?? data['tradeKey'])?.toString();
-      await _persistWorkspaceContext(
-        workspaceId,
-        data['companyName']?.toString() ?? '',
-        userData?['firstName']?.toString() ?? data['creatorFirstName']?.toString(),
-        userData?['lastName']?.toString() ?? data['creatorLastName']?.toString(),
-        isAdmin,
-        tradeKey,
-      );
-
-      final home = _homeForRole(roleKey ?? 'commercial');
-      if (home == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Rôle non supporté ($roleKey).')),
-        );
-        return;
+        await prefs.remove('workit_saved_email');
       }
 
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => home),
-        (route) => false,
-      );
+      
+      // Use the centralized navigation service
+      await AuthNavigationService().navigateUser(context, user);
+
     } on FirebaseAuthException catch (error) {
       final message = _humanError(error);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
     } finally {
       if (mounted) setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> _persistWorkspaceContext(
-    String workspaceId,
-    String companyName,
-    String? firstName,
-    String? lastName,
-    bool isAdmin,
-    String? tradeKey,
-  ) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('workit_workspace_id', workspaceId);
-    await prefs.setString('workit_workspace_name', companyName);
-    if (firstName != null) await prefs.setString('workit_user_first_name', firstName);
-    if (lastName != null) await prefs.setString('workit_user_last_name', lastName);
-    await prefs.setBool('workit_is_admin', isAdmin);
-    if (tradeKey != null && tradeKey.isNotEmpty) {
-      await prefs.setString('workit_trade_key', tradeKey);
     }
   }
 
@@ -241,21 +124,6 @@ class _SignInScreenState extends State<SignInScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? 'Impossible d’envoyer le mail.')),
       );
-    }
-  }
-
-  Widget? _homeForRole(String roleKey) {
-    switch (roleKey) {
-      case 'commercial':
-        return const CommercialHomeScreen();
-      case 'metreur':
-        return const MetreurHomeScreen();
-      case 'poseur':
-        return const PoseursHomeScreen();
-      case 'commercial_metreur':
-        return const CommercialHomeScreen();
-      default:
-        return null;
     }
   }
 
@@ -391,18 +259,37 @@ class _SignInScreenState extends State<SignInScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _sendReset,
-                          child: const Text(
-                            'Mot de passe oublié ?',
-                            style: TextStyle(
-                              color: accent,
-                              fontWeight: FontWeight.w700,
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: rememberEmail,
+                            activeColor: accent,
+                            checkColor: Colors.black,
+                            side: const BorderSide(color: Colors.white54),
+                            onChanged: (value) {
+                              setState(() {
+                                rememberEmail = value ?? false;
+                              });
+                            },
+                          ),
+                          const Flexible(
+                            child: Text(
+                              'Se souvenir de l\'email',
+                              style: TextStyle(color: Colors.white70),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ),
+                          TextButton(
+                            onPressed: _sendReset,
+                            child: const Text(
+                              'Mot de passe oublié ?',
+                              style: TextStyle(
+                                color: accent,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 10),
                       SizedBox(
@@ -503,6 +390,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           'role': _role ?? widget.currentRole,
           'tradeKey': widget.userDoc?['tradeKey'],
           'mustChangePassword': false,
+          'tempPassword': FieldValue.delete(),
           'status': 'active',
           'updatedAt': FieldValue.serverTimestamp(),
         },
@@ -596,7 +484,33 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                _roleSelector(),
+                const SizedBox(height: 12),
+                if (widget.currentRole != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F1524),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Rôle assigné', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Text(
+                            roleDisplayName(widget.currentRole!),
+                            style: const TextStyle(color: Color(0xFF00E676), fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  _roleSelector(),
                 const SizedBox(height: 12),
                 _input(
                   controller: _newPasswordController,

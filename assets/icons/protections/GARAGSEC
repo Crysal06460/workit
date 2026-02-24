@@ -1,0 +1,27 @@
+<!-- WorkIt - PORTE DE GARAGE SECTIONNELLE | schéma clair type exemple | currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Cadre baie -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <!-- montants + linteau -->
+    <path d="M120 120 V420 M392 120 V420 M120 120 H392"/>
+
+    <!-- panneau porte (fermé) -->
+    <rect x="148" y="168" width="216" height="252" rx="14"/>
+
+    <!-- sections -->
+    <line x1="148" y1="252" x2="364" y2="252"/>
+    <line x1="148" y1="336" x2="364" y2="336"/>
+
+    <!-- retour plafond (panneau qui se replie) -->
+    <path d="M148 168 L364 168 L420 124 L204 124 Z"/>
+  </g>
+
+  <!-- Flèche de mouvement (montée) -->
+  <g stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="256" y1="360" x2="256" y2="268"/>
+    <line x1="256" y1="268" x2="236" y2="288"/>
+    <line x1="256" y1="268" x2="276" y2="288"/>
+  </g>
+
+</svg>

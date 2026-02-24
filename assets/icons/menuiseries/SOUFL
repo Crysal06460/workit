@@ -1,0 +1,19 @@
+<!-- WorkIt - SOUFFLET (ouvrant haut, paumelles bas) | sobre, premium, currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Cadre extérieur -->
+    <rect x="96" y="112" width="320" height="288" rx="24"/>
+
+    <!-- Ouvrant (cadre intérieur) -->
+    <rect x="124" y="140" width="264" height="232" rx="18"/>
+
+    <!-- Poignée (en haut, centrée) -->
+    <line x1="232" y1="156" x2="280" y2="156"/>
+
+    <!-- Paumelles (en bas, gauche + droite) -->
+    <line x1="156" y1="382" x2="186" y2="382"/>
+    <line x1="326" y1="382" x2="356" y2="382"/>
+  </g>
+
+</svg>

@@ -97,7 +97,7 @@ class WelcomeScreen extends StatelessWidget {
                                   ),
                                   SizedBox(width: 8),
                                   Text(
-                                    'Essai gratuit 7 jours',
+                                    'Découvrir WorkIt',
                                     style: TextStyle(
                                       color: Color(0xFF00E676),
                                       fontWeight: FontWeight.w700,
@@ -146,7 +146,7 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 20),
                         Text(
-                          'Obtenez WorkIt Pro',
+                          'Bienvenue sur WorkIt',
                           style: theme.textTheme.headlineSmall?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w900,
@@ -156,7 +156,7 @@ class WelcomeScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'La plateforme chantier qui synchronise commerciaux, métreurs et poseurs..',
+                          'La plateforme chantier qui synchronise commerciaux, métreurs et poseurs.',
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: Colors.white.withOpacity(0.85),
                           ),
@@ -187,91 +187,27 @@ class WelcomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: PriceBadge(
-                      label: 'Essai gratuit activé',
-                      background: const Color(0xFF0E1A2E),
-                      borderColor: const Color(0xFF00E676),
-                      textColor: const Color(0xFF00E676),
-                      leading: const Icon(
-                        Icons.check_circle,
-                        color: Color(0xFF00E676),
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: PriceBadge(
-                      label: 'À partir de 49€/mois',
-                      background: const Color(0xFF111827),
-                      borderColor: Colors.white12,
-                      textColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Card(
-                color: const Color(0xFF0D1B2A),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  side: const BorderSide(color: Color(0xFF00E676)),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Row(
-                    children: const [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Plan annuel recommandé',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'Essai 7 jours, puis 49€/mois — aucun paiement maintenant.',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PriceBadge(
-                        label: 'Best value',
-                        background: Color(0xFF00E676),
-                        borderColor: Color(0xFF00E676),
-                        textColor: Colors.black,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E676),
-                    foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    textStyle: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+              Center(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF00E676),
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      textStyle: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
-                  ),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const TrialActivationScreen(),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TrialActivationScreen(),
+                      ),
                     ),
+                    child: const Text('Commencer l’installation'),
                   ),
-                  child: const Text('Activer l’essai WorkIt'),
                 ),
               ),
               const SizedBox(height: 12),
@@ -284,27 +220,6 @@ class WelcomeScreen extends StatelessWidget {
                     'Déjà client ? Se connecter',
                     style: TextStyle(color: Colors.white70),
                   ),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(
-                      Icons.verified_user,
-                      color: Color(0xFF00E676),
-                      size: 18,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'Aucun paiement maintenant',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],

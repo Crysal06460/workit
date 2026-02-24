@@ -1,0 +1,42 @@
+<!-- WorkIt - GAL2/1R (Galandage 2 vantaux / 1 rail) | poignées extérieures corrigées -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre global -->
+    <rect x="56" y="136" width="400" height="240" rx="24"/>
+
+    <!-- Séparations : mur | vantail G | vantail D | mur -->
+    <line x1="156" y1="160" x2="156" y2="352"/>
+    <line x1="256" y1="160" x2="256" y2="352"/>
+    <line x1="356" y1="160" x2="356" y2="352"/>
+
+    <!-- 2 vantaux centraux -->
+    <rect x="172" y="160" width="80" height="192" rx="18"/>
+    <rect x="260" y="160" width="80" height="192" rx="18"/>
+
+    <!-- Poignée vantail gauche (montant gauche) -->
+    <line x1="172" y1="224" x2="172" y2="288"/>
+
+    <!-- Poignée vantail droit (montant droit) -->
+    <line x1="340" y1="224" x2="340" y2="288"/>
+
+  </g>
+
+  <!-- Flèches vers les murs -->
+  <g stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Flèche gauche -->
+    <line x1="212" y1="256" x2="120" y2="256"/>
+    <line x1="120" y1="256" x2="140" y2="232"/>
+    <line x1="120" y1="256" x2="140" y2="280"/>
+
+    <!-- Flèche droite -->
+    <line x1="300" y1="256" x2="392" y2="256"/>
+    <line x1="392" y1="256" x2="372" y2="232"/>
+    <line x1="392" y1="256" x2="372" y2="280"/>
+
+  </g>
+
+</svg>

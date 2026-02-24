@@ -7,11 +7,11 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onCall} = require("firebase-functions/v2/https");
-const {initializeApp} = require("firebase-admin/app");
-const {getFirestore, Timestamp, FieldValue} = require("firebase-admin/firestore");
-const {getAuth} = require("firebase-admin/auth");
+const { setGlobalOptions } = require("firebase-functions");
+const { onCall } = require("firebase-functions/v2/https");
+const { initializeApp } = require("firebase-admin/app");
+const { getFirestore, Timestamp } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
 const OpenAI = require("openai");
 const Mailjet = require("node-mailjet");
 const logger = require("firebase-functions/logger");
@@ -30,16 +30,16 @@ const db = getFirestore();
  * Analyse un devis via OpenAI Vision.
  */
 exports.analyzeDevis = onCall(
-    {region: "europe-west1", secrets: ["OPENAI_API_KEY"]},
-    async (request) => {
-      const fileUrl = request.data && request.data.fileUrl;
-      if (!fileUrl) {
-        throw new Error("fileUrl manquant");
-      }
-      const openai = getOpenAIClient();
+  { region: "europe-west1", secrets: ["OPENAI_API_KEY"] },
+  async (request) => {
+    const fileUrl = request.data && request.data.fileUrl;
+    if (!fileUrl) {
+      throw new Error("fileUrl manquant");
+    }
+    const openai = getOpenAIClient();
 
-      const systemPrompt =
-`Tu es une IA WorkIt, experte des devis menuiserie/pose
+    const systemPrompt =
+      `Tu es une IA WorkIt, experte des devis menuiserie/pose
 (fenêtres, portes, volets, stores, pergolas).
 Objectif: extraire un résumé structuré du devis en français.
 Retourne du texte clair (pas de Markdown) avec :
@@ -50,37 +50,37 @@ Retourne du texte clair (pas de Markdown) avec :
 - Totaux (HT/TTC si présents)
 Si une info manque, ignore-la.`;
 
-      try {
-        const response = await openai.responses.create({
-          model: "gpt-4o-mini",
-          input: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Analyse ce devis et fournis le résumé structuré.",
-                },
-                {type: "input_image", image_url: fileUrl, detail: "high"},
-              ],
-            },
-          ],
-          response_format: {type: "text"},
-        });
+    try {
+      const response = await openai.responses.create({
+        model: "gpt-4o-mini",
+        input: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Analyse ce devis et fournis le résumé structuré.",
+              },
+              { type: "input_image", image_url: fileUrl, detail: "high" },
+            ],
+          },
+        ],
+        response_format: { type: "text" },
+      });
 
-        const text = (response && response.output_text) ?
-          response.output_text : "";
-        logger.info("Analyse terminée", {length: text.length});
-        return {text};
-      } catch (error) {
-        logger.error("Erreur OpenAI", error);
-        throw new Error(`Analyse échouée: ${error.message}`);
-      }
-    },
+      const text = (response && response.output_text) ?
+        response.output_text : "";
+      logger.info("Analyse terminée", { length: text.length });
+      return { text };
+    } catch (error) {
+      logger.error("Erreur OpenAI", error);
+      throw new Error(`Analyse échouée: ${error.message}`);
+    }
+  },
 );
 
 /**
@@ -92,7 +92,7 @@ function getOpenAIClient() {
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY non configurée");
   }
-  return new OpenAI({apiKey});
+  return new OpenAI({ apiKey });
 }
 
 /**
@@ -107,67 +107,124 @@ function generateToken() {
  * Crée une invitation (admin uniquement).
  */
 exports.createInvitation = onCall(
-    {region: "europe-west1"},
-    async (request) => {
-      const {email, role, companyId, expiresInDays = 14} =
-        request.data || {};
-      const uid = request.auth && request.auth.uid;
-      if (!uid) throw new Error("Non autorisé");
-      if (!email || !role || !companyId) {
-        throw new Error("email, role, companyId requis");
-      }
+  { region: "europe-west1" },
+  async (request) => {
+    const { email, role, companyId, expiresInDays = 14 } =
+      request.data || {};
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new Error("Non autorisé");
+    if (!email || !role || !companyId) {
+      throw new Error("email, role, companyId requis");
+    }
 
-      const token = generateToken();
-      const invitationId = token; // simple mapping
-      const now = Timestamp.now();
-      const expiresAt = Timestamp.fromMillis(
-          now.toMillis() + expiresInDays * 24 * 60 * 60 * 1000,
-      );
+    const token = generateToken();
+    const invitationId = token; // simple mapping
+    const now = Timestamp.now();
+    const expiresAt = Timestamp.fromMillis(
+      now.toMillis() + expiresInDays * 24 * 60 * 60 * 1000,
+    );
 
-      await db.collection("invitations").doc(invitationId).set({
-        email: email.toLowerCase(),
-        role,
-        companyId,
-        token,
-        status: "pending",
-        createdAt: now,
-        createdBy: uid,
-        expiresAt,
-      });
+    await db.collection("invitations").doc(invitationId).set({
+      email: email.toLowerCase(),
+      role,
+      companyId,
+      token,
+      status: "pending",
+      createdAt: now,
+      createdBy: uid,
+      expiresAt,
+    });
 
-      const inviteUrl = `https://workit.app/invite?token=${token}`;
-      return {token, inviteUrl, invitationId};
-    },
+    const inviteUrl = `https://workit.app/invite?token=${token}`;
+    return { token, inviteUrl, invitationId };
+  },
 );
 
 /**
+ * Helper: Envoie un email via Mailjet ou SMTP.
+ */
+async function sendEmail({ to, subject, html, text, fromName = "WorkIt" }) {
+  const mjApi = process.env.MAILJET_API_KEY;
+  const mjSecret = process.env.MAILJET_API_SECRET;
+  const useMailjet = mjApi && mjSecret;
+
+  if (useMailjet) {
+    try {
+      logger.info("Mailjet send start", { to });
+      const mailjet = Mailjet.apiConnect(mjApi, mjSecret);
+      await mailjet.post("send", { version: "v3.1" }).request({
+        Messages: [
+          {
+            From: {
+              Email: process.env.MAILJET_FROM || "noreply@workit.app",
+              Name: fromName,
+            },
+            To: [{ Email: to }],
+            Subject: subject,
+            TextPart: text,
+            HTMLPart: html,
+          },
+        ],
+      });
+      logger.info("Mailjet send success", { to });
+      return true;
+    } catch (err) {
+      logger.error("Mailjet send failed", { error: err });
+      throw new Error("Envoi Mailjet impossible");
+    }
+  } else {
+    try {
+      logger.info("SMTP send start", { to, fromName });
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+      await transporter.sendMail({
+        from: `"${fromName}" <${process.env.SMTP_FROM}>`,
+        to: to,
+        subject: subject,
+        html,
+        text,
+      });
+      logger.info("SMTP send success", { to });
+      return true;
+    } catch (err) {
+      logger.error("SMTP send failed", { error: err });
+      throw new Error("Envoi SMTP impossible");
+    }
+  }
+}
+
+/**
  * Envoie l'email d'invitation.
- * Nécessite des secrets SMTP : SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS,
- * SMTP_FROM.
- * Optionnel : MAILJET_API_KEY, MAILJET_API_SECRET, MAILJET_FROM.
  */
 exports.sendInvitationEmail = onCall(
-    {
-      region: "europe-west1",
-      secrets: [
-        "SMTP_HOST",
-        "SMTP_PORT",
-        "SMTP_USER",
-        "SMTP_PASS",
-        "SMTP_FROM",
-        "MAILJET_API_KEY",
-        "MAILJET_API_SECRET",
-        "MAILJET_FROM",
-      ],
-    },
-    async (request) => {
-      const {email, token, companyName = "WorkIt", role = ""} =
-        request.data || {};
-      if (!email || !token) throw new Error("email et token requis");
-      const inviteUrl = `https://workit.app/invite?token=${token}`;
+  {
+    region: "europe-west1",
+    secrets: [
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_USER",
+      "SMTP_PASS",
+      "SMTP_FROM",
+      "MAILJET_API_KEY",
+      "MAILJET_API_SECRET",
+      "MAILJET_FROM",
+    ],
+  },
+  async (request) => {
+    const { email, token, companyName = "WorkIt", role = "" } =
+      request.data || {};
+    if (!email || !token) throw new Error("email et token requis");
+    const inviteUrl = `https://workit.app/invite?token=${token}`;
 
-      const html =
-`<div style="font-family:Arial,sans-serif;color:#0B1426">
+    const html =
+      `<div style="font-family:Arial,sans-serif;color:#0B1426">
   <p>Bonjour,</p>
   <p>Vous êtes invité(e) à rejoindre <b>${companyName}</b> en tant que
   <b>${role || "membre"}</b> sur WorkIt.</p>
@@ -178,253 +235,169 @@ exports.sendInvitationEmail = onCall(
   ignorez ce message.</p>
 </div>`;
 
-      const text =
-`Bonjour,
+    const text =
+      `Bonjour,
 
 Vous êtes invité(e) à rejoindre ${companyName} (${role}).
 Lien: ${inviteUrl}
 `;
 
-      const mjApi = process.env.MAILJET_API_KEY;
-      const mjSecret = process.env.MAILJET_API_SECRET;
-      const useMailjet = mjApi && mjSecret;
+    await sendEmail({
+      to: email,
+      subject: `Invitation WorkIt – ${companyName}`,
+      html,
+      text,
+      fromName: "WorkIt",
+    });
 
-      if (useMailjet) {
-        try {
-          logger.info("Mailjet send start", {
-            to: email,
-            from: process.env.MAILJET_FROM,
-            company: companyName,
-            role,
-          });
-          const mailjet = Mailjet.apiConnect(mjApi, mjSecret);
-          await mailjet.post("send", {version: "v3.1"}).request({
-            Messages: [
-              {
-                From: {
-                  Email: process.env.MAILJET_FROM || "noreply@workit.app",
-                  Name: "WorkIt",
-                },
-                To: [{Email: email}],
-                Subject: `Invitation WorkIt – ${companyName}`,
-                TextPart: text,
-                HTMLPart: html,
-              },
-            ],
-          });
-          logger.info("Mailjet send success", {to: email});
-        } catch (err) {
-          logger.error("Mailjet send failed", {error: err});
-          throw new Error("Envoi Mailjet impossible");
-        }
-      } else {
-        try {
-          logger.info("SMTP send start", {
-            to: email,
-            from: process.env.SMTP_FROM,
-            host: process.env.SMTP_HOST,
-            company: companyName,
-            role,
-          });
-          const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT || 587),
-            secure: false,
-            auth: {
-              user: process.env.SMTP_USER,
-              pass: process.env.SMTP_PASS,
-            },
-          });
-          await transporter.sendMail({
-            from: process.env.SMTP_FROM,
-            to: email,
-            subject: `Invitation WorkIt – ${companyName}`,
-            html,
-            text,
-          });
-          logger.info("SMTP send success", {to: email});
-        } catch (err) {
-          logger.error("SMTP send failed", {error: err});
-          throw new Error("Envoi SMTP impossible");
-        }
-      }
-      return {sent: true};
-    },
+    return { sent: true };
+  },
 );
 
 /**
- * Récupère une invitation par token (preview).
+ * Provisionne des comptes avec mot de passe temporaire
+ * et envoie les identifiants par email.
  */
-exports.getInvitationByToken = onCall(
-    {region: "europe-west1"},
-    async (request) => {
-      const {token} = request.data || {};
-      if (!token) throw new Error("token requis");
-      const snap = await db.collection("invitations").doc(token).get();
-      if (!snap.exists) throw new Error("Invitation introuvable");
-      const data = snap.data();
-      if (data.status === "used") {
-        throw new Error("Invitation déjà utilisée");
-      }
-      if (data.expiresAt && data.expiresAt.toMillis() < Date.now()) {
-        throw new Error("Invitation expirée");
-      }
-      return {...data, id: snap.id};
-    },
-);
+exports.provisionAccounts = onCall(
+  {
+    region: "europe-west1",
+    secrets: [
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_USER",
+      "SMTP_PASS",
+      "SMTP_FROM",
+      "MAILJET_API_KEY",
+      "MAILJET_API_SECRET",
+      "MAILJET_FROM",
+    ],
+  },
+  async (request) => {
+    const caller = request.auth && request.auth.uid;
+    if (!caller) throw new Error("Non autorisé");
+    const accounts = request.data && request.data.accounts;
+    if (!Array.isArray(accounts) || accounts.length === 0) {
+      throw new Error("accounts requis");
+    }
 
-/**
- * Consomme une invitation :
- * crée/associe l'utilisateur et marque l'invitation utilisée.
- */
-exports.consumeInvitation = onCall(
-    {region: "europe-west1"},
-    async (request) => {
-      const {token, password, firstName = "", lastName = ""} =
-        request.data || {};
-      if (!token || !password) throw new Error("token et password requis");
-      const ref = db.collection("invitations").doc(token);
-      const snap = await ref.get();
-      if (!snap.exists) throw new Error("Invitation introuvable");
-      const data = snap.data();
-      if (data.status === "used") throw new Error("Invitation déjà utilisée");
-      if (data.expiresAt && data.expiresAt.toMillis() < Date.now()) {
-        throw new Error("Invitation expirée");
+    const results = [];
+    const successes = [];
+    const errors = [];
+
+    // Récupérer le nom de l'entreprise si possible pour l'email
+    let companyName = "WorkIt";
+    try {
+      if (accounts[0].companyId) {
+        const snap = await db.collection("workspaces")
+          .doc(accounts[0].companyId).get();
+        if (snap.exists) {
+          companyName = snap.data().companyName || "WorkIt";
+        }
       }
+    } catch (_) {
+      logger.warn("Could not fetch company name", _);
+    }
 
-      const email = data.email;
-      const role = data.role;
-      const companyId = data.companyId;
+    for (const acc of accounts) {
+      const email = (acc.email || "").toString().trim().toLowerCase();
+      const role = (acc.role || "").toString();
+      const companyId = (acc.companyId || "").toString();
+      if (!email || !role || !companyId) continue;
 
+      const tempPassword = generateTempPassword();
       let userRecord;
       try {
         userRecord = await getAuth().getUserByEmail(email);
+        userRecord = await getAuth().updateUser(userRecord.uid, {
+          password: tempPassword,
+        });
       } catch (_) {
         userRecord = await getAuth().createUser({
           email,
-          password,
-          displayName: `${firstName} ${lastName}`.trim(),
+          password: tempPassword,
+          displayName: "",
         });
       }
-
-      await getAuth().updateUser(userRecord.uid, {
-        password,
-        displayName:
-          `${firstName} ${lastName}`.trim() || userRecord.displayName,
-      });
 
       await getAuth().setCustomUserClaims(userRecord.uid, {
         role,
         companyId,
       });
 
+      const userDoc = {
+        email,
+        firstName: acc.firstName || "",
+        lastName: acc.lastName || "",
+        role,
+        companyId,
+        tradeKey: acc.tradeKey || null,
+        mustChangePassword: true,
+        tempPassword, // On garde trace au cas où, mais l'email part.
+        status: "provisioned",
+        updatedAt: Timestamp.now(),
+        createdBy: caller,
+      };
+
       await db.collection("users").doc(userRecord.uid).set(
-          {
-            email,
-            firstName,
-            lastName,
-            role,
-            companyId,
-            invitationId: token,
-            status: "active",
-            updatedAt: Timestamp.now(),
-          },
-          {merge: true},
+        userDoc,
+        { merge: true },
       );
 
-      await ref.set(
-          {
-            status: "used",
-            usedAt: Timestamp.now(),
-            usedBy: userRecord.uid,
-          },
-          {merge: true},
-      );
-
-      return {
+      await db.collection("provisioned_accounts").add({
+        ...userDoc,
         uid: userRecord.uid,
+        createdAt: Timestamp.now(),
+      });
+
+      // ENVOI EMAIL CREDENTIALS
+      const html = `
+<div style="font-family:Arial,sans-serif;color:#0B1426">
+  <h2>Bienvenue chez ${companyName} !</h2>
+  <p>Votre compte WorkIt a été créé pour le rôle : <b>${role}</b>.</p>
+  <p>Voici vos identifiants temporaires :</p>
+  <ul>
+    <li><b>Email :</b> ${email}</li>
+    <li><b>Mot de passe :</b> ${tempPassword}</li>
+  </ul>
+  <p>Merci de vous connecter dès que possible et de modifier
+  ce mot de passe.</p>
+  <p><a href="https://workit.app/login"
+     style="background:#00F795;color:#000;padding:12px 18px;
+     border-radius:10px;text-decoration:none;font-weight:bold;">
+     Accéder à WorkIt
+  </a></p>
+</div>`;
+
+      const text = `Bienvenue chez ${companyName} !\n\n` +
+        `Votre compte a été créé (${role}).\n` +
+        `Email: ${email}\n` +
+        `Mot de passe: ${tempPassword}\n\n` +
+        `Merci de vous connecter et de changer votre mot de passe.`;
+
+      try {
+        await sendEmail({
+          to: email,
+          subject: `Vos accès WorkIt – ${companyName}`,
+          html,
+          text,
+          fromName: "WorkIt",
+        });
+        successes.push(email);
+      } catch (err) {
+        logger.error(`Erreur envoi email pour ${email}`, err);
+        errors.push({ email, error: err.message });
+      }
+
+      results.push({
         email,
         role,
         companyId,
-        invitationId: token,
-      };
-    },
-);
-
-/**
- * Provisionne des comptes avec mot de passe temporaire et flag
- * mustChangePassword. Ne fait pas d'envoi d'email.
- * data.accounts: [{email, role, companyId}]
- */
-exports.provisionAccounts = onCall(
-    {region: "europe-west1"},
-    async (request) => {
-      const caller = request.auth && request.auth.uid;
-      if (!caller) throw new Error("Non autorisé");
-      const accounts = request.data && request.data.accounts;
-      if (!Array.isArray(accounts) || accounts.length === 0) {
-        throw new Error("accounts requis");
-      }
-      const results = [];
-      for (const acc of accounts) {
-        const email = (acc.email || "").toString().trim().toLowerCase();
-        const role = (acc.role || "").toString();
-        const companyId = (acc.companyId || "").toString();
-        if (!email || !role || !companyId) continue;
-
-        const tempPassword = generateTempPassword();
-        let userRecord;
-        try {
-          userRecord = await getAuth().getUserByEmail(email);
-          userRecord = await getAuth().updateUser(userRecord.uid, {
-            password: tempPassword,
-          });
-        } catch (_) {
-          userRecord = await getAuth().createUser({
-            email,
-            password: tempPassword,
-            displayName: "",
-          });
-        }
-
-        await getAuth().setCustomUserClaims(userRecord.uid, {
-          role,
-          companyId,
-        });
-
-        const userDoc = {
-          email,
-          role,
-          companyId,
-          tradeKey: acc.tradeKey || null,
-          mustChangePassword: true,
-          tempPassword,
-          status: "provisioned",
-          updatedAt: Timestamp.now(),
-          createdBy: caller,
-        };
-
-        await db.collection("users").doc(userRecord.uid).set(
-            userDoc,
-            {merge: true},
-        );
-
-        await db.collection("provisioned_accounts").add({
-          ...userDoc,
-          uid: userRecord.uid,
-          createdAt: Timestamp.now(),
-        });
-
-        results.push({
-          email,
-          role,
-          companyId,
-          tradeKey: acc.tradeKey || null,
-          tempPassword,
-        });
-      }
-      return {accounts: results};
-    },
+        tradeKey: acc.tradeKey || null,
+        tempPassword,
+      });
+    }
+    return { accounts: results, sent: successes, errors };
+  },
 );
 
 /**
@@ -438,12 +411,107 @@ function generateTempPassword() {
   const pick = (pool) => pool[Math.floor(Math.random() * pool.length)];
   const pool = (upper + lower + digit).split("");
 
-  // 5 caractères, au moins 1 lettre majuscule et 1 chiffre, aucun caractère spécial.
+  // 8 caractères, au moins 1 lettre majuscule et 1 chiffre,
+  // aucun caractère spécial.
   const required = [pick(upper), pick(digit)];
-  while (required.length < 5) required.push(pick(pool));
+  while (required.length < 8) required.push(pick(pool));
   return required.join("");
 }
+/**
+ * Récupère une invitation par token (preview).
+ */
+exports.getInvitationByToken = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const { token } = request.data || {};
+    if (!token) throw new Error("token requis");
+    const snap = await db.collection("invitations").doc(token).get();
+    if (!snap.exists) throw new Error("Invitation introuvable");
+    const data = snap.data();
+    if (data.status === "used") {
+      throw new Error("Invitation déjà utilisée");
+    }
+    if (data.expiresAt && data.expiresAt.toMillis() < Date.now()) {
+      throw new Error("Invitation expirée");
+    }
+    return { ...data, id: snap.id };
+  },
+);
+
 /**
  * Consomme une invitation :
  * crée/associe l'utilisateur et marque l'invitation utilisée.
  */
+exports.consumeInvitation = onCall(
+  { region: "europe-west1" },
+  async (request) => {
+    const { token, password, firstName = "", lastName = "" } =
+      request.data || {};
+    if (!token || !password) throw new Error("token et password requis");
+    const ref = db.collection("invitations").doc(token);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error("Invitation introuvable");
+    const data = snap.data();
+    if (data.status === "used") throw new Error("Invitation déjà utilisée");
+    if (data.expiresAt && data.expiresAt.toMillis() < Date.now()) {
+      throw new Error("Invitation expirée");
+    }
+
+    const email = data.email;
+    const role = data.role;
+    const companyId = data.companyId;
+
+    let userRecord;
+    try {
+      userRecord = await getAuth().getUserByEmail(email);
+    } catch (_) {
+      userRecord = await getAuth().createUser({
+        email,
+        password,
+        displayName: `${firstName} ${lastName}`.trim(),
+      });
+    }
+
+    await getAuth().updateUser(userRecord.uid, {
+      password,
+      displayName:
+        `${firstName} ${lastName}`.trim() || userRecord.displayName,
+    });
+
+    await getAuth().setCustomUserClaims(userRecord.uid, {
+      role,
+      companyId,
+    });
+
+    await db.collection("users").doc(userRecord.uid).set(
+      {
+        email,
+        firstName,
+        lastName,
+        role,
+        companyId,
+        invitationId: token,
+        status: "active",
+        updatedAt: Timestamp.now(),
+      },
+      { merge: true },
+    );
+
+    await ref.set(
+      {
+        status: "used",
+        usedAt: Timestamp.now(),
+        usedBy: userRecord.uid,
+      },
+      { merge: true },
+    );
+
+    return {
+      uid: userRecord.uid,
+      email,
+      role,
+      companyId,
+      invitationId: token,
+    };
+  },
+);

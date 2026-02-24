@@ -44,8 +44,8 @@ class _TrialActivationScreenState extends State<TrialActivationScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const bulletPoints = [
-      'Essai complet 7 jours, sans carte bancaire.',
-      'Vos données sont sauvegardées pour la suite.',
+      'Accès immédiat à toutes les fonctionnalités.',
+      'Vos données sont sauvegardées et sécurisées.',
       'Accès direct au choix de parcours A ou B.',
     ];
 
@@ -56,7 +56,7 @@ class _TrialActivationScreenState extends State<TrialActivationScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
-          'Activer l’essai WorkIt',
+          'Activation de votre espace',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
         ),
       ),
@@ -98,7 +98,7 @@ class _TrialActivationScreenState extends State<TrialActivationScreen> {
                             border: Border.all(color: const Color(0xFF00E676).withOpacity(0.5)),
                           ),
                           child: const Text(
-                            'Essai WorkIt • 7 jours',
+                            'Configuration rapide',
                             style: TextStyle(
                               color: Color(0xFF00E676),
                               fontWeight: FontWeight.w800,
@@ -106,12 +106,12 @@ class _TrialActivationScreenState extends State<TrialActivationScreen> {
                           ),
                         ),
                         const Spacer(),
-                        Icon(Icons.timer_outlined, color: Colors.white.withOpacity(0.6)),
+                        Icon(Icons.rocket_launch_outlined, color: Colors.white.withOpacity(0.6)),
                       ],
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      'Votre essai démarre ici',
+                      'Votre espace démarre ici',
                       style: theme.textTheme.headlineSmall?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
@@ -148,51 +148,8 @@ class _TrialActivationScreenState extends State<TrialActivationScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.04),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white.withOpacity(0.07)),
-                      ),
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Icon(Icons.lock_clock, color: Color(0xFF00E676)),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Accès complet pendant 7 jours. Vous choisissez ensuite l’abonnement qui convient à votre équipe.',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Expanded(
-                    child: _Pill(
-                      label: 'Essai activé',
-                      value: '7 jours',
-                      accent: const Color(0xFF00E676),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _Pill(
-                      label: 'Paiement',
-                      value: 'Plus tard',
-                      accent: Colors.white,
-                    ),
-                  ),
-                ],
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -208,7 +165,7 @@ class _TrialActivationScreenState extends State<TrialActivationScreen> {
                     ),
                   ),
                   onPressed: isLoading ? null : () => _startTrial(context),
-                  child: Text(isLoading ? 'Démarrage…' : 'Démarrer l’essai'),
+                  child: Text(isLoading ? 'Activation…' : 'Activer mon espace'),
                 ),
               ),
               const SizedBox(height: 12),

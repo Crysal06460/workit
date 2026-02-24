@@ -1,0 +1,34 @@
+<!-- WorkIt - CL2/2R (Coulissant 2 vantaux / 2 rails) | fermé + flèche cohérente CL3 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre extérieur -->
+    <rect x="72" y="136" width="368" height="240" rx="24"/>
+
+    <!-- 2 vantaux fermés (dans les limites) -->
+    <!-- Zone utile intérieure: 96 → 416 (largeur 320) -->
+    <rect x="96"  y="160" width="152" height="192" rx="18"/>
+    <rect x="264" y="160" width="152" height="192" rx="18"/>
+
+    <!-- Jonction centrale -->
+    <line x1="256" y1="160" x2="256" y2="352"/>
+
+    <!-- Poignées latérales -->
+    <line x1="112" y1="224" x2="112" y2="288"/>  <!-- gauche -->
+    <line x1="400" y1="224" x2="400" y2="288"/>  <!-- droite -->
+
+  </g>
+
+  <!-- Double flèche centrale (même style que CL3) -->
+  <g stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="216" y1="256" x2="296" y2="256"/>
+    <line x1="216" y1="256" x2="236" y2="238"/>
+    <line x1="216" y1="256" x2="236" y2="274"/>
+    <line x1="296" y1="256" x2="276" y2="238"/>
+    <line x1="296" y1="256" x2="276" y2="274"/>
+  </g>
+
+</svg>
+    

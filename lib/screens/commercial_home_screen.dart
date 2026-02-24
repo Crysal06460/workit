@@ -15,21 +15,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'admin_home_screen.dart';
 import 'invite_team_screen.dart';
 import 'sign_in_screen.dart';
+import 'settings_screen.dart';
 import 'widgets/dynamic_dropdown_field.dart';
 
 const Map<String, String> _metierOptions = {
-  'menuiserie_aluminium': 'Menuiserie Aluminium / PVC / Bois / Mixte',
-  'platrerie_isolation_cloisons': 'Plâtrerie – Isolation – Cloisons',
-  'electricite_courants_faibles': 'Électricité – Courants faibles',
-  'chauffage_climatisation_ventilation': 'Chauffage – Clim – Ventilation',
-  'plomberie_sanitaire': 'Plomberie – Sanitaire',
-  'peinture_revetements': 'Peinture – Revêtements',
-  'carrelage_maconnerie_fine': 'Carrelage – Maçonnerie fine',
-  'cuisine_amenagement_interieur': 'Cuisine – Aménagement intérieur',
-  'salle_de_bain_etancheite': 'Salle de bain – Étanchéité',
-  'sols_exterieurs_amenagements': 'Sols extérieurs – Aménagements',
-  'vitrerie_miroiterie': 'Vitrerie – Miroiterie',
-  'automatismes_portails': 'Automatismes – Portails',
+  'menuiserie_aluminium': 'Menuiserie Extérieure & Fermeture',
 };
 
 const Color _commercialBg = Color(0xFF07090D);
@@ -108,6 +98,15 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
             ],
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined, color: Colors.white70),
+              tooltip: 'Paramètres',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+            ),
             if (_isAdmin && _workspaceId != null)
               IconButton(
                 icon: const Icon(Icons.lock_outline, color: Colors.white70),

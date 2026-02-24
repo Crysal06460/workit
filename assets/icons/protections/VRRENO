@@ -1,0 +1,20 @@
+<!-- WorkIt - VOLET ROULANT BLOC BAIE -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <g stroke="currentColor" stroke-linecap="butt" stroke-linejoin="miter">
+
+    <!-- Coffre intégré -->
+    <rect x="64" y="48" width="128" height="32" rx="6" stroke-width="18"/>
+
+    <!-- Coulisses -->
+    <line x1="72" y1="80" x2="72" y2="192" stroke-width="18"/>
+    <line x1="184" y1="80" x2="184" y2="192" stroke-width="18"/>
+
+    <!-- Rideau -->
+    <rect x="72" y="96" width="112" height="96" rx="6" stroke-width="18"/>
+
+    <!-- Lames -->
+    <line x1="72" y1="128" x2="184" y2="128" stroke-width="12"/>
+    <line x1="72" y1="160" x2="184" y2="160" stroke-width="12"/>
+
+  </g>
+</svg>

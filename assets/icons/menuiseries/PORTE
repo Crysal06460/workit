@@ -1,0 +1,21 @@
+<!-- WorkIt - PORTE 1V (Porte 1 vantail) | sobre, premium, currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre extérieur -->
+    <rect x="96" y="64" width="320" height="384" rx="24"/>
+
+    <!-- Vantail -->
+    <rect x="124" y="92" width="264" height="328" rx="18"/>
+
+    <!-- Poignée (horizontale, côté droit) -->
+    <line x1="346" y1="270" x2="382" y2="270"/>
+
+    <!-- Paumelles (côté gauche) -->
+    <line x1="146" y1="120" x2="146" y2="150"/>
+    <line x1="146" y1="334" x2="146" y2="364"/>
+
+  </g>
+
+</svg>

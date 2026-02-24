@@ -1,13 +1,14 @@
-import 'package:flutter/material.dart';
+2import 'package:flutter/material.dart';
 
 const Color _bg = Color(0xFF07090D);
 const Color _accent = Color(0xFF00E676); // Metreur Green
 const Color _cardBg = Color(0xFF13161C);
 
 class MeasurementFormScreen extends StatefulWidget {
-  const MeasurementFormScreen({super.key, required this.draftData});
+  const MeasurementFormScreen({super.key, required this.draftData, this.initialIndex = 0});
 
   final Map<String, dynamic> draftData;
+  final int initialIndex;
 
   @override
   State<MeasurementFormScreen> createState() => _MeasurementFormScreenState();
@@ -23,7 +24,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
           .map((e) => e as Map<String, dynamic>)
           .toList();
 
-  int _currentIndex = 0;
+  late int _currentIndex;
 
   // Temporary local state for measurements
   final Map<int, Map<String, String>> _measurements = {};
@@ -31,6 +32,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     // Initialize measurements from existing product data
     final products = (widget.draftData['products'] as List<dynamic>? ?? []);
     for (int i = 0; i < products.length; i++) {

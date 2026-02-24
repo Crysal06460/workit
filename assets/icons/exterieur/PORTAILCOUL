@@ -1,0 +1,30 @@
+<!-- WorkIt - PORTAIL COULISSANT 1V | sobre, premium, currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre extérieur -->
+    <rect x="48" y="176" width="416" height="160" rx="18"/>
+
+    <!-- Panneau portail -->
+    <rect x="72" y="196" width="368" height="120" rx="14"/>
+
+    <!-- Poignée (côté gauche, comme modèle) -->
+    <line x1="92" y1="236" x2="92" y2="276"/>
+
+    <!-- Galets (roulettes) -->
+    <circle cx="192" cy="344" r="10"/>
+    <circle cx="320" cy="344" r="10"/>
+  </g>
+
+  <!-- Flèche coulissement (au centre) -->
+  <g stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="206" y1="256" x2="306" y2="256"/>
+    <line x1="206" y1="256" x2="226" y2="238"/>
+    <line x1="206" y1="256" x2="226" y2="274"/>
+    <line x1="306" y1="256" x2="286" y2="238"/>
+    <line x1="306" y1="256" x2="286" y2="274"/>
+  </g>
+
+</svg>

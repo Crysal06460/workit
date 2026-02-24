@@ -83,7 +83,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Quelle configuration vous correspond ?',
+                            'Choisir la taille de votre équipe',
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w800,
@@ -92,7 +92,7 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            'Choisissez simplement la configuration adaptée, vous pourrez ajuster celle-ci plus tard.',
+                            'Sélectionnez la configuration adaptée à votre structure.',
                             style: TextStyle(color: Colors.white70),
                           ),
                         ],
@@ -210,10 +210,11 @@ class PlanCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        plan.price,
-                        style: const TextStyle(color: Colors.white70),
-                      ),
+                      // Price hidden for trial flow
+                      // Text(
+                      //   plan.price,
+                      //   style: const TextStyle(color: Colors.white70),
+                      // ),
                     ],
                   ),
                 ),

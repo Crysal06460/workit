@@ -1,0 +1,28 @@
+<!-- WorkIt - GAL1/1R (Galandage 1 vantail / 1 rail) | cadre global + 1 vantail + mur sans cadre -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure principale -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre global -->
+    <rect x="56" y="136" width="400" height="240" rx="24"/>
+
+    <!-- Séparation vantail / mur -->
+    <line x1="256" y1="160" x2="256" y2="352"/>
+
+    <!-- Vantail (gauche uniquement) -->
+    <rect x="80" y="160" width="160" height="192" rx="18"/>
+
+    <!-- Poignée -->
+    <line x1="96" y1="224" x2="96" y2="288"/>
+
+  </g>
+
+  <!-- Flèche vers le mur -->
+  <g stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="180" y1="256" x2="332" y2="256"/>
+    <line x1="332" y1="256" x2="308" y2="232"/>
+    <line x1="332" y1="256" x2="308" y2="280"/>
+  </g>
+
+</svg>

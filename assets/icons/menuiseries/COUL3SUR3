@@ -1,0 +1,42 @@
+<!-- WorkIt - CL3/3R (Coulissant 3 vantaux / 3 rails) | 3 vantaux fermés + flèches | FIXED (no overflow) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre extérieur -->
+    <rect x="56" y="136" width="400" height="240" rx="24"/>
+
+    <!-- 3 vantaux fermés (dans les limites du cadre) -->
+    <!-- Cadre intérieur utile: x=80..432 (largeur 352) => 3x112 = 336 + 2 gaps de 8 = 352 -->
+    <rect x="80"  y="160" width="112" height="192" rx="18"/>
+    <rect x="200" y="160" width="112" height="192" rx="18"/>
+    <rect x="320" y="160" width="112" height="192" rx="18"/>
+
+    <!-- Montants de jonction -->
+    <line x1="200" y1="160" x2="200" y2="352"/>
+    <line x1="320" y1="160" x2="320" y2="352"/>
+
+    <!-- Poignées latérales (extérieurs) -->
+    <line x1="96"  y1="224" x2="96"  y2="288"/>  <!-- gauche -->
+    <line x1="416" y1="224" x2="416" y2="288"/>  <!-- droite -->
+  </g>
+
+  <!-- Flèches (coulissement) : 2 doubles flèches entre les 3 vantaux -->
+  <g stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <!-- entre vantail 1 et 2 -->
+    <line x1="168" y1="256" x2="224" y2="256"/>
+    <line x1="168" y1="256" x2="184" y2="240"/>
+    <line x1="168" y1="256" x2="184" y2="272"/>
+    <line x1="224" y1="256" x2="208" y2="240"/>
+    <line x1="224" y1="256" x2="208" y2="272"/>
+
+    <!-- entre vantail 2 et 3 -->
+    <line x1="288" y1="256" x2="344" y2="256"/>
+    <line x1="288" y1="256" x2="304" y2="240"/>
+    <line x1="288" y1="256" x2="304" y2="272"/>
+    <line x1="344" y1="256" x2="328" y2="240"/>
+    <line x1="344" y1="256" x2="328" y2="272"/>
+  </g>
+
+</svg>

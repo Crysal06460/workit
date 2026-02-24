@@ -317,6 +317,34 @@
             "coulissante": { "label": "Coulissante" },
             "fixe": { "label": "Fixe" }
           }
+        },
+        "clotures": {
+          "label": "Clôtures",
+          "types": {
+            "cloture_alu": {
+              "label": "Clôture Alu",
+              "variantes": ["Pleine", "Ajourée", "Semi-ajourée", "Découpe laser"]
+            },
+            "cloture_composite": { "label": "Clôture Composite" },
+            "cloture_grillage": { "label": "Grillage rigide" }
+          },
+          "options": {
+            "pose": ["Sur muret", "Scellement au sol", "Sur platine"],
+            "hauteurs": ["1m", "1.2m", "1.5m", "1.8m", "2m"],
+            "piliers": ["Alu", "Maçonnerie"]
+          }
+        },
+        "garde_corps": {
+          "label": "Garde-corps / Séparations",
+          "types": {
+            "garde_corps_vitre": { "label": "Garde-corps vitré", "variantes": ["Sur profil", "Sur poteaux"] },
+            "garde_corps_barreaude": { "label": "Garde-corps barreaudé", "variantes": ["Vertical", "Horizontal"] },
+            "separation_balcon": { "label": "Séparation de balcon", "variantes": ["Pleine", "Vitrée", "Ajourée"] }
+          },
+          "options": {
+            "fixation": ["A l'anglaise (applique)", "A la française (dalle)"],
+            "main_courante": ["Ronde", "Rectangulaire", "Sans"]
+          }
         }
       },
       "options": {

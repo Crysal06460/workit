@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'measurement_form_screen.dart';
 import 'sign_in_screen.dart';
+import 'settings_screen.dart';
 
 const Color _metreurBg = Color(0xFF07090D);
 const Color _metreurCard = Color(0xFF0F1422);
@@ -229,6 +230,15 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
             IconButton(
               icon: const Icon(Icons.calendar_month_outlined, color: Colors.white),
               onPressed: () {},
+            ),
+            IconButton(
+              icon: const Icon(Icons.settings_outlined, color: Colors.white),
+              tooltip: 'Paramètres',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
             ),
             IconButton(
               icon: const Icon(Icons.refresh, color: _metreurAccent),
@@ -1465,6 +1475,67 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
     meetingAt = widget.data.meetingAt;
   }
 
+  Future<void> _openMeasurementForm(int initialIndex) async {
+    final data = widget.data;
+    // Navigate to Measurement Form and await result
+    final updatedProducts = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MeasurementFormScreen(
+          draftData: data.draft!.toMap(),
+          initialIndex: initialIndex,
+        ),
+      ),
+    );
+
+    if (updatedProducts != null && updatedProducts is List) {
+      // Update local state and Firestore
+      final updatedDraft = _QuoteDraft.fromMap({
+        ...data.draft!.toMap(),
+        'products': updatedProducts,
+      });
+
+      try {
+        final wsId = data.workspaceId; // Ensure we have a workspace ID
+        if (wsId == null) throw 'Workspace ID missing';
+
+        await FirebaseFirestore.instance
+            .collection('workspaces')
+            .doc(wsId)
+            .collection('devis')
+            .doc(data.id)
+            .update({
+          'draft': updatedDraft.toMap(),
+          'updated': DateTime.now().toIso8601String(),
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Métré enregistré avec succès'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: _metreurAccent,
+            ),
+          );
+          // Refresh the parent list to show updated status/button
+          if (widget.onRefresh != null) {
+            widget.onRefresh!();
+          }
+        }
+      } catch (e) {
+        debugPrint('Error saving measurements: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erreur lors de l\'enregistrement: $e'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = widget.data;
@@ -1604,57 +1675,75 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                               );
                             }
 
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.04),
+                            return Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _openMeasurementForm(i),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.white12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
+                                child: Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.04),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.white12),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: _metreurAccent.withOpacity(0.15),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          'Élément ${i + 1}',
-                                          style: const TextStyle(
-                                            color: _metreurAccent,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: _metreurAccent.withOpacity(0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              'Élément ${i + 1}',
+                                              style: const TextStyle(
+                                                color: _metreurAccent,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                          const Spacer(),
+                                          if (p.quantite != null)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                border: Border.all(color: Colors.white12),
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Text(
+                                                'Qté: ${p.quantite}',
+                                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                              ),
+                                            ),
+                                        ],
                                       ),
-                                      const Spacer(),
-                                      if (p.quantite != null)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.white12),
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: Text(
-                                            'Qté: ${p.quantite}',
-                                            style: const TextStyle(color: Colors.white70, fontSize: 12),
-                                          ),
-                                        ),
+                                      const SizedBox(height: 12),
+                                      if (p.categoryKey != null) _buildRow('Catégorie', p.categoryKey!),
+                                      if (p.sousCategorie != null) _buildRow('Type', p.sousCategorie!),
+                                      if (p.typeProduit != null && p.typeProduit != p.sousCategorie) _buildRow('Produit', p.typeProduit!),
+                                      if (p.couleur != null) _buildRow('Couleur', p.couleur!),
+                                      if (p.largeur != null || p.hauteur != null)
+                                        _buildRow('Dim', '${p.largeur ?? '-'} x ${p.hauteur ?? '-'} ${p.unite}'),
+                                      
+                                      // Add a subtle hint that it's clickable
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: const [
+                                          Text('Modifier', style: TextStyle(color: _metreurAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                                          SizedBox(width: 4),
+                                          Icon(Icons.edit, size: 14, color: _metreurAccent),
+                                        ],
+                                      )
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
-                                  if (p.categoryKey != null) _buildRow('Catégorie', p.categoryKey!),
-                                  if (p.sousCategorie != null) _buildRow('Type', p.sousCategorie!),
-                                  if (p.typeProduit != null && p.typeProduit != p.sousCategorie) _buildRow('Produit', p.typeProduit!),
-                                  if (p.couleur != null) _buildRow('Couleur', p.couleur!),
-                                  if (p.largeur != null || p.hauteur != null)
-                                    _buildRow('Dim', '${p.largeur ?? '-'} x ${p.hauteur ?? '-'} ${p.unite}'),
-                                ],
+                                ),
                               ),
                             );
                           }),
@@ -1783,64 +1872,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                           elevation: 4,
                           shadowColor: _metreurAccent.withOpacity(0.4),
                         ),
-                        onPressed: () async {
-                          // Navigate to Measurement Form and await result
-                          final updatedProducts = await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => MeasurementFormScreen(
-                                draftData: data.draft!.toMap(),
-                              ),
-                            ),
-                          );
-
-                          if (updatedProducts != null && updatedProducts is List) {
-                              // Update local state and Firestore
-                              final updatedDraft = _QuoteDraft.fromMap({
-                                ...data.draft!.toMap(),
-                                'products': updatedProducts,
-                              });
-
-                              try {
-                                final wsId = data.workspaceId; // Ensure we have a workspace ID
-                                if (wsId == null) throw 'Workspace ID missing';
-
-                                await FirebaseFirestore.instance
-                                    .collection('workspaces')
-                                    .doc(wsId)
-                                    .collection('devis')
-                                    .doc(data.id) 
-                                    .update({
-                                      'draft': updatedDraft.toMap(),
-                                      'updated': DateTime.now().toIso8601String(),
-                                      // Potentially update status to 'Métré effectué'? 
-                                      // For now, keep it simple.
-                                    });
-                                  
-                                if (mounted) {
-                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Métré enregistré avec succès'),
-                                      backgroundColor: _metreurAccent,
-                                    ),
-                                  );
-                                  // Refresh the parent list to show updated status/button
-                                  if (widget.onRefresh != null) {
-                                    widget.onRefresh!(); 
-                                  }
-                                }
-                              } catch (e) {
-                                 debugPrint('Error saving measurements: $e');
-                                 if (mounted) {
-                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Erreur lors de l\'enregistrement: $e'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                 }
-                              }
-                          }
-                        },
+                        onPressed: () => _openMeasurementForm(0),
                         child: Builder(
                           builder: (context) {
                             // Check if any product has measurements

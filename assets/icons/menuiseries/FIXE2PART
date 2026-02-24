@@ -1,0 +1,31 @@
+<!-- WorkIt - FIXE 2P (Châssis fixe 2 parties) | cadre + meneau + F/F | currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre extérieur -->
+    <rect x="56" y="136" width="400" height="240" rx="24"/>
+
+    <!-- Meneau central -->
+    <line x1="256" y1="160" x2="256" y2="352"/>
+
+  </g>
+
+  <!-- F gauche -->
+  <text x="164" y="272"
+        text-anchor="middle"
+        font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+        font-size="90"
+        font-weight="700"
+        fill="currentColor">F</text>
+
+  <!-- F droite -->
+  <text x="348" y="272"
+        text-anchor="middle"
+        font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+        font-size="90"
+        font-weight="700"
+        fill="currentColor">F</text>
+
+</svg>

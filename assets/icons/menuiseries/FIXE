@@ -1,0 +1,20 @@
+<!-- WorkIt - FIXE (simple) | cadre + F centré | minimal -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Cadre extérieur uniquement -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="96" y="80" width="320" height="352" rx="24"/>
+  </g>
+
+  <!-- F centré -->
+  <text x="256"
+        y="272"
+        text-anchor="middle"
+        font-family="system-ui, -apple-system, Segoe UI, Roboto, Arial"
+        font-size="110"
+        font-weight="700"
+        fill="currentColor">
+    F
+  </text>
+
+</svg>

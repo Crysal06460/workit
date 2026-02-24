@@ -1,0 +1,32 @@
+<!-- WorkIt - GAL2/2R (Galandage 2 vantaux / 2 rails) | 1 grande flèche → | 1 poignée gauche -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre global -->
+    <rect x="56" y="136" width="400" height="240" rx="24"/>
+
+    <!-- Séparation baie / mur (poche) -->
+    <line x1="356" y1="160" x2="356" y2="352"/>
+
+    <!-- 2 vantaux côte à côte -->
+    <rect x="80"  y="160" width="132" height="192" rx="18"/>
+    <rect x="224" y="160" width="132" height="192" rx="18"/>
+
+    <!-- Jonction entre les 2 vantaux -->
+    <line x1="224" y1="160" x2="224" y2="352"/>
+
+    <!-- Poignée unique (extérieur gauche uniquement) -->
+    <line x1="96" y1="224" x2="96" y2="288"/>
+
+  </g>
+
+  <!-- Grande flèche unique (les 2 vantaux partent vers la droite) -->
+  <g stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="140" y1="256" x2="332" y2="256"/>
+    <line x1="332" y1="256" x2="304" y2="228"/>
+    <line x1="332" y1="256" x2="304" y2="284"/>
+  </g>
+
+</svg>

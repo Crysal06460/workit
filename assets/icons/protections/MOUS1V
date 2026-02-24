@@ -1,0 +1,40 @@
+<!-- WorkIt - MOUSTIQUAIRE VERTICALE ENROULABLE | coffre haut + grillage fin -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure principale -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre extérieur -->
+    <rect x="96" y="80" width="320" height="352" rx="24"/>
+
+    <!-- Coffre enrouleur (haut) -->
+    <line x1="96" y1="108" x2="416" y2="108"/>
+
+    <!-- Barre de charge (bas de toile) -->
+    <line x1="124" y1="404" x2="388" y2="404"/>
+
+    <!-- Petite poignée centrée -->
+    <line x1="240" y1="390" x2="272" y2="390"/>
+
+  </g>
+
+  <!-- Grillage fin (toile moustiquaire) -->
+  <g stroke="currentColor" stroke-width="3" opacity="0.35">
+    <!-- lignes verticales -->
+    <line x1="150" y1="120" x2="150" y2="392"/>
+    <line x1="190" y1="120" x2="190" y2="392"/>
+    <line x1="230" y1="120" x2="230" y2="392"/>
+    <line x1="270" y1="120" x2="270" y2="392"/>
+    <line x1="310" y1="120" x2="310" y2="392"/>
+    <line x1="350" y1="120" x2="350" y2="392"/>
+
+    <!-- lignes horizontales -->
+    <line x1="124" y1="150" x2="388" y2="150"/>
+    <line x1="124" y1="190" x2="388" y2="190"/>
+    <line x1="124" y1="230" x2="388" y2="230"/>
+    <line x1="124" y1="270" x2="388" y2="270"/>
+    <line x1="124" y1="310" x2="388" y2="310"/>
+    <line x1="124" y1="350" x2="388" y2="350"/>
+  </g>
+
+</svg>

@@ -1,0 +1,15 @@
+<!-- WorkIt - VOLET BATTANT 2V | style pictogramme 3/4 | currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <g stroke="currentColor" stroke-linecap="butt" stroke-linejoin="miter">
+
+    <!-- Cadre fenêtre -->
+    <rect x="88" y="80" width="80" height="96" rx="8" stroke-width="18"/>
+
+    <!-- Volet gauche ouvert -->
+    <path d="M60 72 L88 80 L88 176 L60 168 Z" stroke-width="18"/>
+
+    <!-- Volet droit ouvert -->
+    <path d="M168 80 L196 72 L196 168 L168 176 Z" stroke-width="18"/>
+
+  </g>
+</svg>

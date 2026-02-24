@@ -1,12 +1,59 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/auth_navigation_service.dart';
 import 'sign_in_screen.dart';
 import 'welcome_screen.dart';
 
-class EntryScreen extends StatelessWidget {
+class EntryScreen extends StatefulWidget {
   const EntryScreen({super.key});
 
-  void _openSignIn(BuildContext context) {
+  @override
+  State<EntryScreen> createState() => _EntryScreenState();
+}
+
+class _EntryScreenState extends State<EntryScreen> {
+  final LocalAuthentication auth = LocalAuthentication();
+  bool _isAuthenticating = false;
+
+  Future<void> _handleSignIn(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      // User is already logged in, check if FaceID is enabled
+      final prefs = await SharedPreferences.getInstance();
+      final faceIdEnabled = prefs.getBool('workit_faceid_enabled') ?? false;
+
+      if (faceIdEnabled) {
+        try {
+          final bool canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
+          final bool canAuthenticate =
+              canAuthenticateWithBiometrics || await auth.isDeviceSupported();
+
+          if (canAuthenticate) {
+            setState(() => _isAuthenticating = true);
+            final bool didAuthenticate = await auth.authenticate(
+              localizedReason: 'Veuillez vous authentifier pour accéder à WorkIt',
+              biometricOnly: true,
+            );
+            setState(() => _isAuthenticating = false);
+
+            if (didAuthenticate) {
+              if (!mounted) return;
+               await AuthNavigationService().navigateUser(context, user);
+               return;
+            }
+          }
+        } catch (e) {
+          setState(() => _isAuthenticating = false);
+          // Fallback to normal sign in if error
+          print('Error auth: $e');
+        }
+      }
+    }
+
+    if (!mounted) return;
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const SignInScreen()));
@@ -200,8 +247,19 @@ class EntryScreen extends StatelessWidget {
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
-                                onPressed: () => _openSignIn(context),
-                                child: const Text('Se connecter'),
+                                onPressed: _isAuthenticating
+                                    ? null
+                                    : () => _handleSignIn(context),
+                                child: _isAuthenticating
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.black,
+                                        ),
+                                      )
+                                    : const Text('Se connecter'),
                               ),
                             ),
                             const SizedBox(height: 14),
@@ -253,7 +311,7 @@ class EntryScreen extends StatelessWidget {
                                   ),
                                   SizedBox(height: 6),
                                   Text(
-                                    'Essai gratuit 7 jours, sans carte bancaire.',
+                                    'Créez votre espace entreprise en 2 minutes.',
                                     style: TextStyle(
                                       color: Colors.white70,
                                       height: 1.3,
@@ -268,7 +326,7 @@ class EntryScreen extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: const [
                                   Text(
-                                    'Essayer',
+                                    'Commencer',
                                     style: TextStyle(
                                       color: Color(0xFF00E676),
                                       fontWeight: FontWeight.w800,

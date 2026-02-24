@@ -1,0 +1,17 @@
+<!-- WorkIt - OF1 (Ouvrant à la française 1 battant) | sobre, premium, currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Cadre extérieur -->
+    <rect x="96" y="80" width="320" height="352" rx="24"/>
+
+    <!-- Ouvrant (cadre intérieur) -->
+    <rect x="124" y="108" width="264" height="296" rx="18"/>
+
+    <!-- Poignée (côté droit) -->
+    <line x1="364" y1="240" x2="364" y2="292"/>
+
+    <!-- Petit repère de paumelles (côté gauche) -->
+    <line x1="146" y1="140" x2="146" y2="170"/>
+    <line x1="146" y1="342" x2="146" y2="372"/>
+  </g>
+</svg>

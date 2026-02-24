@@ -5,18 +5,7 @@ import '../models/onboarding_models.dart';
 import 'account_setup_screen.dart';
 
 const _metierOptions = <String, String>{
-  'menuiserie_aluminium': 'Menuiserie Aluminium / PVC / Bois / Mixte',
-  'platrerie_isolation_cloisons': 'Plâtrerie – Isolation – Cloisons',
-  'electricite_courants_faibles': 'Électricité – Courants faibles',
-  'chauffage_climatisation_ventilation': 'Chauffage – Clim – Ventilation',
-  'plomberie_sanitaire': 'Plomberie – Sanitaire',
-  'peinture_revetements': 'Peinture – Revêtements',
-  'carrelage_maconnerie_fine': 'Carrelage – Maçonnerie fine',
-  'cuisine_amenagement_interieur': 'Cuisine – Aménagement intérieur',
-  'salle_de_bain_etancheite': 'Salle de bain – Étanchéité',
-  'sols_exterieurs_amenagements': 'Sols extérieurs – Aménagements',
-  'vitrerie_miroiterie': 'Vitrerie – Miroiterie',
-  'automatismes_portails': 'Automatismes – Portails',
+  'menuiserie_aluminium': 'Menuiserie Extérieure & Fermeture',
 };
 
 class SelectMetierScreen extends StatefulWidget {
@@ -35,6 +24,9 @@ class _SelectMetierScreenState extends State<SelectMetierScreen> {
   void initState() {
     super.initState();
     selectedKey = widget.data.tradeKey;
+    if (_metierOptions.length == 1 && selectedKey == null) {
+      selectedKey = _metierOptions.keys.first;
+    }
   }
 
   Future<void> _saveAndContinue() async {

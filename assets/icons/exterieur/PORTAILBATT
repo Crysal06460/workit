@@ -1,0 +1,27 @@
+<!-- WorkIt - PORTAIL BATTANT 2V | sobre, premium, currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre extérieur (portail) -->
+    <rect x="56" y="168" width="400" height="176" rx="18"/>
+
+    <!-- 2 vantaux -->
+    <rect x="80"  y="192" width="176" height="128" rx="14"/>
+    <rect x="256" y="192" width="176" height="128" rx="14"/>
+
+    <!-- Meneau central -->
+    <line x1="256" y1="192" x2="256" y2="320"/>
+
+    <!-- Paumelles (charnières sur poteaux extérieurs) -->
+    <line x1="80"  y1="206" x2="80"  y2="234"/>
+    <line x1="80"  y1="278" x2="80"  y2="306"/>
+    <line x1="432" y1="206" x2="432" y2="234"/>
+    <line x1="432" y1="278" x2="432" y2="306"/>
+
+    <!-- Serrure / poignée (au centre, sur vantail droit) -->
+    <line x1="276" y1="248" x2="276" y2="292"/>
+
+  </g>
+
+</svg>

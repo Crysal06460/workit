@@ -170,6 +170,30 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                             ],
                           ),
                         ),
+                        if (data['tempPassword'] != null && data['status'] == 'provisioned')
+                          IconButton(
+                            icon: const Icon(Icons.password, color: Color(0xFF00E676)),
+                            tooltip: 'Voir le mot de passe provisoire',
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  backgroundColor: const Color(0xFF0F1422),
+                                  title: const Text('Mot de passe provisoire', style: TextStyle(color: Colors.white)),
+                                  content: SelectableText(
+                                    '${data['tempPassword']}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('Fermer', style: TextStyle(color: Colors.white54)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                          IconButton(
                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                            onPressed: () => _removeUser(uid, email),
@@ -197,6 +221,9 @@ class _AddMemberDialog extends StatefulWidget {
 
 class _AddMemberDialogState extends State<_AddMemberDialog> {
   final _emailController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+
   String _selectedRole = 'commercial';
   bool _isLoading = false;
 
@@ -210,6 +237,8 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
       
       final payload = [{
         'email': _emailController.text.trim(),
+        'firstName': _firstNameController.text.trim(),
+        'lastName': _lastNameController.text.trim(),
         'role': _selectedRole,
         'companyId': widget.workspaceId,
       }];
@@ -258,37 +287,65 @@ class _AddMemberDialogState extends State<_AddMemberDialog> {
     return AlertDialog(
       backgroundColor: const Color(0xFF0F1422),
       title: const Text('Ajouter un membre', style: TextStyle(color: Colors.white)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _emailController,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'Email',
-              hintStyle: const TextStyle(color: Colors.white54),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
-               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _firstNameController,
+              style: const TextStyle(color: Colors.white),
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Prénom',
+                hintStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _selectedRole,
-             dropdownColor: const Color(0xFF0F1422),
-             style: const TextStyle(color: Colors.white),
-            items: onboardingRoles.map((role) => DropdownMenuItem(
-              value: role,
-              child: Text(roleDisplayName(role)),
-            )).toList(),
-            onChanged: (val) => setState(() => _selectedRole = val!),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _lastNameController,
+              style: const TextStyle(color: Colors.white),
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Nom',
+                hintStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: _emailController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Email',
+                hintStyle: const TextStyle(color: Colors.white54),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _selectedRole,
+               dropdownColor: const Color(0xFF0F1422),
+               style: const TextStyle(color: Colors.white),
+              items: onboardingRoles.map((role) => DropdownMenuItem(
+                value: role,
+                child: Text(roleDisplayName(role)),
+              )).toList(),
+              onChanged: (val) => setState(() => _selectedRole = val!),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.05),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(

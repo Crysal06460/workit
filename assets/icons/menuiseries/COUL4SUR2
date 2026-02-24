@@ -1,0 +1,36 @@
+<!-- WorkIt - CL4/2R (Coulissant 4 vantaux / 2 rails) | flèche centrale uniquement | currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Structure -->
+  <g stroke="currentColor" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+
+    <!-- Cadre extérieur -->
+    <rect x="48" y="136" width="416" height="240" rx="24"/>
+
+    <!-- 4 vantaux fermés -->
+    <rect x="72"  y="160" width="92" height="192" rx="18"/>
+    <rect x="164" y="160" width="92" height="192" rx="18"/>
+    <rect x="256" y="160" width="92" height="192" rx="18"/>
+    <rect x="348" y="160" width="92" height="192" rx="18"/>
+
+    <!-- Jonctions -->
+    <line x1="164" y1="160" x2="164" y2="352"/>
+    <line x1="256" y1="160" x2="256" y2="352"/>
+    <line x1="348" y1="160" x2="348" y2="352"/>
+
+    <!-- Poignées extérieures -->
+    <line x1="88"  y1="224" x2="88"  y2="288"/>
+    <line x1="424" y1="224" x2="424" y2="288"/>
+
+  </g>
+
+  <!-- Double flèche centrale large (bien espacée) -->
+  <g stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="196" y1="256" x2="316" y2="256"/>
+    <line x1="196" y1="256" x2="220" y2="232"/>
+    <line x1="196" y1="256" x2="220" y2="280"/>
+    <line x1="316" y1="256" x2="292" y2="232"/>
+    <line x1="316" y1="256" x2="292" y2="280"/>
+  </g>
+
+</svg>
