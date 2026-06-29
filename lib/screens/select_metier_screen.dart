@@ -41,7 +41,7 @@ class _SelectMetierScreenState extends State<SelectMetierScreen> {
     await prefs.setString('workit_trade_key', selectedKey!);
     if (!mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AccountSetupScreen(data: widget.data)),
+      MaterialPageRoute(builder: (_) => const AccountSetupScreen()),
     );
   }
 

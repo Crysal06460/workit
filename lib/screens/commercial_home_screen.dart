@@ -11,23 +11,22 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_home_screen.dart';
-import 'invite_team_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/dynamic_dropdown_field.dart';
+import '../core/theme/app_colors.dart';
 
 const Map<String, String> _metierOptions = {
   'menuiserie_aluminium': 'Menuiserie Extérieure & Fermeture',
 };
 
-const Color _commercialBg = Color(0xFF07090D);
-const Color _commercialCard = Color(0xFF0F1422);
-const Color _commercialAccent = Color(0xFF00F795);
-const String _quotesPrefsKey = 'workit_saved_quotes';
+const Color _commercialBg     = AppColors.background;
+const Color _commercialCard   = AppColors.surface;
+const Color _commercialAccent = AppColors.primary;
 const String _workspaceIdKey = 'workit_workspace_id';
-const String _workspaceNameKey = 'workit_workspace_name';
 const String _userFirstNameKey = 'workit_user_first_name';
 const String _userLastNameKey = 'workit_user_last_name';
 const String _isAdminKey = 'workit_is_admin';
@@ -43,10 +42,11 @@ class CommercialHomeScreen extends StatefulWidget {
 class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
   final _firestore = FirebaseFirestore.instance;
   String? _workspaceId;
-  String? _workspaceName;
   String? _userFirstName;
   String? _userLastName;
   bool _isAdmin = false;
+  String _searchQuery = '';
+  int _bottomNavIndex = 0;
 
   @override
   void initState() {
@@ -68,75 +68,91 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
     return '';
   }
 
+  String _initials() {
+    final f = _userFirstName?.trim() ?? '';
+    final l = _userLastName?.trim() ?? '';
+    if (f.isNotEmpty && l.isNotEmpty) return '${f[0]}${l[0]}'.toUpperCase();
+    if (f.isNotEmpty) return f[0].toUpperCase();
+    if (l.isNotEmpty) return l[0].toUpperCase();
+    return '?';
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 5,
+      length: 7,
       child: Scaffold(
         backgroundColor: _commercialBg,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: AppColors.surface,
           elevation: 0,
-          centerTitle: true,
-          titleSpacing: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: false,
+          titleSpacing: 20,
           title: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()}' : 'Bonjour',
+                _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()} 👋' : 'Bonjour 👋',
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.grey900,
                   fontWeight: FontWeight.w800,
-                  fontSize: 20,
+                  fontSize: 22,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                'Commercial',
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              StreamBuilder<QuerySnapshot>(
+                stream: _workspaceId == null
+                    ? const Stream.empty()
+                    : _firestore.collection('workspaces').doc(_workspaceId).collection('devis').snapshots(),
+                builder: (_, snap) {
+                  final total = (snap.data?.docs.length ?? 0) +
+                      _kDemoDevis.where((d) => d.status != 'Terminé' && d.status != 'Clôturé').length;
+                  return Text(
+                    'Commercial · $total affaires actives',
+                    style: const TextStyle(color: AppColors.grey400, fontSize: 13),
+                  );
+                },
               ),
             ],
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Colors.white70),
-              tooltip: 'Paramètres',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            // Avatar initiales + logout sur tap long
+            GestureDetector(
+              onTap: () async {
+                await FirebaseAuth.instance.signOut();
+                if (!mounted) return;
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const SignInScreen()),
+                  (_) => false,
                 );
               },
-            ),
-            if (_isAdmin && _workspaceId != null)
-              IconButton(
-                icon: const Icon(Icons.lock_outline, color: Colors.white70),
-                tooltip: 'Espace Admin',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => AdminHomeScreen(
-                        workspaceId: _workspaceId,
-                      ),
-                    ),
-                  );
-                },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _initials(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ),
+            ),
+            const SizedBox(width: 16),
           ],
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(110),
+            preferredSize: const Size.fromHeight(52),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF0E1424), Color(0xFF0B111D)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+              child: SizedBox(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: _workspaceId == null
                       ? const Stream.empty()
@@ -148,57 +164,87 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                           .orderBy('createdAt', descending: true)
                           .snapshots(),
                   builder: (context, snapshot) {
-                    final docs = snapshot.data?.docs ?? [];
-                    
+                    final allDocs = snapshot.data?.docs ?? [];
+                    final docs = _searchQuery.isEmpty
+                        ? allDocs
+                        : allDocs.where((doc) {
+                            return _matchesSearch(
+                              doc.data() as Map<String, dynamic>,
+                              _searchQuery,
+                            );
+                          }).toList();
+
                     final newItems = docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final status = data['metreurStatus'] as String?;
-                      return status == null || status == 'Nouvelle demande' || status == 'À classer';
+                      final status = (data['status'] ?? data['metreurStatus']) as String?;
+                      return status == null || status == 'Nouvelle demande' || status == 'Acceptée' || status == 'À classer';
                     }).toList();
 
-                    final measuringItems = docs.where((doc) {
+                    final scheduledItems = docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final status = data['metreurStatus'] as String?;
-                      return status == 'Acceptée' || status == 'En cours';
+                      final status = (data['status'] ?? data['metreurStatus']) as String?;
+                      return status == 'En cours';
                     }).toList();
 
                     final commandeItems = docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final status = data['metreurStatus'] as String?;
+                      final status = (data['status'] ?? data['metreurStatus']) as String?;
                       return status == 'À commander' || status == 'Commande en cours';
+                    }).toList();
+
+                    final planifierItems = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final status = (data['status'] ?? data['metreurStatus']) as String?;
+                      return status == 'À planifier';
                     }).toList();
 
                     final poseItems = docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final status = data['metreurStatus'] as String?;
-                      return status == 'À planifier' || status == 'En pose';
+                      final status = (data['status'] ?? data['metreurStatus']) as String?;
+                      return status == 'En pose';
                     }).toList();
 
                     final terminesItems = docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      final status = data['metreurStatus'] as String?;
+                      final status = (data['status'] ?? data['metreurStatus']) as String?;
                       return status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé';
                     }).toList();
 
-                    return TabBar(
-                      isScrollable: true,
-                      labelColor: Colors.white,
-                      unselectedLabelColor: Colors.white70,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      indicator: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _commercialAccent.withOpacity(0.5)),
-                      ),
-                      indicatorPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                      tabs: [
-                        Tab(child: _TabPill(label: 'En attente', count: newItems.length, color: Colors.deepPurpleAccent, icon: Icons.upload_file)),
-                        Tab(child: _TabPill(label: 'En cours de métré', count: measuringItems.length, color: Colors.amberAccent, icon: Icons.straighten)),
-                        Tab(child: _TabPill(label: 'En commande', count: commandeItems.length, color: Colors.lightBlueAccent, icon: Icons.shopping_bag_outlined)),
-                        Tab(child: _TabPill(label: 'En pose', count: poseItems.length, color: _commercialAccent, icon: Icons.home_repair_service_outlined)),
-                        Tab(child: _TabPill(label: 'Terminés', count: terminesItems.length, color: _commercialAccent, icon: Icons.verified_outlined)),
-                      ],
+                    // compter demo + firestore
+                    final demoNew = _kDemoDevis.where((d) => d.status == null || d.status == 'Nouvelle demande').length;
+                    final demoSched = _kDemoDevis.where((d) => d.status == 'En cours').length;
+                    final demoCmd = _kDemoDevis.where((d) => d.status == 'À commander' || d.status == 'Commande en cours').length;
+                    final demoPlan = _kDemoDevis.where((d) => d.status == 'À planifier').length;
+                    final demoPose = _kDemoDevis.where((d) => d.status == 'En pose').length;
+                    final demoTerm = _kDemoDevis.where((d) => d.status == 'Terminé' || d.status == 'Clôturé').length;
+                    final totalAll = newItems.length + demoNew + scheduledItems.length + demoSched
+                        + commandeItems.length + demoCmd + planifierItems.length + demoPlan
+                        + poseItems.length + demoPose + terminesItems.length + demoTerm;
+                    final tabController = DefaultTabController.of(context);
+                    return AnimatedBuilder(
+                      animation: tabController,
+                      builder: (ctx, _) {
+                        final sel = tabController.index;
+                        return TabBar(
+                          isScrollable: true,
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                          tabAlignment: TabAlignment.start,
+                          dividerColor: Colors.transparent,
+                          indicator: const BoxDecoration(),
+                          indicatorSize: TabBarIndicatorSize.tab,
+                          splashBorderRadius: BorderRadius.circular(100),
+                          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                          tabs: [
+                            _PillTab(label: 'Tous', count: totalAll, isSelected: sel == 0),
+                            _PillTab(label: 'En attente', count: newItems.length + demoNew, isSelected: sel == 1),
+                            _PillTab(label: 'Devis prog.', count: scheduledItems.length + demoSched, isSelected: sel == 2),
+                            _PillTab(label: 'À commander', count: commandeItems.length + demoCmd, isSelected: sel == 3),
+                            _PillTab(label: 'À planifier', count: planifierItems.length + demoPlan, isSelected: sel == 4),
+                            _PillTab(label: 'En pose', count: poseItems.length + demoPose, isSelected: sel == 5),
+                            _PillTab(label: 'Terminés', count: terminesItems.length + demoTerm, isSelected: sel == 6),
+                          ],
+                        );
+                      },
                     );
                   },
                 ),
@@ -209,13 +255,47 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _SearchBar(),
+              // ── Stats row ────────────────────────────────────
+              StreamBuilder<QuerySnapshot>(
+                stream: _workspaceId == null
+                    ? const Stream.empty()
+                    : _firestore.collection('workspaces').doc(_workspaceId).collection('devis').snapshots(),
+                builder: (context, snap) {
+                  final docs = snap.data?.docs ?? [];
+                  int fsNew = 0, fsActive = 0, fsDone = 0;
+                  for (final doc in docs) {
+                    final s = ((doc.data() as Map<String, dynamic>)['status'] ?? (doc.data() as Map<String, dynamic>)['metreurStatus'])?.toString();
+                    if (s == null || s == 'Nouvelle demande' || s == 'Acceptée') fsNew++;
+                    else if (s == 'Terminé' || s == 'Clôturé' || s == 'À clôturer') fsDone++;
+                    else fsActive++;
+                  }
+                  final totalNew = fsNew + _kDemoDevis.where((d) => d.status == null || d.status == 'Nouvelle demande').length;
+                  final totalActive = fsActive + _kDemoDevis.where((d) => d.status != null && d.status != 'Nouvelle demande' && d.status != 'Terminé' && d.status != 'Clôturé').length;
+                  final totalDone = fsDone + _kDemoDevis.where((d) => d.status == 'Terminé' || d.status == 'Clôturé').length;
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: Row(
+                      children: [
+                        _StatCard(value: totalNew, label: 'En attente', color: AppColors.warning),
+                        const SizedBox(width: 10),
+                        _StatCard(value: totalActive, label: 'En cours', color: AppColors.primary),
+                        const SizedBox(width: 10),
+                        _StatCard(value: totalDone, label: 'Terminés', color: AppColors.success),
+                      ],
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 12),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: _SearchBar(
+                  onChanged: (q) => setState(() => _searchQuery = q),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: _AddQuoteButton(
                   onPressed: () async {
                     await Navigator.of(context).push<_QuoteItem>(
@@ -226,7 +306,13 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                   },
                 ),
               ),
-              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: const Text(
+                  'Affaires récentes',
+                  style: TextStyle(color: AppColors.grey900, fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -243,75 +329,114 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      
-                      final docs = snapshot.data?.docs ?? [];
-                      
-                       final newItems = docs.where((doc) {
+
+                      final allDocs = snapshot.data?.docs ?? [];
+                      final docs = _searchQuery.isEmpty
+                          ? allDocs
+                          : allDocs.where((doc) {
+                              return _matchesSearch(
+                                doc.data() as Map<String, dynamic>,
+                                _searchQuery,
+                              );
+                            }).toList();
+
+                      final newItems = docs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
-                        final status = data['metreurStatus'] as String?;
-                        return status == null || status == 'Nouvelle demande' || status == 'À classer';
+                        final status = (data['status'] ?? data['metreurStatus']) as String?;
+                        return status == null || status == 'Nouvelle demande' || status == 'Acceptée' || status == 'À classer';
                       }).map((doc) {
-                         final data = doc.data() as Map<String, dynamic>;
-                         data['id'] = doc.id;
-                         return _QuoteItem.fromMap(data);
+                        final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+                        data['id'] = doc.id;
+                        return _QuoteItem.fromMap(data);
                       }).toList();
 
-                      final measuringItems = docs.where((doc) {
+                      final scheduledItems = docs.where((doc) {
                         final data = doc.data() as Map<String, dynamic>;
-                        final status = data['metreurStatus'] as String?;
-                        return status == 'Acceptée' || status == 'En cours';
+                        final status = (data['status'] ?? data['metreurStatus']) as String?;
+                        return status == 'En cours';
                       }).map((doc) {
-                         final data = doc.data() as Map<String, dynamic>;
-                         data['id'] = doc.id;
-                         return _MeasureItem.fromMap(data);
+                        final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+                        data['id'] = doc.id;
+                        return _QuoteItem.fromMap(data);
                       }).toList();
 
-                      final commandeItems = docs.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final status = data['metreurStatus'] as String?;
-                        return status == 'À commander' || status == 'Commande en cours';
-                      }).map((doc) {
-                         final data = doc.data() as Map<String, dynamic>;
-                         data['id'] = doc.id;
-                         return _QuoteItem.fromMap(data);
-                      }).toList();
+                      final commandeItems = [
+                        ..._kDemoDevis.where((d) => d.status == 'À commander' || d.status == 'Commande en cours'),
+                        ...docs.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final status = (data['status'] ?? data['metreurStatus']) as String?;
+                          return status == 'À commander' || status == 'Commande en cours';
+                        }).map((doc) {
+                          final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+                          data['id'] = doc.id;
+                          return _QuoteItem.fromMap(data);
+                        }),
+                      ];
 
-                      final poseItems = docs.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                         final status = data['metreurStatus'] as String?;
-                        return status == 'À planifier' || status == 'En pose';
-                      }).map((doc) {
-                         final data = doc.data() as Map<String, dynamic>;
-                         data['id'] = doc.id;
-                         return _QuoteItem.fromMap(data);
-                      }).toList();
+                      final planifierItems = [
+                        ..._kDemoDevis.where((d) => d.status == 'À planifier'),
+                        ...docs.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final status = (data['status'] ?? data['metreurStatus']) as String?;
+                          return status == 'À planifier';
+                        }).map((doc) {
+                          final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+                          data['id'] = doc.id;
+                          return _QuoteItem.fromMap(data);
+                        }),
+                      ];
 
-                       final terminesItems = docs.where((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final status = data['metreurStatus'] as String?;
-                        return status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé';
-                      }).map((doc) {
-                         final data = doc.data() as Map<String, dynamic>;
-                         data['id'] = doc.id;
-                         return _QuoteItem.fromMap(data);
-                      }).toList();
+                      final poseItems = [
+                        ..._kDemoDevis.where((d) => d.status == 'En pose'),
+                        ...docs.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final status = (data['status'] ?? data['metreurStatus']) as String?;
+                          return status == 'En pose';
+                        }).map((doc) {
+                          final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+                          data['id'] = doc.id;
+                          return _QuoteItem.fromMap(data);
+                        }),
+                      ];
 
+                      final terminesItems = [
+                        ..._kDemoDevis.where((d) => d.status == 'Terminé' || d.status == 'Clôturé'),
+                        ...docs.where((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final status = (data['status'] ?? data['metreurStatus']) as String?;
+                          return status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé';
+                        }).map((doc) {
+                          final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+                          data['id'] = doc.id;
+                          return _QuoteItem.fromMap(data);
+                        }),
+                      ];
 
+                      final allItems = [
+                        ..._kDemoDevis,
+                        ...docs.map((doc) {
+                          final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+                          data['id'] = doc.id;
+                          return _QuoteItem.fromMap(data);
+                        }),
+                      ];
                       return TabBarView(
                         children: [
+                          _AllItemsList(items: allItems),
                           _NewQuotesList(
                             items: newItems,
-                            onDelete: (item) {}, // Deletion should optionally be done via a method but for now we skip implicit delete from list
+                            onDelete: (item) {},
                             onEdit: (item) async {
-                               await Navigator.of(context).push<_QuoteItem>(
+                              await Navigator.of(context).push<_QuoteItem>(
                                 MaterialPageRoute(
                                   builder: (_) => _AddQuoteScreen(existingItem: item),
                                 ),
                               );
                             },
                           ),
-                          _MeasuringList(items: measuringItems),
+                          _ScheduledList(items: scheduledItems),
                           _ValidatedList(items: commandeItems),
+                          _ValidatedList(items: planifierItems),
                           _ValidatedList(items: poseItems),
                           _ValidatedList(items: terminesItems),
                         ],
@@ -323,15 +448,57 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
             ],
           ),
         ),
+        bottomNavigationBar: _buildBottomNav(),
       ),
     );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: const Border(top: BorderSide(color: AppColors.cardBorder)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            children: [
+              _NavItem(icon: Icons.home_rounded, activeIcon: Icons.home_rounded, label: 'Accueil', active: _bottomNavIndex == 0, onTap: () => setState(() => _bottomNavIndex = 0)),
+              _NavItem(icon: Icons.description_outlined, activeIcon: Icons.description_rounded, label: 'Devis', active: _bottomNavIndex == 1, onTap: () => setState(() => _bottomNavIndex = 1)),
+              _NavItem(icon: Icons.calendar_month_outlined, activeIcon: Icons.calendar_month_rounded, label: 'Agenda', active: _bottomNavIndex == 2, onTap: () => setState(() => _bottomNavIndex = 2)),
+              _NavItem(icon: Icons.settings_outlined, activeIcon: Icons.settings_rounded, label: 'Réglages', active: _bottomNavIndex == 3, onTap: () => setState(() => _bottomNavIndex = 3)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool _matchesSearch(Map<String, dynamic> data, String query) {
+    final q = query.toLowerCase();
+    final fields = [
+      data['clientName'],
+      data['clientFirstName'],
+      data['clientLastName'],
+      data['client'],
+      data['address'],
+      data['adresse'],
+    ];
+    return fields.any((f) => f?.toString().toLowerCase().contains(q) == true);
   }
 
   Future<void> _loadWorkspaceContext() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _workspaceId = prefs.getString(_workspaceIdKey);
-      _workspaceName = prefs.getString(_workspaceNameKey);
       _userFirstName = prefs.getString(_userFirstNameKey);
       _userLastName = prefs.getString(_userLastNameKey);
       _isAdmin = prefs.getBool(_isAdminKey) ?? false;
@@ -365,32 +532,187 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
       // ignore fetch errors, fallback to defaults
     }
   }
+
+  Future<void> _showCalendar() async {
+    if (_workspaceId == null) return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    final now = DateTime.now();
+    final snap = await _firestore
+        .collection('workspaces')
+        .doc(_workspaceId)
+        .collection('devis')
+        .where('userId', isEqualTo: uid)
+        .get();
+
+    final List<Map<String, dynamic>> events = [];
+
+    for (final doc in snap.docs) {
+      final d = doc.data();
+      final client = d['client']?.toString() ?? d['clientName']?.toString() ?? 'Client';
+      final meetingTs = d['meetingAt'];
+      final poseTs = d['poseDate'];
+
+      if (meetingTs is Timestamp) {
+        final dt = meetingTs.toDate();
+        if (dt.isAfter(now.subtract(const Duration(days: 1)))) {
+          events.add({'date': dt, 'label': 'RDV Métré — $client', 'type': 'rdv'});
+        }
+      }
+      if (poseTs is Timestamp) {
+        final dt = poseTs.toDate();
+        if (dt.isAfter(now.subtract(const Duration(days: 1)))) {
+          events.add({'date': dt, 'label': 'Pose — $client', 'type': 'pose'});
+        }
+      }
+    }
+
+    events.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
+
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.grey200,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const Text(
+              'Agenda',
+              style: TextStyle(
+                color: AppColors.grey900,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (events.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    'Aucun rendez-vous ou pose à venir',
+                    style: TextStyle(color: AppColors.grey400),
+                  ),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.45,
+                ),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: events.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(color: AppColors.grey100, height: 1),
+                  itemBuilder: (_, i) {
+                    final ev = events[i];
+                    final dt = ev['date'] as DateTime;
+                    final isRdv = ev['type'] == 'rdv';
+                    final dayStr = _frDay(dt.weekday);
+                    final dateStr =
+                        '$dayStr ${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}  ${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: isRdv
+                                  ? _commercialAccent
+                                  : AppColors.primary,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  ev['label'] as String,
+                                  style: const TextStyle(
+                                    color: AppColors.grey900,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  dateStr,
+                                  style: const TextStyle(
+                                    color: AppColors.grey500,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _frDay(int weekday) {
+    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    return days[(weekday - 1).clamp(0, 6)];
+  }
 }
 
 class _SearchBar extends StatelessWidget {
-  const _SearchBar();
+  const _SearchBar({required this.onChanged});
+
+  final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
-      style: const TextStyle(color: Colors.white),
+      style: const TextStyle(color: AppColors.grey900),
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: 'Rechercher un devis, un client…',
-        hintStyle: const TextStyle(color: Colors.white54),
+        hintStyle: const TextStyle(color: AppColors.grey400),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.04),
-        prefixIcon: const Icon(Icons.search, color: Colors.white70),
+        fillColor: AppColors.grey50,
+        prefixIcon: const Icon(Icons.search, color: AppColors.grey400),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
+          borderSide: const BorderSide(color: AppColors.grey200),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
+          borderSide: const BorderSide(color: AppColors.grey200),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: _commercialAccent, width: 1.3),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
     );
@@ -403,25 +725,33 @@ class _AddQuoteButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: _commercialCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
-      ),
-      padding: const EdgeInsets.all(16),
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _commercialAccent,
-          foregroundColor: Colors.black,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+    return Material(
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(14),
+      elevation: 0,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add, color: Colors.white, size: 20),
+              SizedBox(width: 8),
+              const Text(
+                'Ajouter un devis',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
         ),
-        onPressed: onPressed,
-        icon: const Icon(Icons.upload_file),
-        label: const Text('Ajouter un devis'),
       ),
     );
   }
@@ -435,50 +765,28 @@ class _NewQuotesList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-     if (items.isEmpty) {
-        return const Center(child: Text("Aucun devis en attente", style: TextStyle(color: Colors.white54)));
-     }
+    final demoNew = _kDemoDevis.where((d) => d.status == null || d.status == 'Nouvelle demande').toList();
+    final allItems = [...demoNew, ...items];
+    if (allItems.isEmpty) {
+      return const Center(child: Text("Aucun devis en attente", style: TextStyle(color: AppColors.grey400)));
+    }
     return ListView.separated(
-      itemCount: items.length,
+      padding: const EdgeInsets.all(16),
+      itemCount: allItems.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, index) {
-        final item = items[index];
+        final item = allItems[index];
         return _QuoteCard(
           title: item.client,
           subtitle: item.address,
           meta: item.date,
-          badgeLabel: item.tag,
-          badgeColor: Colors.deepPurpleAccent,
+          badgeLabel: 'En attente',
+          badgeColor: AppColors.warning,
+          statusValue: item.status,
           thumbnailUrl: item.uploadUrl,
           onEdit: () => onEdit(item),
           onDelete: () => onDelete(item),
-        );
-      },
-    );
-  }
-}
-
-class _WaitingForMeasureList extends StatelessWidget {
-  const _WaitingForMeasureList({required this.items});
-  final List<_QuoteItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (_, index) {
-        final item = items[index];
-        return _QuoteCard(
-          title: item.client,
-          subtitle: item.address,
-          meta: item.number,
-          badgeLabel: item.tag,
-          badgeColor: Colors.blueGrey,
-          trailing: TextButton(
-            onPressed: () {},
-            child: const Text('Relancer le métreur', style: TextStyle(color: Colors.white)),
-          ),
+          onTap: () => _showChantierDetail(context, item),
         );
       },
     );
@@ -487,13 +795,15 @@ class _WaitingForMeasureList extends StatelessWidget {
 
 class _MeasuringList extends StatelessWidget {
   const _MeasuringList({required this.items});
-  final List<_MeasureItem> items;
+  final List<_QuoteItem> items;
 
   @override
   Widget build(BuildContext context) {
-      if (items.isEmpty) {
-        return const Center(child: Text("Aucun métré en cours", style: TextStyle(color: Colors.white54)));
-     }
+    if (items.isEmpty) {
+      return const Center(
+        child: Text("Aucun métré en cours", style: TextStyle(color: AppColors.grey400)),
+      );
+    }
     return ListView.separated(
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -502,10 +812,52 @@ class _MeasuringList extends StatelessWidget {
         return _QuoteCard(
           title: item.client,
           subtitle: item.address,
-          meta: item.status,
-          badgeLabel: item.assignee,
+          meta: item.status ?? 'En cours',
+          badgeLabel: item.assignedMetreurName ?? 'Non attribué',
           badgeColor: Colors.lightBlueAccent,
-          trailing: const Icon(Icons.straighten, color: Colors.white70),
+          statusValue: item.status ?? 'En cours',
+          trailing: const Icon(Icons.straighten, color: AppColors.grey500),
+          onTap: () => _showChantierDetail(context, item),
+        );
+      },
+    );
+  }
+}
+
+class _ScheduledList extends StatelessWidget {
+  const _ScheduledList({required this.items});
+  final List<_QuoteItem> items;
+
+  String _fmtDate(DateTime dt) {
+    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    final day = days[(dt.weekday - 1).clamp(0, 6)];
+    return '$day ${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')} à ${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final demoScheduled = _kDemoDevis.where((d) => d.status == 'En cours').toList();
+    final allItems = [...demoScheduled, ...items];
+    if (allItems.isEmpty) {
+      return const Center(
+        child: Text('Aucun métré programmé', style: TextStyle(color: AppColors.grey400)),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: allItems.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, index) {
+        final item = allItems[index];
+        final rdv = item.meetingAt != null ? _fmtDate(item.meetingAt!) : '';
+        return _QuoteCard(
+          title: item.client,
+          subtitle: item.address,
+          meta: rdv.isNotEmpty ? '📅 RDV le $rdv' : 'Métré programmé',
+          badgeLabel: 'Devis prog.',
+          badgeColor: AppColors.purple,
+          statusValue: item.status ?? 'En cours',
+          onTap: () => _showChantierDetail(context, item),
         );
       },
     );
@@ -518,21 +870,33 @@ class _ValidatedList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-      if (items.isEmpty) {
-        return const Center(child: Text("Aucune donnée pour l'instant", style: TextStyle(color: Colors.white54)));
-     }
+    if (items.isEmpty) {
+      return const Center(
+        child: Text("Aucune donnée pour l'instant", style: TextStyle(color: AppColors.grey400)),
+      );
+    }
     return ListView.separated(
+      padding: const EdgeInsets.all(16),
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, index) {
         final item = items[index];
+        final badgeColor = item.status == 'Commande en cours' ? AppColors.amber
+            : item.status == 'À commander' ? AppColors.warning
+            : item.status == 'À planifier' ? AppColors.primary
+            : item.status == 'En pose' ? AppColors.success
+            : item.status == 'Terminé' || item.status == 'Clôturé' ? AppColors.grey500
+            : _commercialAccent;
         return _QuoteCard(
           title: item.client,
           subtitle: item.address,
-          meta: '${item.number} • ${item.date}',
-          badgeLabel: item.tag,
-          badgeColor: _commercialAccent,
-          trailing: const Icon(Icons.verified_outlined, color: _commercialAccent),
+          meta: item.poseDate != null
+              ? '📅 Pose le ${item.poseDate!.day}/${item.poseDate!.month}'
+              : '${item.number} • ${item.date}',
+          badgeLabel: item.status ?? item.tag,
+          badgeColor: badgeColor,
+          trailing: const Icon(Icons.chevron_right, color: AppColors.grey300),
+          onTap: () => _showChantierDetail(context, item),
         );
       },
     );
@@ -799,20 +1163,35 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     }
   }
 
+  String _defaultCouleurForTrade() {
+    switch (tradeKey) {
+      case 'menuiserie_pvc':
+        return 'Couleur PVC';
+      case 'menuiserie_bois':
+        return 'Essence de Bois';
+      default:
+        return 'RAL Aluminium';
+    }
+  }
+
   void _ensureDefaultCategoryForProducts() {
     final categories = _categoryChoices();
     if (categories.isEmpty) return;
     final defaultCategory = categories.first.key;
+    final defaultCouleur = _defaultCouleurForTrade();
     var changed = false;
     final updated = <_ProductFormData>[];
 
     if (products.isEmpty) {
-      updated.add(_ProductFormData(categoryKey: defaultCategory));
+      updated.add(_ProductFormData(categoryKey: defaultCategory, couleur: defaultCouleur));
       changed = true;
     } else {
       for (final product in products) {
-        if (product.categoryKey == null) {
-          updated.add(product.copyWith(categoryKey: defaultCategory));
+        if (product.categoryKey == null || product.couleur == null) {
+          updated.add(product.copyWith(
+            categoryKey: product.categoryKey ?? defaultCategory,
+            couleur: product.couleur ?? defaultCouleur,
+          ));
           changed = true;
         } else {
           updated.add(product);
@@ -830,7 +1209,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   _ProductFormData _newProductWithDefaultCategory() {
     final categories = _categoryChoices();
     final defaultCategory = categories.isNotEmpty ? categories.first.key : null;
-    return _ProductFormData(categoryKey: defaultCategory);
+    return _ProductFormData(categoryKey: defaultCategory, couleur: _defaultCouleurForTrade());
   }
 
   _QuoteDraft _buildDraft() {
@@ -933,6 +1312,14 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return categoryKey;
   }
 
+  String _typeLabelFromKey(String? categoryKey, String? typeKey) {
+    if (categoryKey == null || typeKey == null) return typeKey ?? '';
+    final trade = _currentTradeNode();
+    final typeData = trade?['categories']?[categoryKey]?['types']?[typeKey];
+    if (typeData is Map) return typeData['label']?.toString() ?? typeKey;
+    return typeKey;
+  }
+
   List<Map<String, dynamic>> _buildSummaryFromDraft(_QuoteDraft draft) {
     final entries = <Map<String, dynamic>>[];
     void addEntry(String label, String? value) {
@@ -953,7 +1340,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       final buffer = StringBuffer();
       buffer.write(catLabel);
       if (p.sousCategorie?.isNotEmpty == true) buffer.write(' • ${p.sousCategorie}');
-      if (p.typeProduit?.isNotEmpty == true) buffer.write(' • ${p.typeProduit}');
+      if (p.typeProduit?.isNotEmpty == true) buffer.write(' • ${_typeLabelFromKey(p.categoryKey, p.typeProduit)}');
       if (p.variante?.isNotEmpty == true) buffer.write(' • ${p.variante}');
       if (p.couleur?.isNotEmpty == true) buffer.write(' • Couleur: ${p.couleur}');
       final dimParts = <String>[];
@@ -1091,7 +1478,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                         width: 36,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Colors.white24,
+                          color: AppColors.grey200,
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
@@ -1099,7 +1486,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                       const Text(
                         'Sélectionnez la commune',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppColors.grey900,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
                         ),
@@ -1112,14 +1499,14 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                           final city = cities[index];
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: Text(city, style: const TextStyle(color: Colors.white)),
+                            title: Text(city, style: const TextStyle(color: AppColors.grey900)),
                             onTap: () {
                               setState(() => clientCityController.text = city);
                               Navigator.of(context).pop();
                             },
                           );
                         },
-                        separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white12),
+                        separatorBuilder: (_, __, ) => const Divider(height: 1, color: AppColors.grey100),
                         itemCount: cities.length,
                       ),
                     ],
@@ -1196,7 +1583,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       final photos = await picker.pickMultiImage();
       if (photos.isEmpty) return;
       final firstPath = photos.first.path;
-      setState(() => selectedFiles = photos.map((f) => f.name ?? 'Photo').toList());
+      setState(() => selectedFiles = photos.map((f) => f.name).toList());
       await _uploadFile(firstPath);
     } on PlatformException catch (e) {
       _showPickerError(context, 'Accès appareil photo impossible (${e.code}).');
@@ -1217,7 +1604,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: AppColors.grey100),
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -1255,7 +1642,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Coordonnées client', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        const Text('Coordonnées client', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
         const SizedBox(height: 10),
         _LabeledField(
           label: 'Nom',
@@ -1343,7 +1730,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           spacing: 8,
           runSpacing: 6,
           children: [
-            const Text('Infos générales chantier', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+            const Text('Infos générales chantier', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
             if (tradeLabel != null)
               Chip(
                 label: Text(
@@ -1353,18 +1740,6 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                 ),
                 backgroundColor: _commercialAccent.withOpacity(0.85),
               ),
-            IconButton(
-              icon: const Icon(Icons.logout, color: _commercialAccent),
-              tooltip: 'Se déconnecter',
-              onPressed: () async {
-                await FirebaseAuth.instance.signOut();
-                if (!mounted) return;
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const SignInScreen()),
-                  (route) => false,
-                );
-              },
-            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1412,7 +1787,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
+        color: AppColors.grey50,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white10),
       ),
@@ -1424,12 +1799,12 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
             children: [
               Text(
                 'Élément ${index + 1}',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800),
               ),
               if (products.length > 1)
                 IconButton(
                   onPressed: () => setState(() => products.removeAt(index)),
-                  icon: const Icon(Icons.delete_outline, color: Colors.white54),
+                  icon: const Icon(Icons.delete_outline, color: AppColors.grey400),
                 ),
             ],
           ),
@@ -1479,23 +1854,23 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(colorDetailLabel, style: const TextStyle(color: Colors.white70)),
+                    Text(colorDetailLabel, style: const TextStyle(color: AppColors.grey500)),
                     const SizedBox(height: 6),
                     TextField(
                       controller: TextEditingController(text: product.couleurDetail ?? '')
                         ..selection = TextSelection.collapsed(offset: (product.couleurDetail ?? '').length),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: AppColors.grey900),
                       onChanged: (text) => setState(() => products[index] = products[index].copyWith(couleurDetail: text)),
                       decoration: InputDecoration(
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.04),
+                        fillColor: AppColors.grey50,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.white12),
+                          borderSide: const BorderSide(color: AppColors.grey200),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.white12),
+                          borderSide: const BorderSide(color: AppColors.grey200),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -1551,13 +1926,13 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     if (_currentTradeNode() == null) {
       return const Text(
         'Aucun corps de métier sélectionné. Définissez-le lors de l’onboarding pour charger les choix produits.',
-        style: TextStyle(color: Colors.white70),
+        style: TextStyle(color: AppColors.grey500),
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Éléments du devis', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        const Text('Éléments du devis', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         ...List.generate(products.length, _productCard),
         Align(
@@ -1579,7 +1954,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Planification', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        const Text('Planification', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -1587,15 +1962,15 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
+                  color: AppColors.grey50,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white12),
+                  border: Border.all(color: AppColors.grey200),
                 ),
                 child: Text(
                   selectedDate != null
                       ? 'Chantier prévu : ${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}'
                       : 'Choisir une date estimative',
-                  style: const TextStyle(color: Colors.white70),
+                  style: const TextStyle(color: AppColors.grey500),
                 ),
               ),
             ),
@@ -1615,10 +1990,10 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                   builder: (context, child) {
                     return Theme(
                       data: Theme.of(context).copyWith(
-                        colorScheme: const ColorScheme.dark(
+                        colorScheme: const ColorScheme.light(
                           primary: _commercialAccent,
                           surface: _commercialCard,
-                          onSurface: Colors.white,
+                          onSurface: AppColors.grey900,
                         ),
                       ),
                       child: child ?? const SizedBox.shrink(),
@@ -1639,7 +2014,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Commentaires', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        const Text('Commentaires', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
         const SizedBox(height: 10),
         _LabeledField(
           label: 'Notes supplémentaires',
@@ -1660,12 +2035,12 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         decoration: BoxDecoration(
           color: _commercialCard,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white12),
+          border: Border.all(color: AppColors.grey200),
         ),
         padding: const EdgeInsets.all(16),
         child: const Text(
           'Aucun métreur disponible dans l’entreprise.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: AppColors.grey500),
         ),
       );
     }
@@ -1680,7 +2055,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       decoration: BoxDecoration(
         color: _commercialCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.grey200),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1688,7 +2063,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         children: [
           const Text(
             'Attribuer à un métreur',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+            style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800, fontSize: 16),
           ),
           const SizedBox(height: 10),
           ...options.map((m) {
@@ -1705,10 +2080,10 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
               activeColor: _commercialAccent,
               title: Text(
                 m.name,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700),
               ),
-              subtitle: m.email != null ? Text(m.email!, style: const TextStyle(color: Colors.white60)) : null,
-              tileColor: selected ? Colors.white.withOpacity(0.05) : Colors.transparent,
+              subtitle: m.email != null ? Text(m.email!, style: const TextStyle(color: AppColors.grey500)) : null,
+              tileColor: selected ? AppColors.primaryLight : Colors.transparent,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             );
           }).toList(),
@@ -1721,11 +2096,11 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Uploader le devis', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        const Text('Uploader le devis', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
         const SizedBox(height: 10),
         const Text(
           'Ajoutez un PDF ou des photos. Le devis sera stocké et accessible aux métreurs/poseurs.',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: AppColors.grey500),
         ),
         const SizedBox(height: 14),
         if (selectedFiles.isNotEmpty)
@@ -1735,9 +2110,9 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
             children: selectedFiles
                 .map(
                   (f) => Chip(
-                    label: Text(f, style: const TextStyle(color: Colors.white)),
-                    backgroundColor: Colors.white.withOpacity(0.08),
-                    side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                    label: Text(f, style: const TextStyle(color: AppColors.grey900)),
+                    backgroundColor: AppColors.grey100,
+                    side: BorderSide(color: AppColors.grey200),
                   ),
                 )
                 .toList(),
@@ -1760,7 +2135,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         ),
         if (uploadLabel != null) ...[
           const SizedBox(height: 10),
-          Text(uploadLabel!, style: const TextStyle(color: Colors.white70)),
+          Text(uploadLabel!, style: const TextStyle(color: AppColors.grey500)),
         ],
       ],
     );
@@ -1791,10 +2166,10 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
+          icon: const Icon(Icons.close, color: AppColors.grey700),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Nouveau devis', style: TextStyle(color: Colors.white)),
+        title: const Text('Nouveau devis', style: TextStyle(color: AppColors.grey900)),
       ),
       body: SafeArea(
         child: loadingDictionary
@@ -1941,7 +2316,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           // If editing, we want to preserve the status ideally, but for now we might reset if not careful.
           // However, existing Metreur workflow relies on status. 
           // If existing item has status, keep it. 
-          'metreurStatus': existing?.status ?? 'Nouvelle demande', 
+          'status': existing?.status ?? 'Nouvelle demande',
           'category': categoryLabel,
           'phone': newItem.draft?.phone,
           'updated': 'À l’instant',
@@ -1978,8 +2353,8 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = primary ? _commercialAccent : Colors.white.withOpacity(0.04);
-    final fg = primary ? Colors.black : Colors.white;
+    final bg = primary ? AppColors.primary : AppColors.grey100;
+    final fg = primary ? Colors.white : AppColors.grey700;
     final border = primary ? Colors.transparent : Colors.white24;
     return Material(
       color: bg,
@@ -1998,7 +2373,7 @@ class _ActionTile extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: primary ? Colors.black.withOpacity(0.08) : Colors.white.withOpacity(0.06),
+                  color: primary ? Colors.white.withOpacity(0.15) : AppColors.grey200,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: fg),
@@ -2055,12 +2430,12 @@ class _StepBadge extends StatelessWidget {
         ? _commercialAccent
         : active
             ? _commercialAccent.withOpacity(0.85)
-            : Colors.white.withOpacity(0.08);
+            : AppColors.grey100;
     final Color textColor = done || active ? Colors.black : Colors.white70;
     final Color labelColor = done
         ? _commercialAccent
         : active
-            ? Colors.white
+            ? AppColors.grey900
             : Colors.white54;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -2149,7 +2524,7 @@ class _LabeledField extends StatelessWidget {
         children: [
           Text(
             required ? '$label *' : label,
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppColors.grey500),
           ),
           const SizedBox(height: 6),
           TextFormField(
@@ -2157,7 +2532,7 @@ class _LabeledField extends StatelessWidget {
             keyboardType: keyboardType,
             maxLines: maxLines,
             maxLength: maxLength,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: AppColors.grey900),
             onChanged: onChanged,
             readOnly: readOnly,
             onTap: onTap,
@@ -2166,18 +2541,18 @@ class _LabeledField extends StatelessWidget {
             autovalidateMode: validator != null ? AutovalidateMode.onUserInteraction : null,
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.white.withOpacity(0.04),
+              fillColor: AppColors.grey50,
               hintText: hintText,
               hintStyle: const TextStyle(color: Colors.white38),
               counterText: maxLength != null ? '' : null,
               errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.white12),
+                borderSide: const BorderSide(color: AppColors.grey200),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.white12),
+                borderSide: const BorderSide(color: AppColors.grey200),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -2226,22 +2601,22 @@ class _DropdownField extends StatelessWidget {
         children: [
           Text(
             required ? '$label *' : label,
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppColors.grey500),
           ),
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
+              color: AppColors.grey50,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white12),
+              border: Border.all(color: AppColors.grey200),
             ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: currentValue,
               isExpanded: true,
               dropdownColor: _commercialCard,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: AppColors.grey900),
               icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
               items: items
                     .map(
@@ -2288,12 +2663,12 @@ class _IntField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white70)),
+          Text(label, style: const TextStyle(color: AppColors.grey500)),
           const SizedBox(height: 6),
           TextField(
             controller: controller,
             keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: AppColors.grey900),
             onChanged: (text) {
               final parsed = int.tryParse(text);
               onChanged?.call(parsed);
@@ -2301,14 +2676,14 @@ class _IntField extends StatelessWidget {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.white.withOpacity(0.04),
+              fillColor: AppColors.grey50,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.white12),
+                borderSide: const BorderSide(color: AppColors.grey200),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.white12),
+                borderSide: const BorderSide(color: AppColors.grey200),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -2493,73 +2868,87 @@ class _QuoteDraft {
   }
 }
 
-class _TabPill extends StatelessWidget {
-  const _TabPill({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.icon,
-  });
-
+/// Pill de filtre style maquette.
+/// isSelected gère fill bleu (actif) vs bordure grise (inactif).
+class _PillTab extends StatelessWidget {
+  const _PillTab({required this.label, required this.count, this.isSelected = false});
   final String label;
   final int count;
-  final Color color;
-  final IconData icon;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withOpacity(0.18),
-          child: Icon(icon, color: color, size: 18),
+    return Tab(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(100),
+          border: isSelected ? null : Border.all(color: AppColors.grey200, width: 1.5),
         ),
-        const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(width: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(10),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.grey600,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
           ),
-          child: Text('$count', style: const TextStyle(fontWeight: FontWeight.w800)),
         ),
-      ],
+      ),
     );
   }
 }
 
-class _TrailingPill extends StatelessWidget {
-  const _TrailingPill({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
+/// Tab "Tous" — affiche toutes les affaires sans filtre
+class _AllItemsList extends StatelessWidget {
+  const _AllItemsList({required this.items});
+  final List<_QuoteItem> items;
 
   @override
   Widget build(BuildContext context) {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white12),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white70, size: 18),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(color: Colors.white70),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
+    if (items.isEmpty) {
+      return const Center(child: Text('Aucune affaire', style: TextStyle(color: AppColors.grey400)));
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) {
+        final item = items[i];
+        Color badgeColor;
+        String badge;
+        switch (item.status) {
+          case null:
+          case 'Nouvelle demande':
+          case 'Acceptée':
+            badge = 'En attente'; badgeColor = AppColors.warning; break;
+          case 'En cours':
+            badge = 'Devis prog.'; badgeColor = AppColors.purple; break;
+          case 'À commander':
+          case 'Commande en cours':
+            badge = item.status!; badgeColor = AppColors.amber; break;
+          case 'À planifier':
+            badge = 'À planifier'; badgeColor = AppColors.primary; break;
+          case 'En pose':
+            badge = 'En pose'; badgeColor = AppColors.success; break;
+          case 'Terminé':
+          case 'Clôturé':
+          case 'À clôturer':
+            badge = 'Terminé'; badgeColor = AppColors.grey500; break;
+          default:
+            badge = item.status ?? ''; badgeColor = AppColors.grey400;
+        }
+        return _QuoteCard(
+          title: item.client,
+          subtitle: item.address,
+          meta: item.date,
+          badgeLabel: badge,
+          badgeColor: badgeColor,
+          statusValue: item.status,
+          onTap: () => _showChantierDetail(context, item),
+        );
+      },
     );
   }
 }
@@ -2591,6 +2980,17 @@ class _QuoteItem {
     this.createdAt,
     this.uploadUrl,
     this.status,
+    this.phone,
+    this.email,
+    this.clientFirstName,
+    this.poseurNames,
+    this.poseDate,
+    this.rapportFin,
+    this.rapportProbleme,
+    this.infoRequest,
+    this.meetingAt,
+    this.metreurNote,
+    this.metreurNoteName,
   });
 
   final String client;
@@ -2605,6 +3005,17 @@ class _QuoteItem {
   final DateTime? createdAt;
   final String? uploadUrl;
   final String? status;
+  final String? phone;
+  final String? email;
+  final String? clientFirstName;
+  final String? poseurNames;
+  final DateTime? poseDate;
+  final Map<String, dynamic>? rapportFin;
+  final Map<String, dynamic>? rapportProbleme;
+  final Map<String, dynamic>? infoRequest;
+  final DateTime? meetingAt;
+  final String? metreurNote;
+  final String? metreurNoteName;
 
   _QuoteItem copyWith({
     String? client,
@@ -2619,6 +3030,14 @@ class _QuoteItem {
     DateTime? createdAt,
     String? uploadUrl,
     String? status,
+    String? phone,
+    String? email,
+    String? clientFirstName,
+    String? poseurNames,
+    DateTime? poseDate,
+    Map<String, dynamic>? rapportFin,
+    Map<String, dynamic>? rapportProbleme,
+    Map<String, dynamic>? infoRequest,
   }) {
     return _QuoteItem(
       client: client ?? this.client,
@@ -2633,6 +3052,14 @@ class _QuoteItem {
       createdAt: createdAt ?? this.createdAt,
       uploadUrl: uploadUrl ?? this.uploadUrl,
       status: status ?? this.status,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      clientFirstName: clientFirstName ?? this.clientFirstName,
+      poseurNames: poseurNames ?? this.poseurNames,
+      poseDate: poseDate ?? this.poseDate,
+      rapportFin: rapportFin ?? this.rapportFin,
+      rapportProbleme: rapportProbleme ?? this.rapportProbleme,
+      infoRequest: infoRequest ?? this.infoRequest,
     );
   }
 
@@ -2649,11 +3076,15 @@ class _QuoteItem {
       'draft': draft?.toMap(),
       'createdAt': createdAt?.toIso8601String(),
       'uploadUrl': uploadUrl,
-      'metreurStatus': status,
+      'status': status,
     };
   }
 
   factory _QuoteItem.fromMap(Map<String, dynamic> map) {
+    DateTime? poseDate;
+    if (map['poseDate'] is Timestamp) {
+      poseDate = (map['poseDate'] as Timestamp).toDate();
+    }
     return _QuoteItem(
       id: map['id']?.toString(),
       client: map['client']?.toString() ?? 'Client',
@@ -2663,38 +3094,35 @@ class _QuoteItem {
       tag: map['tag']?.toString() ?? '',
       assignedMetreurId: map['assignedMetreurId']?.toString(),
       assignedMetreurName: map['assignedMetreurName']?.toString(),
-      draft: map['draft'] is Map<String, dynamic> ? _QuoteDraft.fromMap(map['draft'] as Map<String, dynamic>) : null,
+      draft: map['draft'] is Map<String, dynamic>
+          ? _QuoteDraft.fromMap(map['draft'] as Map<String, dynamic>)
+          : null,
       createdAt: map['createdAt'] is Timestamp
           ? (map['createdAt'] as Timestamp).toDate()
-          : (map['createdAt'] != null ? DateTime.tryParse(map['createdAt'].toString()) : null),
+          : (map['createdAt'] != null
+              ? DateTime.tryParse(map['createdAt'].toString())
+              : null),
       uploadUrl: map['uploadUrl']?.toString(),
-      status: map['metreurStatus']?.toString(),
-    );
-  }
-}
-
-class _MeasureItem {
-  const _MeasureItem({
-    required this.client,
-    required this.address,
-    required this.status,
-    required this.assignee,
-    this.photoUrl,
-  });
-
-  final String client;
-  final String address;
-  final String status;
-  final String assignee;
-  final String? photoUrl;
-
-  factory _MeasureItem.fromMap(Map<String, dynamic> map) {
-    return _MeasureItem(
-      client: map['client']?.toString() ?? 'Client inconnu',
-      address: map['address']?.toString() ?? '',
-      status: map['metreurStatus']?.toString() ?? 'En cours',
-      assignee: map['assignedMetreurName']?.toString() ?? 'Non attribué',
-      photoUrl: map['uploadUrl']?.toString(),
+      status: (map['status'] ?? map['metreurStatus'])?.toString(),
+      phone: map['phone']?.toString() ?? map['clientPhone']?.toString(),
+      email: map['email']?.toString() ?? map['clientEmail']?.toString(),
+      clientFirstName: map['clientFirstName']?.toString(),
+      poseurNames: map['poseurNames']?.toString(),
+      poseDate: poseDate,
+      rapportFin: map['rapportFin'] is Map
+          ? Map<String, dynamic>.from(map['rapportFin'] as Map)
+          : null,
+      rapportProbleme: map['rapportProbleme'] is Map
+          ? Map<String, dynamic>.from(map['rapportProbleme'] as Map)
+          : null,
+      infoRequest: map['infoRequest'] is Map
+          ? Map<String, dynamic>.from(map['infoRequest'] as Map)
+          : null,
+      meetingAt: map['meetingAt'] is Timestamp
+          ? (map['meetingAt'] as Timestamp).toDate()
+          : null,
+      metreurNote: map['metreurNote']?.toString(),
+      metreurNoteName: map['metreurNoteName']?.toString(),
     );
   }
 }
@@ -2710,6 +3138,10 @@ class _QuoteCard extends StatelessWidget {
     this.thumbnailUrl,
     this.onEdit,
     this.onDelete,
+    this.onTap,
+    this.statusValue,
+    this.actionLabel,
+    this.onAction,
   });
 
   final String title;
@@ -2721,79 +3153,147 @@ class _QuoteCard extends StatelessWidget {
   final String? thumbnailUrl;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onTap;
+  final String? statusValue;   // status brut pour les dots
+  final String? actionLabel;   // label bouton CTA
+  final VoidCallback? onAction;
+
+  /// 0=Nouvelle demande  1=En cours  2=À commander  3=À planifier/En pose  4=Terminé
+  static int _stepIndex(String? s) {
+    if (s == null || s == 'Nouvelle demande' || s == 'Acceptée' || s == 'À classer'
+        || s == 'En attente') return 0;
+    if (s == 'En cours' || s == 'Devis prog.' || s == 'Métré programmé') return 1;
+    if (s == 'À commander' || s == 'Commande en cours') return 2;
+    if (s == 'À planifier' || s == 'En pose' || s == 'Chantier à planifier') return 3;
+    return 4;
+  }
+
+  static String _defaultAction(String? s) {
+    if (s == null || s == 'Nouvelle demande') return 'Relancer →';
+    if (s == 'En cours') return 'Rappel →';
+    if (s == 'À commander' || s == 'Commande en cours') return 'Commander →';
+    if (s == 'À planifier') return 'Planifier →';
+    if (s == 'En pose') return 'Suivi →';
+    return 'Voir →';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final step = _stepIndex(statusValue ?? badgeLabel);
+    final ctaLabel = actionLabel ?? _defaultAction(statusValue ?? badgeLabel);
+    final isDone = step == 4;
+
     return Container(
       decoration: BoxDecoration(
-        color: _commercialCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDone ? AppColors.grey100 : AppColors.cardBorder),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
       ),
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: badgeColor.withOpacity(0.16),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.description_outlined, color: Colors.white),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: Colors.white70)),
-                const SizedBox(height: 4),
-                Text(meta, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                // ── Header ──
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: TextStyle(color: isDone ? AppColors.grey500 : AppColors.grey900, fontWeight: FontWeight.w700, fontSize: 15)),
+                          const SizedBox(height: 2),
+                          Text(subtitle, style: const TextStyle(color: AppColors.grey500, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    if (badgeLabel != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(color: badgeColor.withOpacity(0.13), borderRadius: BorderRadius.circular(20)),
+                        child: Text(badgeLabel!, style: TextStyle(color: badgeColor, fontSize: 11, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                    if (onEdit != null || onDelete != null) ...[
+                      const SizedBox(width: 4),
+                      Column(children: [
+                        if (onEdit != null) IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.grey400), onPressed: onEdit, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
+                        if (onDelete != null) IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.grey400), onPressed: onDelete, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
+                      ]),
+                    ],
+                  ],
+                ),
+                // ── Meta ──
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(meta, style: const TextStyle(color: AppColors.grey400, fontSize: 12)),
+                ),
+                // ── Step dots ──
+                if (!isDone) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: List.generate(5, (i) {
+                      final done = i <= step;
+                      final active = i == step;
+                      return Container(
+                        width: active ? 18 : 8,
+                        height: 8,
+                        margin: const EdgeInsets.only(right: 4),
+                        decoration: BoxDecoration(
+                          color: done ? badgeColor : AppColors.grey200,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+                // ── Boutons ──
+                if (!isDone) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: onTap,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 9),
+                            side: const BorderSide(color: AppColors.grey200),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: const Text('Voir détails', style: TextStyle(fontSize: 13, color: AppColors.grey700, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: onAction ?? onTap,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: badgeColor,
+                            padding: const EdgeInsets.symmetric(vertical: 9),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: Text(ctaLabel, style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          if (thumbnailUrl != null && thumbnailUrl!.isNotEmpty)
-            GestureDetector(
-              onTap: () => _showPreview(context, thumbnailUrl!),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white24),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Image.network(
-                    thumbnailUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.picture_as_pdf, color: Colors.white54),
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(width: 10),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (onEdit != null)
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.white70),
-                  onPressed: onEdit,
-                  visualDensity: VisualDensity.compact,
-                ),
-              if (onDelete != null)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.white70),
-                  onPressed: onDelete,
-                  visualDensity: VisualDensity.compact,
-                ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2817,6 +3317,479 @@ class _QuoteCard extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Détail chantier ────────────────────────────────────────────────────────
+
+void _showChantierDetail(BuildContext context, _QuoteItem item) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: _commercialCard,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => _ChantierDetailSheet(item: item),
+  );
+}
+
+class _ChantierDetailSheet extends StatelessWidget {
+  const _ChantierDetailSheet({required this.item});
+  final _QuoteItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = item.status ?? '';
+    final isTermine = status == 'Terminé' || status == 'Clôturé';
+    final isProbleme = status == 'À clôturer';
+    final rapport = isTermine ? item.rapportFin : null;
+    final probleme = isProbleme ? item.rapportProbleme : null;
+    final photoUrls = (rapport?['photoUrls'] as List?)
+        ?.whereType<String>()
+        .toList() ?? [];
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => ListView(
+        controller: scrollCtrl,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.grey200,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+
+          Text(
+            item.client,
+            style: const TextStyle(
+              color: AppColors.grey900,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (item.clientFirstName?.isNotEmpty == true)
+            Text(item.clientFirstName!, style: const TextStyle(color: AppColors.grey500)),
+          const SizedBox(height: 4),
+          Text(item.address, style: const TextStyle(color: AppColors.grey500)),
+          const SizedBox(height: 12),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _statusColor(status).withOpacity(0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _statusColor(status).withOpacity(0.4)),
+            ),
+            child: Text(
+              status.isEmpty ? 'En attente' : status,
+              style: TextStyle(
+                color: _statusColor(status),
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          if (item.phone?.isNotEmpty == true)
+            _DetailRow(
+              icon: Icons.phone_outlined,
+              label: item.phone!,
+              onTap: () async {
+                await launchUrl(Uri.parse('tel:${item.phone}'));
+              },
+            ),
+          if (item.email?.isNotEmpty == true)
+            _DetailRow(
+              icon: Icons.email_outlined,
+              label: item.email!,
+              onTap: () async {
+                await launchUrl(Uri.parse('mailto:${item.email}'));
+              },
+            ),
+          if (item.phone?.isNotEmpty == true || item.email?.isNotEmpty == true)
+            const SizedBox(height: 12),
+
+          if (item.assignedMetreurName?.isNotEmpty == true)
+            _DetailRow(
+              icon: Icons.person_outline,
+              label: 'Métreur : ${item.assignedMetreurName}',
+            ),
+
+          if (item.uploadUrl?.isNotEmpty == true) ...[
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () async {
+                await launchUrl(
+                  Uri.parse(item.uploadUrl!),
+                  mode: LaunchMode.externalApplication,
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.grey50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.grey200),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.picture_as_pdf, color: _commercialAccent),
+                    SizedBox(width: 10),
+                    Text(
+                      'Voir le devis',
+                      style: TextStyle(color: _commercialAccent, fontWeight: FontWeight.w600),
+                    ),
+                    Spacer(),
+                    Icon(Icons.open_in_new, color: Colors.white38, size: 18),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          if (item.poseDate != null) ...[
+            const SizedBox(height: 16),
+            const _SectionHeader(label: 'Pose programmée'),
+            const SizedBox(height: 8),
+            _DetailRow(
+              icon: Icons.calendar_today_outlined,
+              label: _formatDateTime(item.poseDate!),
+            ),
+            if (item.poseurNames?.isNotEmpty == true)
+              _DetailRow(
+                icon: Icons.group_outlined,
+                label: 'Équipe : ${item.poseurNames}',
+              ),
+          ],
+
+          if (item.metreurNote?.isNotEmpty == true) ...[
+            const SizedBox(height: 16),
+            _SectionHeader(
+              label: 'Message du métreur${item.metreurNoteName?.isNotEmpty == true ? " (${item.metreurNoteName})" : ""}',
+              color: Colors.amberAccent,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.withOpacity(0.3)),
+              ),
+              child: Text(
+                item.metreurNote!,
+                style: const TextStyle(color: AppColors.grey900),
+              ),
+            ),
+          ] else if (item.infoRequest != null) ...[
+            const SizedBox(height: 16),
+            const _SectionHeader(label: 'Message du métreur'),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.withOpacity(0.3)),
+              ),
+              child: Text(
+                item.infoRequest!['message']?.toString() ?? '',
+                style: const TextStyle(color: AppColors.grey900),
+              ),
+            ),
+          ],
+
+          if (probleme != null) ...[
+            const SizedBox(height: 16),
+            const _SectionHeader(label: 'Problème signalé', color: Colors.orangeAccent),
+            const SizedBox(height: 8),
+            if ((probleme['soucis'] as String?)?.isNotEmpty == true)
+              _RapportField(label: 'Soucis', value: probleme['soucis'] as String),
+            if ((probleme['manque'] as String?)?.isNotEmpty == true)
+              _RapportField(label: 'Manque', value: probleme['manque'] as String),
+            if ((probleme['erreur'] as String?)?.isNotEmpty == true)
+              _RapportField(label: 'Erreur', value: probleme['erreur'] as String),
+          ],
+
+          if (rapport != null) ...[
+            const SizedBox(height: 16),
+            const _SectionHeader(label: 'Réception chantier', color: _commercialAccent),
+            const SizedBox(height: 8),
+            _DetailRow(
+              icon: rapport['reglementEffectue'] == true
+                  ? Icons.check_circle_outline
+                  : Icons.cancel_outlined,
+              label: rapport['reglementEffectue'] == true
+                  ? 'Règlement effectué'
+                  : 'Règlement non effectué',
+              iconColor: rapport['reglementEffectue'] == true
+                  ? _commercialAccent
+                  : Colors.redAccent,
+            ),
+            if (photoUrls.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Photos (${photoUrls.length})',
+                style: const TextStyle(color: AppColors.grey500, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 100,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: photoUrls.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (ctx, i) => GestureDetector(
+                    onTap: () => showDialog(
+                      context: ctx,
+                      builder: (_) => Dialog(
+                        backgroundColor: Colors.black87,
+                        child: InteractiveViewer(
+                          child: Image.network(photoUrls[i]),
+                        ),
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        photoUrls[i],
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          width: 100,
+                          height: 100,
+                          color: AppColors.grey100,
+                          child: const Icon(Icons.broken_image, color: Colors.white38),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'Nouvelle demande':
+        return Colors.deepPurpleAccent;
+      case 'Acceptée':
+      case 'En cours':
+        return Colors.lightBlueAccent;
+      case 'À commander':
+      case 'Commande en cours':
+        return Colors.orangeAccent;
+      case 'À planifier':
+      case 'En pose':
+        return _commercialAccent;
+      case 'Terminé':
+      case 'Clôturé':
+        return _commercialAccent;
+      case 'À clôturer':
+        return Colors.orangeAccent;
+      default:
+        return Colors.white54;
+    }
+  }
+
+  String _formatDateTime(DateTime dt) {
+    const months = [
+      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+    ];
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year} à ${h}h$m';
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label, this.color});
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: TextStyle(
+        color: color ?? Colors.white,
+        fontWeight: FontWeight.w800,
+        fontSize: 15,
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    this.onTap,
+    this.iconColor,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Icon(icon, color: iconColor ?? Colors.white54, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: onTap != null ? _commercialAccent : Colors.white70,
+                  decoration: onTap != null ? TextDecoration.underline : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RapportField extends StatelessWidget {
+  const _RapportField({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(color: AppColors.grey400, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(value, style: const TextStyle(color: AppColors.grey900)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Bottom nav item ──────────────────────────────────────────────────────────
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.icon, required this.activeIcon, required this.label, required this.active, required this.onTap});
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(active ? activeIcon : icon, size: 24, color: active ? AppColors.primary : AppColors.grey400),
+            const SizedBox(height: 3),
+            Text(label, style: TextStyle(fontSize: 10, fontWeight: active ? FontWeight.w700 : FontWeight.w500, color: active ? AppColors.primary : AppColors.grey400)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Données de démonstration ─────────────────────────────────────────────────
+final _kDemoDevis = <_QuoteItem>[
+  _QuoteItem(
+    client: 'Dupont Jean', address: '14 rue Ledru-Rollin, Paris 15e',
+    number: '#5001', date: 'Il y a 2 jours', tag: 'Nouvelle demande', status: null,
+    phone: '06 12 34 56 78', email: 'dupont@email.fr',
+  ),
+  _QuoteItem(
+    client: 'Martin Sophie', address: '8 avenue des Arts, Lyon 3e',
+    number: '#5002', date: 'Il y a 5 jours', tag: 'En cours', status: 'En cours',
+    assignedMetreurName: 'Pascal M.',
+    meetingAt: DateTime.now().add(const Duration(days: 2)),
+  ),
+  _QuoteItem(
+    client: 'Bernard Marc', address: '22 quai de la Loire, Nantes',
+    number: '#5003', date: 'Il y a 8 jours', tag: 'À planifier', status: 'À planifier',
+    assignedMetreurName: 'Pascal M.',
+  ),
+  _QuoteItem(
+    client: 'Laurent Céline', address: '5 impasse des Pins, Toulouse',
+    number: '#5004', date: 'Il y a 10 jours', tag: 'Commande en cours', status: 'Commande en cours',
+    assignedMetreurName: 'Pascal M.',
+  ),
+  _QuoteItem(
+    client: 'Petit Thomas', address: '3 allée des Roses, Bordeaux',
+    number: '#5005', date: 'Il y a 12 jours', tag: 'En pose', status: 'En pose',
+    assignedMetreurName: 'Pascal M.',
+    poseurNames: 'Équipe A',
+    poseDate: DateTime.now(),
+  ),
+  _QuoteItem(
+    client: 'Moreau Julie', address: '17 rue du Moulin, Strasbourg',
+    number: '#5006', date: 'Il y a 20 jours', tag: 'Terminé', status: 'Terminé',
+  ),
+];
+
+// ─── Stat card ────────────────────────────────────────────────────────────────
+class _StatCard extends StatelessWidget {
+  const _StatCard({required this.value, required this.label, required this.color});
+  final int value;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Column(
+          children: [
+            Text('$value', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: color, letterSpacing: -1)),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 11, color: AppColors.grey500, fontWeight: FontWeight.w500)),
+          ],
         ),
       ),
     );

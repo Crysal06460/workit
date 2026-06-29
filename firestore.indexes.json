@@ -1,0 +1,19 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "devis",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "poseurIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "poseDate",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

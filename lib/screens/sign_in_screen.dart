@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme/app_colors.dart';
 import '../models/onboarding_models.dart';
 import '../services/auth_navigation_service.dart';
 
@@ -122,115 +123,64 @@ class _SignInScreenState extends State<SignInScreen> {
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Impossible d’envoyer le mail.')),
+        SnackBar(content: Text(e.message ?? "Impossible d'envoyer le mail.")),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    const bg = Color(0xFF07090D);
-    const cardGradient = LinearGradient(
-      colors: [Color(0xFF0F172A), Color(0xFF0A1A2F)],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
-    const accent = Color(0xFF00E676);
-
     return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          'Se connecter',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-        ),
-        centerTitle: true,
-      ),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 60, 20, 32),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Form(
             key: formKey,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                const SizedBox(height: 60),
+                // ── Logo ──────────────────────────────────────
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))],
+                  ),
+                  child: const Icon(Icons.construction_rounded, color: Colors.white, size: 36),
+                ),
+                const SizedBox(height: 16),
+                const Text('WorkIt', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: AppColors.grey900, letterSpacing: -1)),
+                const SizedBox(height: 6),
+                const Text('Accédez à votre espace professionnel', style: TextStyle(color: AppColors.grey500, fontSize: 14)),
+                const SizedBox(height: 40),
+                // ── Carte formulaire ──────────────────────────
                 Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    gradient: cardGradient,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(0.05)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accent.withOpacity(0.1),
-                        blurRadius: 30,
-                        offset: const Offset(0, 18),
-                      ),
-                    ],
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.cardBorder),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 8))],
                   ),
                   padding: const EdgeInsets.all(22),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: accent.withOpacity(0.14),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: accent.withOpacity(0.45),
-                              ),
-                            ),
-                            child: const Text(
-                              'Espace sécurisé',
-                              style: TextStyle(
-                                color: accent,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.1,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            Icons.shield_moon,
-                            color: Colors.white.withOpacity(0.7),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        'Accédez à votre espace WorkIt',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: -0.4,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Utilisez votre e-mail professionnel.',
-                        style: TextStyle(color: Colors.white70, height: 1.35),
-                      ),
+                      const Text('Connexion', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.grey900)),
+                      const SizedBox(height: 4),
+                      const Text('Utilisez votre e-mail professionnel', style: TextStyle(color: AppColors.grey500, fontSize: 13)),
                       const SizedBox(height: 22),
                       _Input(
                         controller: emailController,
                         label: 'Email professionnel',
                         keyboardType: TextInputType.emailAddress,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) return 'Email requis';
-                          if (!value.contains('@') || !value.contains('.')) {
-                            return 'Email invalide';
-                          }
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Email requis';
+                          if (!v.contains('@') || !v.contains('.')) return 'Email invalide';
                           return null;
                         },
                       ),
@@ -239,79 +189,70 @@ class _SignInScreenState extends State<SignInScreen> {
                         controller: passwordController,
                         label: 'Mot de passe',
                         obscureText: true,
-                        validator: (value) {
-                          if (value == null || value.isEmpty)
-                            return 'Mot de passe requis';
-                          final hasUpper = value.contains(RegExp('[A-Z]'));
-                          final hasDigit = value.contains(RegExp('[0-9]'));
-                          if (value.length < 6 || !hasUpper || !hasDigit) {
-                            return '6 caractères, 1 majuscule, 1 chiffre requis';
-                          }
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Mot de passe requis';
+                          if (v.length < 6) return '6 caractères minimum';
                           return null;
                         },
                       ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Min. 6 caractères, dont 1 majuscule et 1 chiffre.',
-                        style: TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       Row(
                         children: [
-                          Checkbox(
-                            value: rememberEmail,
-                            activeColor: accent,
-                            checkColor: Colors.black,
-                            side: const BorderSide(color: Colors.white54),
-                            onChanged: (value) {
-                              setState(() {
-                                rememberEmail = value ?? false;
-                              });
-                            },
-                          ),
-                          const Flexible(
-                            child: Text(
-                              'Se souvenir de l\'email',
-                              style: TextStyle(color: Colors.white70),
-                              overflow: TextOverflow.ellipsis,
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: rememberEmail,
+                              activeColor: AppColors.primary,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              side: const BorderSide(color: AppColors.grey300),
+                              onChanged: (v) => setState(() => rememberEmail = v ?? false),
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          const Expanded(child: Text("Se souvenir de l'email", style: TextStyle(color: AppColors.grey600, fontSize: 13))),
                           TextButton(
                             onPressed: _sendReset,
-                            child: const Text(
-                              'Mot de passe oublié ?',
-                              style: TextStyle(
-                                color: accent,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                            style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                            child: const Text('Mot de passe oublié ?', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
-                        child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: accent,
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            textStyle: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                            ),
+                        height: 52,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                           ),
                           onPressed: isLoading ? null : _submit,
-                          child: Text(isLoading ? 'Connexion…' : 'Se connecter'),
+                          child: isLoading
+                              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                              : const Text('Se connecter'),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(12)),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.shield_outlined, color: AppColors.primary, size: 18),
+                      SizedBox(width: 8),
+                      Expanded(child: Text('Connexion sécurisée · Données chiffrées', style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
               ],
             ),
           ),
@@ -436,13 +377,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFF00E676);
     return Scaffold(
-      backgroundColor: const Color(0xFF07090D),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        title: const Text('Sécuriser votre compte', style: TextStyle(color: Colors.white)),
+        iconTheme: const IconThemeData(color: AppColors.grey700),
+        title: const Text('Sécuriser votre compte', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -452,9 +393,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Merci de définir votre mot de passe et vos informations avant d’accéder à votre espace.',
-                  style: TextStyle(color: Colors.white70, height: 1.3),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(12)),
+                  child: const Text(
+                    'Merci de définir votre mot de passe et vos informations avant d\'accéder à votre espace.',
+                    style: TextStyle(color: AppColors.primary, height: 1.4, fontSize: 13),
+                  ),
                 ),
                 const SizedBox(height: 18),
                 _input(
@@ -491,20 +436,17 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     child: Container(
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F1524),
+                        color: AppColors.primaryLight,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white24),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
                       ),
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Rôle assigné', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                          const Text('Rôle assigné', style: TextStyle(color: AppColors.grey500, fontSize: 12)),
                           const SizedBox(height: 4),
-                          Text(
-                            roleDisplayName(widget.currentRole!),
-                            style: const TextStyle(color: Color(0xFF00E676), fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
+                          Text(roleDisplayName(widget.currentRole!), style: const TextStyle(color: AppColors.primary, fontSize: 16, fontWeight: FontWeight.bold)),
                         ],
                       ),
                     ),
@@ -536,16 +478,20 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 const SizedBox(height: 22),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                  height: 52,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     onPressed: _loading ? null : _save,
-                    child: Text(_loading ? 'Enregistrement…' : 'Continuer'),
+                    child: _loading
+                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                        : const Text('Continuer'),
                   ),
                 ),
               ],
@@ -557,37 +503,28 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   }
 
   Widget _roleSelector() {
-    const accent = Color(0xFF00E676);
-    final roles = {
-      'commercial': 'Commercial',
-      'metreur': 'Métreur',
-      'poseur': 'Poseur',
-    };
+    final roles = {'commercial': 'Commercial', 'metreur': 'Métreur', 'poseur': 'Poseur'};
+    final roleColors = {'commercial': AppColors.primary, 'metreur': AppColors.purple, 'poseur': AppColors.success};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Rôle', style: TextStyle(color: Colors.white70)),
+        const Text('Rôle', style: TextStyle(color: AppColors.grey700, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 8, runSpacing: 8,
           children: roles.entries.map((entry) {
             final selected = _role == entry.key;
+            final color = roleColors[entry.key] ?? AppColors.primary;
             return SizedBox(
               width: 130,
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: selected ? accent : Colors.white24),
-                  backgroundColor: selected ? accent.withOpacity(0.12) : const Color(0xFF0F1524),
+                  side: BorderSide(color: selected ? color : AppColors.grey200, width: selected ? 2 : 1),
+                  backgroundColor: selected ? color.withOpacity(0.1) : AppColors.surface,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
                 onPressed: () => setState(() => _role = entry.key),
-                child: Text(
-                  entry.value,
-                  style: TextStyle(
-                    color: selected ? accent : Colors.white70,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                child: Text(entry.value, style: TextStyle(color: selected ? color : AppColors.grey600, fontWeight: FontWeight.w700)),
               ),
             );
           }).toList(),
@@ -610,20 +547,16 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       keyboardType: keyboardType,
       validator: validator,
       inputFormatters: inputFormatters,
-      style: const TextStyle(color: Colors.white),
+      style: const TextStyle(color: AppColors.grey900),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
+        labelStyle: const TextStyle(color: AppColors.grey500),
         filled: true,
-        fillColor: const Color(0xFF0F1524),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Colors.white24),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF00E676), width: 1.5),
-        ),
+        fillColor: AppColors.grey50,
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.grey200)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.danger)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.danger, width: 2)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
     );
@@ -652,24 +585,17 @@ class _Input extends StatelessWidget {
       keyboardType: keyboardType,
       obscureText: obscureText,
       validator: validator,
-      style: const TextStyle(color: Colors.white),
+      style: const TextStyle(color: AppColors.grey900),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
+        labelStyle: const TextStyle(color: AppColors.grey500),
         filled: true,
-        fillColor: const Color(0xFF0F1524),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Colors.white24),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: Color(0xFF00E676), width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
-        ),
+        fillColor: AppColors.grey50,
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.grey200)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.danger)),
+        focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.danger, width: 2)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
     );
   }

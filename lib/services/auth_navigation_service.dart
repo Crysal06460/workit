@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../screens/admin_home_screen.dart';
 import '../screens/commercial_home_screen.dart';
 import '../screens/metreur_home_screen.dart';
 import '../screens/poseurs_home_screen.dart';
-import '../screens/sign_in_screen.dart'; // For CompleteProfileScreen if needed, or better to move it
+import '../screens/sign_in_screen.dart';
 
 class AuthNavigationService {
   static final AuthNavigationService _instance = AuthNavigationService._internal();
@@ -19,136 +21,87 @@ class AuthNavigationService {
 
   Future<void> navigateUser(BuildContext context, User user) async {
     final uid = user.uid;
+    final firestore = FirebaseFirestore.instance;
 
-    // Cherche workspace par admin; sinon, par companyId depuis users/{uid}
-    QuerySnapshot<Map<String, dynamic>> workspaceSnap = await FirebaseFirestore.instance
-        .collection('workspaces')
-        .where('adminUid', isEqualTo: uid)
-        .limit(1)
-        .get();
+    // 1. Lire le document user par ID direct (pas de query — règles Firestore)
+    final userDoc = await firestore.collection('users').doc(uid).get();
+    final userData = userDoc.data();
 
-    String? workspaceId;
-    Map<String, dynamic>? data;
-    String? roleKey;
-    bool isAdmin = false;
-    Map<String, dynamic>? userData;
-
-    if (workspaceSnap.docs.isEmpty) {
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      userData = userDoc.data();
-      final companyId = userData?['companyId']?.toString();
-      roleKey = userData?['role']?.toString();
-      if (companyId != null && companyId.isNotEmpty) {
-        // 1) Essai par docId
-        final ws = await FirebaseFirestore.instance.collection('workspaces').doc(companyId).get();
-        if (ws.exists) {
-          workspaceId = ws.id;
-          data = ws.data();
-        } else {
-          // 2) Essai par siret ou companyName
-          final bySiret = await FirebaseFirestore.instance
-              .collection('workspaces')
-              .where('siret', isEqualTo: companyId)
-              .limit(1)
-              .get();
-          if (bySiret.docs.isNotEmpty) {
-            workspaceId = bySiret.docs.first.id;
-            data = bySiret.docs.first.data();
-          } else {
-            final byName = await FirebaseFirestore.instance
-                .collection('workspaces')
-                .where('companyName', isEqualTo: companyId)
-                .limit(1)
-                .get();
-            if (byName.docs.isNotEmpty) {
-              workspaceId = byName.docs.first.id;
-              data = byName.docs.first.data();
-            }
-          }
-        }
-      }
-    } else {
-      workspaceId = workspaceSnap.docs.first.id;
-      data = workspaceSnap.docs.first.data();
-      isAdmin = true;
-      final roles = data?['creatorRoles'];
-      if (roles is List && roles.isNotEmpty) {
-        roleKey = roles.first?.toString();
-      } else if (data?['creatorRole'] != null) {
-        roleKey = data?['creatorRole'].toString();
-      }
-      if (userData == null) {
-        final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-        userData = userDoc.data();
-        roleKey ??= userData?['role']?.toString();
-      }
-    }
-
-    if (workspaceId == null || data == null) {
+    if (userData == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Espace introuvable pour cet utilisateur.'),
-          ),
+          const SnackBar(content: Text('Compte introuvable. Contactez votre administrateur.')),
         );
       }
       return;
     }
 
-    final usesApp = data['creatorUsesWorkit'] == true;
-    isAdmin = isAdmin || (data['adminUid']?.toString() == uid);
-    roleKey ??= data['role']?.toString();
-
-    final mustChangePassword = userData?['mustChangePassword'] == true;
-
-    if (mustChangePassword) {
-      if (context.mounted) {
-        final completed = await Navigator.of(context).push<Map<String, dynamic>?>(
-          MaterialPageRoute(
-            builder: (_) => CompleteProfileScreen(
-              email: user.email ?? '',
-              currentRole: roleKey,
-              userDoc: userData,
-            ),
-          ),
-        );
-        if (completed != null) {
-          roleKey = completed['role']?.toString() ?? roleKey;
-          userData = userData ?? {};
-          userData.addAll(completed);
-        } else {
-          return;
-        }
-      }
-    }
-
-    if (!usesApp && roleKey == null) {
+    // 2. Récupérer le workspaceId depuis le document user
+    final workspaceId = (userData['workspaceId'] ?? userData['companyId'])?.toString();
+    if (workspaceId == null || workspaceId.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Accès admin uniquement, aucun rôle défini.'),
-          ),
+          const SnackBar(content: Text('Espace de travail introuvable pour ce compte.')),
         );
       }
       return;
     }
 
-    // Stocke le contexte d’entreprise pour isoler les données.
-    final tradeKey = (userData?['tradeKey'] ?? data['tradeKey'])?.toString();
+    // 3. Lire le workspace par ID direct
+    final workspaceDoc = await firestore.collection('workspaces').doc(workspaceId).get();
+    final workspaceData = workspaceDoc.data();
+
+    if (workspaceData == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Espace de travail supprimé ou inaccessible.')),
+        );
+      }
+      return;
+    }
+
+    // 4. Déterminer le rôle
+    final roleKey = userData['role']?.toString() ?? 'commercial';
+    final isAdmin = roleKey == 'admin';
+
+    // 5. Changement de mot de passe obligatoire (comptes provisionnés)
+    final mustChangePassword = userData['mustChangePassword'] == true;
+    String effectiveRole = roleKey;
+
+    if (mustChangePassword && context.mounted) {
+      final completed = await Navigator.of(context).push<Map<String, dynamic>?>(
+        MaterialPageRoute(
+          builder: (_) => CompleteProfileScreen(
+            email: user.email ?? '',
+            currentRole: roleKey,
+            userDoc: userData,
+          ),
+        ),
+      );
+      if (completed == null) return;
+      effectiveRole = completed['role']?.toString() ?? roleKey;
+    }
+
+    // 6. Persister le contexte workspace dans SharedPreferences
+    final tradeKey = (userData['tradeKey'] ?? workspaceData['tradeKey'])?.toString();
     await _persistWorkspaceContext(
       workspaceId,
-      data['companyName']?.toString() ?? '',
-      userData?['firstName']?.toString() ?? data['creatorFirstName']?.toString(),
-      userData?['lastName']?.toString() ?? data['creatorLastName']?.toString(),
+      workspaceData['companyName']?.toString() ?? '',
+      userData['firstName']?.toString() ?? workspaceData['creatorFirstName']?.toString(),
+      userData['lastName']?.toString() ?? workspaceData['creatorLastName']?.toString(),
       isAdmin,
       tradeKey,
     );
 
-    final home = _homeForRole(roleKey ?? 'commercial');
+    // 7. Sauvegarder le token FCM
+    await _saveFcmToken(uid, workspaceId);
+
+    // 8. Naviguer vers le bon écran
+    final home = _homeForRole(effectiveRole);
     if (home == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Rôle non supporté ($roleKey).')),
+          SnackBar(content: Text('Rôle non supporté ($effectiveRole).')),
         );
       }
       return;
@@ -159,6 +112,22 @@ class AuthNavigationService {
         MaterialPageRoute(builder: (_) => home),
         (route) => false,
       );
+    }
+  }
+
+  Future<void> _saveFcmToken(String uid, String workspaceId) async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null) return;
+      await FirebaseFirestore.instance.collection('users').doc(uid).set(
+        {
+          'fcmToken': token,
+          'fcmUpdatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (_) {
+      // Silently ignore FCM token save errors
     }
   }
 
@@ -191,6 +160,8 @@ class AuthNavigationService {
         return const PoseursHomeScreen();
       case 'commercial_metreur':
         return const CommercialHomeScreen();
+      case 'admin':
+        return const AdminHomeScreen();
       default:
         return null;
     }

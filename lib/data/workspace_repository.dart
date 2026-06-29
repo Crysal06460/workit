@@ -74,6 +74,21 @@ class WorkspaceRepository {
     final batch = _firestore.batch();
     batch.set(workspaceRef, workspaceData);
 
+    // Create the admin user document so FCM tokens and role lookups work.
+    final adminUserRef =
+        _firestore.collection('users').doc(data.adminUid);
+    batch.set(adminUserRef, {
+      'uid': data.adminUid,
+      'email': data.adminEmail.toLowerCase(),
+      'firstName': data.creatorFirstName ?? '',
+      'lastName': data.creatorLastName ?? '',
+      'role': 'admin',
+      'companyId': workspaceRef.id,
+      'workspaceId': workspaceRef.id,
+      'tradeKey': data.tradeKey,
+      'createdAt': serverTimestamp,
+    });
+
     int invitesCreated = 0;
     data.invites.forEach((role, emails) {
       for (final email in emails) {

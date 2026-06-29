@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'create_workspace_screen.dart';
+import 'account_setup_screen.dart';
 
 class JourneySelectionScreen extends StatefulWidget {
   const JourneySelectionScreen({super.key, this.trialSessionId});
@@ -119,10 +119,7 @@ class _JourneySelectionScreenState extends State<JourneySelectionScreen> {
                       : () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => CreateWorkspaceScreen(
-                                journeyType: selectedJourney,
-                                trialSessionId: widget.trialSessionId,
-                              ),
+                              builder: (_) => const AccountSetupScreen(),
                             ),
                           );
                         },

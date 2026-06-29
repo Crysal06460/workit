@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme/app_colors.dart';
 import 'admin_company_tab.dart';
 import 'admin_dashboard_tab.dart';
 import 'admin_team_tab.dart';
@@ -45,51 +46,63 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF07090D),
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
 
     if (_workspaceId == null) {
       return const Scaffold(
-         backgroundColor: Color(0xFF07090D),
-         body: Center(child: Text('Aucun espace de travail trouvé.', style: TextStyle(color: Colors.white))),
+        backgroundColor: AppColors.background,
+        body: Center(child: Text('Aucun espace de travail trouvé.', style: TextStyle(color: AppColors.grey500))),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF07090D),
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        centerTitle: true,
-        title: const Text('Admin', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        titleSpacing: 20,
+        title: const Text('Admin', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800, fontSize: 22, letterSpacing: -0.5)),
+        iconTheme: const IconThemeData(color: AppColors.grey600),
         actions: [
-            IconButton(
-              icon: const Icon(Icons.logout, color: Color(0xFF00E676)),
-              tooltip: 'Se déconnecter',
-              onPressed: () async {
-                await FirebaseAuth.instance.signOut();
-                if (context.mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const SignInScreen()),
-                    (route) => false,
-                  );
-                }
-              },
-            ),
+          IconButton(
+            icon: const Icon(Icons.logout_outlined, color: AppColors.grey500),
+            tooltip: 'Se déconnecter',
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const SignInScreen()),
+                  (route) => false,
+                );
+              }
+            },
+          ),
+          const SizedBox(width: 6),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFF00E676),
-          unselectedLabelColor: Colors.white60,
-          indicatorColor: const Color(0xFF00E676),
-          tabs: const [
-            Tab(text: 'Tableau de bord', icon: Icon(Icons.dashboard_outlined)),
-            Tab(text: 'Équipe', icon: Icon(Icons.group_outlined)),
-            Tab(text: 'Entreprise', icon: Icon(Icons.business_outlined)),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(56),
+          child: Container(
+            color: AppColors.surface,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.grey500,
+              indicatorColor: AppColors.primary,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              tabs: const [
+                Tab(text: 'Tableau de bord', icon: Icon(Icons.dashboard_outlined, size: 20)),
+                Tab(text: 'Équipe', icon: Icon(Icons.group_outlined, size: 20)),
+                Tab(text: 'Entreprise', icon: Icon(Icons.business_outlined, size: 20)),
+              ],
+            ),
+          ),
         ),
       ),
       body: TabBarView(

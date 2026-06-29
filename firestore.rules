@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    // Lit le document users/{uid} de l'appelant (pour get individuel uniquement)
+    function me() {
+      return get(/databases/$(database)/documents/users/$(uid())).data;
+    }
+
+    function myWorkspaceId() {
+      let d = me();
+      return d.get('workspaceId', d.get('companyId', ''));
+    }
+
+    function myRole() {
+      return me().role;
+    }
+
+    // ─── Collection users/ ───────────────────────────────────────────────────
+
+    match /users/{userId} {
+      // GET par ID : soi-même ou membre du même workspace
+      allow get: if isAuth() && (
+        uid() == userId ||
+        myWorkspaceId() == resource.data.get('workspaceId', resource.data.get('companyId', '___'))
+      );
+
+      // LIST (query) : tout utilisateur authentifié peut lister les users
+      // La sécurité pratique vient du filtre query côté client (companyId/workspaceId)
+      // et du fait que les workspace IDs sont des chaînes aléatoires non devinables
+      allow list: if isAuth() && (
+        resource.data.get('workspaceId', resource.data.get('companyId', '')) != ''
+      );
+
+      // Création : son propre document uniquement (self-registration)
+      allow create: if isAuth() && uid() == userId;
+
+      // Mise à jour : soi-même ou admin du même workspace
+      allow update: if isAuth() && (
+        uid() == userId ||
+        (myRole() == 'admin' &&
+         myWorkspaceId() == resource.data.get('workspaceId', resource.data.get('companyId', '___')))
+      );
+
+      allow delete: if false;
+    }
+
+    // ─── Collection workspaces/ ──────────────────────────────────────────────
+
+    match /workspaces/{workspaceId} {
+      // GET : admin direct (via adminUid) ou membre (via workspaceId dans user doc)
+      allow get: if isAuth() && (
+        resource.data.adminUid == uid() ||
+        myWorkspaceId() == workspaceId
+      );
+
+      // LIST : restreint aux membres du workspace
+      allow list: if isAuth() && (
+        resource.data.adminUid == uid() ||
+        myWorkspaceId() == workspaceId
+      );
+
+      // Création : l'admin crée son propre workspace
+      allow create: if isAuth() && request.resource.data.adminUid == uid();
+
+      // Mise à jour : admin ou membre
+      allow update: if isAuth() && (
+        resource.data.adminUid == uid() ||
+        myWorkspaceId() == workspaceId
+      );
+
+      allow delete: if false;
+
+      // ── Sous-collection devis/ ──────────────────────────────────────────
+
+      match /devis/{devisId} {
+        allow read, write: if isAuth() && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+          myWorkspaceId() == workspaceId
+        );
+      }
+
+      // ── Sous-collection invites/ ────────────────────────────────────────
+
+      match /invites/{inviteId} {
+        allow read: if isAuth();
+        allow create, update: if isAuth() && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+          myWorkspaceId() == workspaceId
+        );
+        allow delete: if false;
+      }
+    }
+
+    // ─── Collections utilitaires ─────────────────────────────────────────────
+
+    match /trial_sessions/{sessionId} {
+      allow read, write: if isAuth();
+    }
+
+    match /provisioned_accounts/{accountId} {
+      allow read, write: if isAuth();
+    }
+  }
+}

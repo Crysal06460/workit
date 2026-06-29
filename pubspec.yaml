@@ -48,6 +48,9 @@ dependencies:
   url_launcher: ^6.3.2
   local_auth: ^3.0.0
   flutter_svg: ^2.0.10
+  firebase_messaging: ^15.0.0
+  pdf: ^3.11.1
+  printing: ^5.13.1
 
 
 dev_dependencies:

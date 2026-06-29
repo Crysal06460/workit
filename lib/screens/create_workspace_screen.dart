@@ -5,14 +5,21 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/onboarding_models.dart';
-import 'account_setup_screen.dart';
-import 'select_metier_screen.dart';
+import 'plan_selection_screen.dart';
 
 class CreateWorkspaceScreen extends StatefulWidget {
-  const CreateWorkspaceScreen({super.key, this.journeyType, this.trialSessionId});
+  const CreateWorkspaceScreen({
+    super.key,
+    required this.firstName,
+    required this.lastName,
+    required this.email,
+    required this.uid,
+  });
 
-  final String? journeyType;
-  final String? trialSessionId;
+  final String firstName;
+  final String lastName;
+  final String email;
+  final String uid;
 
   @override
   State<CreateWorkspaceScreen> createState() => _CreateWorkspaceScreenState();
@@ -54,93 +61,64 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
   void _continue() {
     if (!formKey.currentState!.validate()) return;
     final data = OnboardingData(
-      companyName: nameController.text,
-      siret: siretController.text,
-      address: addressController.text,
-      postalCode: postalCodeController.text,
-      city: cityController.text,
-      journeyType: widget.journeyType,
-      trialSessionId: widget.trialSessionId,
-    );
+      companyName: nameController.text.trim(),
+      siret: siretController.text.trim(),
+      address: addressController.text.trim(),
+      postalCode: postalCodeController.text.trim(),
+      city: cityController.text.trim(),
+    )
+      ..adminEmail = widget.email
+      ..adminUid = widget.uid
+      ..creatorFirstName = widget.firstName
+      ..creatorLastName = widget.lastName
+      ..tradeKey = 'menuiserie_aluminium';
+
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => SelectMetierScreen(data: data)),
+      MaterialPageRoute(builder: (_) => PlanSelectionScreen(data: data)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    const bg = Color(0xFF07090D);
+    const accent = Color(0xFF00E676);
     return Scaffold(
-      backgroundColor: const Color(0xFF07090D),
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          'Créer mon entreprise',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-        ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
         child: Form(
           key: formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF0E1726), Color(0xFF0A1A2F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
-                ),
-                padding: const EdgeInsets.all(18),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: const Icon(Icons.business, color: Color(0xFF00E676)),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Identité de l’entreprise',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            'Ces informations s’affichent sur vos devis, métrés et fiches chantiers.',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              const _StepProgress(current: 2, total: 3),
+              const SizedBox(height: 28),
+              const Text(
+                'Mon entreprise',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 6),
+              const Text(
+                'Ces informations s\'afficheront sur vos devis et métrés.',
+                style: TextStyle(color: Colors.white60, fontSize: 15),
+              ),
+              const SizedBox(height: 28),
               _DarkField(
                 controller: nameController,
-                label: 'Nom de l’entreprise',
-                validator: (value) => value == null || value.isEmpty ? 'Nom requis' : null,
+                label: 'Nom de l\'entreprise',
+                textCapitalization: TextCapitalization.words,
+                validator: (v) =>
+                    (v?.trim().isEmpty ?? true) ? 'Nom requis' : null,
               ),
               const SizedBox(height: 14),
               _DarkField(
@@ -149,11 +127,9 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
                 keyboardType: TextInputType.number,
                 maxLength: 14,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) {
-                  if (value == null || value.isEmpty) return null; // facultatif
-                  if (value.length != 14 || !RegExp(r'^\d{14}$').hasMatch(value)) {
-                    return '14 chiffres';
-                  }
+                validator: (v) {
+                  if (v == null || v.isEmpty) return null;
+                  if (v.length != 14) return '14 chiffres requis';
                   return null;
                 },
               ),
@@ -161,10 +137,12 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
               _DarkField(
                 controller: addressController,
                 label: 'Adresse du siège',
-                validator: (value) => value == null || value.isEmpty ? 'Adresse requise' : null,
+                validator: (v) =>
+                    (v?.trim().isEmpty ?? true) ? 'Adresse requise' : null,
               ),
               const SizedBox(height: 14),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     flex: 2,
@@ -175,9 +153,9 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
                       maxLength: 5,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: _onPostalCodeChanged,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Code postal requis';
-                        if (value.length != 5 || !RegExp(r'^\d{5}$').hasMatch(value)) return '5 chiffres';
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Requis';
+                        if (v.length != 5) return '5 chiffres';
                         return null;
                       },
                     ),
@@ -194,29 +172,24 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
                           _showCitySelector(citySuggestions);
                         }
                       },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Ville requise';
-                        return null;
-                      },
-                      hintText: 'Auto (selon CP)',
+                      validator: (v) =>
+                          (v?.trim().isEmpty ?? true) ? 'Ville requise' : null,
+                      hintText: isFetchingCities ? 'Chargement...' : 'Auto (CP)',
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 30),
               SizedBox(
                 width: double.infinity,
+                height: 52,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E676),
+                    backgroundColor: accent,
                     foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
                     textStyle: const TextStyle(
-                      inherit: false,
                       fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.black,
-                      letterSpacing: 0.1,
+                      fontWeight: FontWeight.w900,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -234,6 +207,44 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
   }
 }
 
+class _StepProgress extends StatelessWidget {
+  const _StepProgress({required this.current, required this.total});
+
+  final int current;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Étape $current sur $total',
+          style: const TextStyle(color: Colors.white54, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: List.generate(total, (i) {
+            final done = i < current;
+            return Expanded(
+              child: Container(
+                margin: EdgeInsets.only(right: i < total - 1 ? 6 : 0),
+                height: 4,
+                decoration: BoxDecoration(
+                  color: done
+                      ? const Color(0xFF00E676)
+                      : Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+}
+
 class _DarkField extends StatelessWidget {
   const _DarkField({
     required this.controller,
@@ -246,6 +257,7 @@ class _DarkField extends StatelessWidget {
     this.onTap,
     this.hintText,
     this.inputFormatters,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   final TextEditingController controller;
@@ -258,6 +270,7 @@ class _DarkField extends StatelessWidget {
   final void Function(String)? onChanged;
   final VoidCallback? onTap;
   final List<TextInputFormatter>? inputFormatters;
+  final TextCapitalization textCapitalization;
 
   @override
   Widget build(BuildContext context) {
@@ -270,18 +283,19 @@ class _DarkField extends StatelessWidget {
       onChanged: onChanged,
       onTap: onTap,
       inputFormatters: inputFormatters,
+      textCapitalization: textCapitalization,
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         counterText: '',
         labelText: label,
         hintText: hintText,
         hintStyle: const TextStyle(color: Colors.white38),
-        labelStyle: const TextStyle(color: Colors.white70),
+        labelStyle: const TextStyle(color: Colors.white60),
         filled: true,
         fillColor: const Color(0xFF0F1422),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.10)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -295,6 +309,8 @@ class _DarkField extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: Colors.redAccent),
         ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     );
   }
@@ -323,26 +339,23 @@ extension on _CreateWorkspaceScreenState {
     });
 
     try {
-      final url =
-          Uri.parse('https://geo.api.gouv.fr/communes?codePostal=$postalCode&fields=nom');
+      final url = Uri.parse(
+        'https://geo.api.gouv.fr/communes?codePostal=$postalCode&fields=nom',
+      );
       final response = await http.get(url);
       if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body) as List<dynamic>;
+        final List<dynamic> data =
+            json.decode(response.body) as List<dynamic>;
         final List<String> cities =
-            data.map((city) => city['nom'].toString()).toSet().toList()..sort();
+            data.map((c) => c['nom'].toString()).toSet().toList()..sort();
 
         if (!mounted) return;
         setState(() {
           citySuggestions = cities;
-          if (cities.isNotEmpty) {
-            cityController.text = cities.first;
-          } else {
-            cityController.clear();
-          }
+          if (cities.isNotEmpty) cityController.text = cities.first;
         });
 
         if (cities.length > 1 && mounted) {
-          // Ouvrir la sélection après le build pour éviter les conflits de contexte.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) _showCitySelector(cities);
           });
@@ -355,11 +368,7 @@ extension on _CreateWorkspaceScreenState {
       if (!mounted) return;
       _applyFallbackCity(postalCode);
     } finally {
-      if (mounted) {
-        setState(() {
-          isFetchingCities = false;
-        });
-      }
+      if (mounted) setState(() => isFetchingCities = false);
     }
   }
 
@@ -367,11 +376,7 @@ extension on _CreateWorkspaceScreenState {
     final fallbackCities = _postalFallback[postalCode] ?? [];
     setState(() {
       citySuggestions = fallbackCities;
-      if (fallbackCities.isNotEmpty) {
-        cityController.text = fallbackCities.first;
-      } else {
-        cityController.clear();
-      }
+      if (fallbackCities.isNotEmpty) cityController.text = fallbackCities.first;
     });
 
     if (fallbackCities.length > 1) {
@@ -432,7 +437,8 @@ extension on _CreateWorkspaceScreenState {
                           },
                         );
                       },
-                      separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white12),
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, color: Colors.white12),
                       itemCount: cities.length,
                     ),
                   ),

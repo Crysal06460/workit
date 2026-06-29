@@ -4,8 +4,8 @@ import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/auth_navigation_service.dart';
+import 'account_setup_screen.dart';
 import 'sign_in_screen.dart';
-import 'welcome_screen.dart';
 
 class EntryScreen extends StatefulWidget {
   const EntryScreen({super.key});
@@ -59,10 +59,10 @@ class _EntryScreenState extends State<EntryScreen> {
     ).push(MaterialPageRoute(builder: (_) => const SignInScreen()));
   }
 
-  void _openDiscovery(BuildContext context) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const WelcomeScreen()));
+  void _openSignup(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AccountSetupScreen()),
+    );
   }
 
   @override
@@ -292,7 +292,7 @@ class _EntryScreenState extends State<EntryScreen> {
                                 border: Border.all(color: Colors.white12),
                               ),
                               child: const Icon(
-                                Icons.explore,
+                                Icons.rocket_launch_outlined,
                                 color: Color(0xFF00E676),
                               ),
                             ),
@@ -302,7 +302,7 @@ class _EntryScreenState extends State<EntryScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: const [
                                   Text(
-                                    'Découvrir WorkIt',
+                                    'Créer mon espace',
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w800,
@@ -311,7 +311,7 @@ class _EntryScreenState extends State<EntryScreen> {
                                   ),
                                   SizedBox(height: 6),
                                   Text(
-                                    'Créez votre espace entreprise en 2 minutes.',
+                                    'Inscription gratuite en 3 étapes.',
                                     style: TextStyle(
                                       color: Colors.white70,
                                       height: 1.3,
@@ -321,7 +321,7 @@ class _EntryScreenState extends State<EntryScreen> {
                               ),
                             ),
                             TextButton(
-                              onPressed: () => _openDiscovery(context),
+                              onPressed: () => _openSignup(context),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: const [

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,10 +9,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'measurement_form_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
+import '../core/theme/app_colors.dart';
 
-const Color _metreurBg = Color(0xFF07090D);
-const Color _metreurCard = Color(0xFF0F1422);
-const Color _metreurAccent = Color(0xFF00F795);
+const Color _metreurBg = AppColors.background;
+const Color _metreurCard = AppColors.surface;
+const Color _metreurAccent = AppColors.primary;
 const String _workspaceIdKey = 'workit_workspace_id';
 const String _workspaceNameKey = 'workit_workspace_name';
 const String _userFirstNameKey = 'workit_user_first_name';
@@ -33,11 +35,13 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
   late List<_MeasureCardData> _toPlan;
   late List<_MeasureCardData> _toClose;
   final _firestore = FirebaseFirestore.instance;
+  StreamSubscription<QuerySnapshot>? _devisSubscription;
   String? _workspaceId;
   String? _workspaceName;
   String? _userId;
   String? _userFirstName;
   String? _userLastName;
+  int _bottomNavIndex = 0;
 
   @override
   void initState() {
@@ -61,13 +65,85 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
     return '';
   }
 
+  String _initials() {
+    final f = _userFirstName?.trim() ?? '';
+    final l = _userLastName?.trim() ?? '';
+    if (f.isNotEmpty && l.isNotEmpty) return '${f[0]}${l[0]}'.toUpperCase();
+    if (f.isNotEmpty) return f[0].toUpperCase();
+    if (l.isNotEmpty) return l[0].toUpperCase();
+    return 'PL';
+  }
+
+  int _totalActions() =>
+      _newRequests.length + _acceptedRequests.length + _toOrder.length + _toPlan.length;
+
+  @override
+  void dispose() {
+    _devisSubscription?.cancel();
+    super.dispose();
+  }
+
   Future<void> _init() async {
     await _loadWorkspaceContext();
-    await _loadRequests();
-    if (_newRequests.isEmpty && _acceptedRequests.isEmpty) {
-      _seedDemo();
+    _subscribeToDevis();
+  }
+
+  void _subscribeToDevis() {
+    if (_workspaceId == null) {
+      _loadFromPrefs();
+      return;
     }
-    setState(() {});
+    _devisSubscription?.cancel();
+    _devisSubscription = _firestore
+        .collection('workspaces')
+        .doc(_workspaceId)
+        .collection('devis')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen(_onDevisSnapshot, onError: (_) => _loadFromPrefs());
+  }
+
+  void _onDevisSnapshot(QuerySnapshot snap) {
+    final newOnes = <_MeasureCardData>[];
+    final accepted = <_MeasureCardData>[];
+    final toOrder = <_MeasureCardData>[];
+    final toPlan = <_MeasureCardData>[];
+    final toClose = <_MeasureCardData>[];
+
+    for (final doc in snap.docs) {
+      final map = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+      map['id'] = doc.id;
+      final assignedId = (map['metreurId'] ?? map['assignedMetreurId'])?.toString();
+      if (assignedId != null &&
+          assignedId.isNotEmpty &&
+          assignedId != 'any' &&
+          assignedId != _userId) {
+        continue;
+      }
+      final item = _MeasureCardData.fromMap(map);
+      final status = item.status;
+      if (status == 'En cours') {
+        accepted.add(item);
+      } else if (status == 'À commander' || status == 'Commande en cours') {
+        toOrder.add(item);
+      } else if (status == 'À planifier' || status == 'En pose') {
+        toPlan.add(item);
+      } else if (status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé') {
+        toClose.add(item);
+      } else {
+        newOnes.add(item);
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _newRequests = [..._kDemoNewRequests, ...newOnes];
+      _acceptedRequests = [..._kDemoAccepted, ...accepted];
+      _toOrder = [..._kDemoToOrder, ...toOrder];
+      _toPlan = [..._kDemoPlan, ...toPlan];
+      _toClose = [..._kDemoToClose, ...toClose];
+    });
+    _saveToPrefs();
   }
 
   Future<void> _loadWorkspaceContext() async {
@@ -80,49 +156,8 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
   }
 
   Future<void> _loadRequests() async {
-    final cachedMap = await _readPrefsMap();
-    if (_workspaceId == null) {
-      await _loadFromPrefs();
-      return;
-    }
-    try {
-      final snap = await _firestore
-          .collection('workspaces')
-          .doc(_workspaceId)
-          .collection('devis')
-          .orderBy('createdAt', descending: true)
-          .get();
-      final newOnes = <_MeasureCardData>[];
-      final accepted = <_MeasureCardData>[];
-      for (final doc in snap.docs) {
-        final map = doc.data();
-        map['id'] = doc.id;
-        final assignedId = (map['metreurId'] ?? map['assignedMetreurId'])?.toString();
-        if (assignedId != null &&
-            assignedId.isNotEmpty &&
-            assignedId != 'any' &&
-            assignedId != _userId) {
-          continue;
-        }
-        final item = _mergeCached(_MeasureCardData.fromMap(map), cachedMap[doc.id]);
-        if (item.status == 'Acceptée') {
-          accepted.add(item);
-        } else {
-          newOnes.add(item);
-        }
-      }
-      setState(() {
-        _newRequests
-          ..clear()
-          ..addAll(newOnes);
-        _acceptedRequests
-          ..clear()
-          ..addAll(accepted);
-      });
-      await _saveToPrefs();
-    } catch (_) {
-      await _loadFromPrefs();
-    }
+    await _loadWorkspaceContext();
+    _subscribeToDevis();
   }
 
   Future<Map<String, _MeasureCardData>> _readPrefsMap() async {
@@ -189,277 +224,215 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
   }
 
   void _seedDemo() {
-    _newRequests = [];
+    _newRequests = [..._kDemoNewRequests];
+    _acceptedRequests = [..._kDemoAccepted];
     _todaysMeasures = [];
-    _toOrder = [];
-    _toPlan = [];
-    _toClose = [];
+    _toOrder = [..._kDemoToOrder];
+    _toPlan = [..._kDemoPlan];
+    _toClose = [..._kDemoToClose];
   }
 
   @override
   Widget build(BuildContext context) {
 
+    final allItems = [
+      ..._newRequests,
+      ..._acceptedRequests,
+      ..._toOrder,
+      ..._toPlan,
+      ..._toClose,
+    ];
     return DefaultTabController(
-      length: 4,
+      length: 6,
       child: Scaffold(
-        backgroundColor: _metreurBg,
+        backgroundColor: AppColors.background,
         appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text(
-              _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()}' : 'Bonjour',
-                style: const TextStyle(
-                  color: Colors.white,
+          backgroundColor: AppColors.surface,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: false,
+          titleSpacing: 20,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Gestion chantiers',
+                style: TextStyle(
+                  color: AppColors.grey900,
                   fontWeight: FontWeight.w800,
-                  fontSize: 24,
+                  fontSize: 22,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 2),
-              const Text(
-                'Métreur',
-                style: TextStyle(color: Colors.white70, fontSize: 14),
+              Text(
+                'Metteur en œuvre · ${_totalActions()} actions à traiter',
+                style: const TextStyle(color: AppColors.grey400, fontSize: 13),
               ),
             ],
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.calendar_month_outlined, color: Colors.white),
-              onPressed: () {},
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings_outlined, color: Colors.white),
-              tooltip: 'Paramètres',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            GestureDetector(
+              onTap: () async {
+                await FirebaseAuth.instance.signOut();
+                if (!mounted) return;
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const SignInScreen()),
+                  (_) => false,
                 );
               },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: AppColors.purple,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _initials(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
             ),
-            IconButton(
-              icon: const Icon(Icons.refresh, color: _metreurAccent),
-              tooltip: 'Actualiser',
-              onPressed: _loadRequests,
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout, color: _metreurAccent),
-              tooltip: 'Se déconnecter',
-              onPressed: () async {
-                await FirebaseAuth.instance.signOut();
-                if (context.mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const SignInScreen()),
-                    (route) => false,
-                  );
-                }
-              },
-            ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 16),
           ],
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(92),
+            preferredSize: const Size.fromHeight(52),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF0E1424), Color(0xFF0B111D)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                child: TabBar(
-                  isScrollable: true,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white70,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: _metreurAccent.withOpacity(0.5)),
-                  ),
-                  indicatorPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-                  tabs: [
-                    Tab(
-                      child: _TabPill(
-                        label: 'En cours',
-                        count: (_newRequests.length + _todaysMeasures.length + _acceptedRequests.length),
-                        color: Colors.lightBlueAccent,
-                        icon: Icons.straighten,
-                      ),
-                    ),
-                    Tab(
-                      child: _TabPill(
-                        label: 'À commander',
-                        count: _toOrder.length,
-                        color: Colors.orangeAccent,
-                        icon: Icons.shopping_bag_outlined,
-                      ),
-                    ),
-                    Tab(
-                      child: _TabPill(
-                        label: 'À planifier',
-                        count: _toPlan.length,
-                        color: Colors.tealAccent,
-                        icon: Icons.event_available_outlined,
-                      ),
-                    ),
-                    Tab(
-                      child: _TabPill(
-                        label: 'À clôturer',
-                        count: _toClose.length,
-                        color: Colors.greenAccent,
-                        icon: Icons.verified_outlined,
-                      ),
-                    ),
-                  ],
-                ),
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+              child: Builder(
+                builder: (ctx) {
+                  final tabController = DefaultTabController.of(ctx);
+                  return AnimatedBuilder(
+                    animation: tabController,
+                    builder: (ctx2, _) {
+                      final sel = tabController.index;
+                      return TabBar(
+                        isScrollable: true,
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                        tabAlignment: TabAlignment.start,
+                        dividerColor: Colors.transparent,
+                        indicator: const BoxDecoration(),
+                        indicatorSize: TabBarIndicatorSize.tab,
+                        splashBorderRadius: BorderRadius.circular(100),
+                        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                        tabs: [
+                          _MetPillTab(label: 'Tous', isSelected: sel == 0),
+                          _MetPillTab(label: 'En attente', isSelected: sel == 1),
+                          _MetPillTab(label: 'En cours', isSelected: sel == 2),
+                          _MetPillTab(label: 'À commander', isSelected: sel == 3),
+                          _MetPillTab(label: 'À planifier', isSelected: sel == 4),
+                          _MetPillTab(label: 'À clôturer', isSelected: sel == 5),
+                        ],
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ),
         ),
         body: SafeArea(
-          child: TabBarView(
+          child: Column(
             children: [
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // Stats row
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Row(
                   children: [
-                    if (_newRequests.isNotEmpty)
-                      _Section(
-                        title: 'Nouvelle demande de métré',
-                        children: _newRequests
-                            .map(
-                              (item) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _MeasureCard(
-                                  data: item,
-                                  tag: 'Demande',
-                                  tagColor: Colors.deepPurpleAccent,
-                                  actions: [
-                                    Text(
-                                      item.updated ?? '',
-                                      style: const TextStyle(color: Colors.white54, fontSize: 12),
-                                    ),
-                                    _PillButton(
-                                      label: 'Ouvrir la demande',
-                                      icon: Icons.open_in_new,
-                                      onPressed: () => _showRequestDetails(context, item),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    if (_newRequests.isNotEmpty) const SizedBox(height: 16),
-                    _PrioritiesSection(
-                      title: 'Métrés du jour',
-                      items: _todaysMeasures,
+                    _StatChip(
+                      label: 'Urgent',
+                      count: _newRequests.length,
+                      color: AppColors.danger,
+                      bg: AppColors.dangerLight,
                     ),
-                    if (_acceptedRequests.isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      _Section(
-                        title: 'Demandes acceptées',
-                        children: _acceptedRequests
-                            .map(
-                              (item) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _MeasureCard(
-                                      data: item,
-                                      tag: 'Acceptée',
-                                      tagColor: Colors.tealAccent,
-                                      actions: [
-                                        Text(
-                                          item.updated ?? '',
-                                          style: const TextStyle(color: Colors.white54, fontSize: 12),
-                                        ),
-                                        _PillButton(
-                                          label: 'Voir le résumé',
-                                          icon: Icons.list_alt,
-                                          onPressed: () => _showRequestDetails(context, item),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
+                    const SizedBox(width: 8),
+                    _StatChip(
+                      label: 'À commander',
+                      count: _toOrder.length,
+                      color: AppColors.warning,
+                      bg: AppColors.warningLight,
+                    ),
+                    const SizedBox(width: 8),
+                    _StatChip(
+                      label: 'À planifier',
+                      count: _toPlan.length,
+                      color: AppColors.purple,
+                      bg: AppColors.purpleLight,
+                    ),
                   ],
                 ),
               ),
-              _StatusList(
-                tag: 'À commander',
-                tagColor: Colors.orangeAccent,
-                items: _toOrder,
-                emptyLabel: 'Aucune commande en attente.',
-                actionsBuilder: (item) => [
-                  _Tag(label: item.status ?? '', color: Colors.orangeAccent),
-                  const SizedBox(width: 6),
-                  Text(
-                    item.updated ?? '',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text(
-                      'Commander',
-                      style: TextStyle(color: Colors.white),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _MetreurList(
+                      items: allItems,
+                      emptyLabel: 'Aucun chantier.',
+                      onCardTap: (item) => _showRequestDetails(context, item),
                     ),
-                  ),
-                ],
+                    _MetreurList(
+                      items: _newRequests,
+                      emptyLabel: 'Aucune demande en attente.',
+                      onCardTap: (item) => _showRequestDetails(context, item),
+                    ),
+                    _MetreurList(
+                      items: _acceptedRequests,
+                      emptyLabel: 'Aucun métré en cours.',
+                      onCardTap: (item) => _showRequestDetails(context, item),
+                    ),
+                    _MetreurList(
+                      items: _toOrder,
+                      emptyLabel: 'Aucune commande en attente.',
+                      onCardTap: (item) => _showRequestDetails(context, item),
+                    ),
+                    _MetreurList(
+                      items: _toPlan,
+                      emptyLabel: 'Aucune pose à planifier.',
+                      onCardTap: (item) => _showRequestDetails(context, item),
+                    ),
+                    _MetreurList(
+                      items: _toClose,
+                      emptyLabel: 'Rien à clôturer.',
+                      onCardTap: (item) => _showRequestDetails(context, item),
+                    ),
+                  ],
+                ),
               ),
-              _StatusList(
-                tag: 'À planifier',
-                tagColor: Colors.tealAccent,
-                items: _toPlan,
-                emptyLabel: 'Aucune pose à planifier.',
-                actionsBuilder: (item) => [
-                  _Tag(label: item.status ?? '', color: Colors.tealAccent),
-                  const SizedBox(width: 6),
-                  Text(
-                    item.updated ?? '',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.event, color: Colors.white70),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
-              _StatusList(
-                tag: 'À clôturer',
-                tagColor: Colors.greenAccent,
-                items: _toClose,
-                emptyLabel: 'Rien à clôturer pour le moment.',
-                actionsBuilder: (item) => [
-                  _Tag(label: item.status ?? '', color: Colors.greenAccent),
-                  const SizedBox(width: 6),
-                  Text(
-                    item.updated ?? '',
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.verified, color: Colors.white70),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: _buildBottomNav(),
+      ),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: const Border(top: BorderSide(color: AppColors.cardBorder)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            children: [
+              _MetNavItem(icon: Icons.home_rounded, label: 'Accueil', active: _bottomNavIndex == 0, onTap: () => setState(() => _bottomNavIndex = 0)),
+              _MetNavItem(icon: Icons.straighten_rounded, label: 'Chantiers', active: _bottomNavIndex == 1, onTap: () => setState(() => _bottomNavIndex = 1)),
+              _MetNavItem(icon: Icons.calendar_month_outlined, label: 'Agenda', active: _bottomNavIndex == 2, onTap: () => setState(() => _bottomNavIndex = 2)),
+              _MetNavItem(icon: Icons.settings_outlined, label: 'Réglages', active: _bottomNavIndex == 3, onTap: () => setState(() => _bottomNavIndex = 3)),
             ],
           ),
         ),
@@ -486,14 +459,14 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 14),
                 decoration: BoxDecoration(
-                  color: Colors.white24,
+                  color: AppColors.grey200,
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
               Text(
                 data.title,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.grey900,
                   fontWeight: FontWeight.w800,
                   fontSize: 16,
                 ),
@@ -523,7 +496,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
               const SizedBox(height: 8),
               Text(
                 data.note,
-                style: const TextStyle(color: Colors.white70),
+                style: const TextStyle(color: AppColors.grey500),
               ),
               const SizedBox(height: 18),
               _PrimaryAction(
@@ -545,6 +518,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         MaterialPageRoute(
         builder: (_) => _MeasureRequestSummary(
           data: data,
+          workspaceId: _workspaceId,
           onAccept: () => _acceptRequest(context, data),
           onAskInfo: () => _askForInfo(context, data),
           onSchedule: () => _scheduleMeeting(data),
@@ -555,8 +529,9 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
   });
 }
 
-  void _acceptRequest(BuildContext context, _MeasureCardData data) {
+  Future<void> _acceptRequest(BuildContext context, _MeasureCardData data) async {
     final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(this.context);
     setState(() {
       _newRequests.removeWhere((e) => e.id == data.id);
       final alreadyAccepted = _acceptedRequests.any((e) => e.id == data.id);
@@ -571,118 +546,126 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         );
       }
     });
-    _persistRequestToCloud(
+    navigator.pop();
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Demande acceptée — commercial et admin mis à jour.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    await _persistRequestToCloud(
       data.copyWith(
         status: 'Acceptée',
         metreurId: _userId,
         updated: 'Acceptée à l’instant',
       ),
     );
-    _saveToPrefs();
-    navigator.pop();
-    ScaffoldMessenger.of(this.context).showSnackBar(
-      const SnackBar(
-        content: Text('Demande acceptée et déplacée en En cours.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    await _saveToPrefs();
   }
 
   void _askForInfo(BuildContext context, _MeasureCardData data) {
     final navigator = Navigator.of(context);
     navigator.pop();
     Future.microtask(() {
+      final ctrl = TextEditingController();
       showModalBottomSheet(
         context: this.context,
         backgroundColor: _metreurCard,
+        isScrollControlled: true,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        builder: (_) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              Row(
-                children: const [
-                  Icon(Icons.chat_bubble_outline, color: Colors.white70),
-                  SizedBox(width: 8),
-                  Text(
-                    'Demander des informations',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
+        builder: (_) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            16, 12, 16,
+            MediaQuery.of(this.context).viewInsets.bottom + 24,
+          ),
+          child: StatefulBuilder(
+            builder: (ctx, setSt) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.grey200,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const Row(
+                    children: [
+                      Icon(Icons.chat_bubble_outline, color: AppColors.grey500),
+                      SizedBox(width: 8),
+                      Text(
+                        'Demander des informations',
+                        style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: ctrl,
+                    maxLines: 3,
+                    autofocus: true,
+                    style: const TextStyle(color: AppColors.grey900),
+                    decoration: InputDecoration(
+                      hintText: 'Ex: ajoutez les plans de façade ou les accès au chantier…',
+                      hintStyle: const TextStyle(color: AppColors.grey400),
+                      filled: true,
+                      fillColor: AppColors.grey50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.grey50),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _metreurAccent),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: _PrimaryAction(
+                      label: 'Envoyer au commercial',
+                      icon: Icons.send,
+                      onPressed: () async {
+                        final msg = ctrl.text.trim();
+                        if (msg.isEmpty) return;
+                        Navigator.of(this.context).pop();
+                        if (_workspaceId != null) {
+                          await _firestore
+                              .collection('workspaces')
+                              .doc(_workspaceId)
+                              .collection('devis')
+                              .doc(data.id)
+                              .set({
+                            'metreurNote': msg,
+                            'metreurNoteName': '${_userFirstName ?? ''} ${_userLastName ?? ''}'.trim(),
+                            'metreurNoteAt': FieldValue.serverTimestamp(),
+                          }, SetOptions(merge: true));
+                        }
+                        if (mounted) {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Message envoyé au commercial.'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white12),
-                ),
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'À ${data.title}',
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Expliquez ce dont vous avez besoin pour démarrer.',
-                      style: TextStyle(color: Colors.white54),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                maxLines: 3,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Ex: Ajoutez les plans de façade ou les accès au chantier',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: _metreurAccent),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: _PrimaryAction(
-                  label: 'Envoyer au commercial',
-                  icon: Icons.send,
-                  onPressed: () => Navigator.of(this.context).pop(),
-                ),
-              ),
-            ],
+              );
+            },
           ),
-        );
-      },
-      );
+        ),
+      ).whenComplete(() => ctrl.dispose());
     });
   }
 
@@ -702,39 +685,70 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
     final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     if (!mounted) return dt;
     setState(() {
-      _acceptedRequests = _acceptedRequests
-          .map((e) => e.id == data.id ? e.copyWith(meetingAt: dt) : e)
-          .toList();
-      _newRequests = _newRequests
-          .map((e) => e.id == data.id ? e.copyWith(meetingAt: dt) : e)
-          .toList();
+      final updated = data.copyWith(meetingAt: dt, status: 'En cours');
+      _newRequests = _newRequests.where((e) => e.id != data.id).toList();
+      _acceptedRequests = [
+        ..._acceptedRequests.where((e) => e.id != data.id),
+        updated,
+      ];
     });
-    _persistRequestToCloud(data.copyWith(meetingAt: dt));
-    _saveToPrefs();
+    if (_workspaceId != null) {
+      try {
+        await _firestore
+            .collection('workspaces')
+            .doc(_workspaceId)
+            .collection('devis')
+            .doc(data.id)
+            .set({
+          'status': 'En cours',
+          'meetingAt': Timestamp.fromDate(dt),
+          'metreurId': _userId,
+          'metreurUpdatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (_) {}
+    }
+    await _saveToPrefs();
     return dt;
+  }
+
+  Future<void> _markPoseAProgrammer(_MeasureCardData item) async {
+    final wsId = item.workspaceId ?? _workspaceId;
+    if (wsId == null) return;
+    setState(() {
+      _toOrder = _toOrder.where((e) => e.id != item.id).toList();
+      _toPlan = [..._toPlan, item.copyWith(status: 'À planifier', updated: 'Pose à programmer')];
+    });
+    try {
+      await _firestore
+          .collection('workspaces').doc(wsId)
+          .collection('devis').doc(item.id)
+          .set({
+        'status': 'À planifier',
+        'updated': 'Pose à programmer',
+        'metreurUpdatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   Future<void> _persistRequestToCloud(_MeasureCardData data) async {
     if (_workspaceId == null) return;
     try {
-      final doc = _firestore.collection('workspaces').doc(_workspaceId).collection('devis').doc(data.id);
+      final doc = _firestore
+          .collection('workspaces')
+          .doc(_workspaceId)
+          .collection('devis')
+          .doc(data.id);
       await doc.set(
         {
-          'metreurStatus': data.status ?? 'En cours',
-          'meetingAt': data.meetingAt != null ? Timestamp.fromDate(data.meetingAt!) : null,
+          'status': data.status ?? 'Acceptée',
           'metreurId': data.metreurId ?? _userId,
           'workspaceId': _workspaceId,
           'updated': data.updated,
-          'address': data.address,
-          'title': data.title,
           'metreurUpdatedAt': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       );
-    } catch (_) {
-      // ignore remote errors for now
-    }
+    } catch (_) {}
   }
 }
 
@@ -750,7 +764,7 @@ class _PrioritiesSection extends StatelessWidget {
       decoration: BoxDecoration(
         color: _metreurCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.grey100),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -758,12 +772,12 @@ class _PrioritiesSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.flag, color: Colors.white70, size: 18),
+              const Icon(Icons.flag, color: AppColors.grey500, size: 18),
               const SizedBox(width: 8),
               Text(
                 title,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.grey900,
                   fontWeight: FontWeight.w800,
                   fontSize: 16,
                 ),
@@ -793,9 +807,9 @@ class _PriorityCard extends StatelessWidget {
     final tagColor = item.tag == 'Terrain' ? Colors.orangeAccent : Colors.blueGrey;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
+        color: AppColors.grey50,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.grey100),
       ),
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -806,14 +820,14 @@ class _PriorityCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.06),
+                  color: AppColors.grey50,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.access_time, color: Colors.white70, size: 16),
+                    const Icon(Icons.access_time, color: AppColors.grey500, size: 16),
                     const SizedBox(width: 6),
-                    Text(item.time, style: const TextStyle(color: Colors.white)),
+                    Text(item.time, style: const TextStyle(color: AppColors.grey900)),
                   ],
                 ),
               ),
@@ -822,19 +836,19 @@ class _PriorityCard extends StatelessWidget {
               const Spacer(),
               IconButton(
                 onPressed: () {},
-                icon: const Icon(Icons.navigation_outlined, color: Colors.white70),
+                icon: const Icon(Icons.navigation_outlined, color: AppColors.grey500),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             item.address,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+            style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
             '${item.client} • ${item.quote}',
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppColors.grey500),
           ),
         ],
       ),
@@ -856,7 +870,7 @@ class _Section extends StatelessWidget {
         Text(
           title,
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.grey900,
             fontWeight: FontWeight.w800,
             fontSize: 16,
           ),
@@ -887,7 +901,7 @@ class _MeasureCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: _metreurCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.grey100),
       ),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -911,7 +925,7 @@ class _MeasureCard extends StatelessWidget {
           Text(
             data.title,
             style: const TextStyle(
-              color: Colors.white,
+              color: AppColors.grey900,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -920,17 +934,17 @@ class _MeasureCard extends StatelessWidget {
             data.note,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppColors.grey500),
           ),
           if (data.meetingAt != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Icons.event_available_outlined, color: Colors.white54, size: 18),
+                const Icon(Icons.event_available_outlined, color: AppColors.grey400, size: 18),
                 const SizedBox(width: 6),
                 Text(
                   _formatMeeting(data.meetingAt!),
-                  style: const TextStyle(color: Colors.white70),
+                  style: const TextStyle(color: AppColors.grey500),
                 ),
               ],
             ),
@@ -959,7 +973,7 @@ class _Tag extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          color: Colors.white,
+          color: AppColors.grey900,
           fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
@@ -1111,40 +1125,296 @@ class _MeasureCardData {
   }
 }
 
-class _TabPill extends StatelessWidget {
-  const _TabPill({
-    required this.label,
-    required this.count,
-    required this.color,
-    required this.icon,
-  });
-
+class _MetPillTab extends StatelessWidget {
+  const _MetPillTab({required this.label, this.isSelected = false});
   final String label;
-  final int count;
-  final Color color;
-  final IconData icon;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withOpacity(0.18),
-          child: Icon(icon, color: color, size: 18),
+    return Tab(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.purple : Colors.transparent,
+          borderRadius: BorderRadius.circular(100),
+          border: isSelected ? null : Border.all(color: AppColors.grey200, width: 1.5),
         ),
-        const SizedBox(width: 8),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(width: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(10),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.grey600,
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
           ),
-          child: Text('$count', style: const TextStyle(fontWeight: FontWeight.w800)),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  const _StatChip({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.bg,
+  });
+  final String label;
+  final int count;
+  final Color color;
+  final Color bg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$count',
+              style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 20),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetreurList extends StatelessWidget {
+  const _MetreurList({
+    required this.items,
+    required this.emptyLabel,
+    required this.onCardTap,
+  });
+  final List<_MeasureCardData> items;
+  final String emptyLabel;
+  final void Function(_MeasureCardData) onCardTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return Center(
+        child: Text(emptyLabel, style: const TextStyle(color: AppColors.grey400)),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      itemCount: items.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (_, i) => _MetCard(
+        data: items[i],
+        onTap: () => onCardTap(items[i]),
+      ),
+    );
+  }
+}
+
+class _MetCard extends StatelessWidget {
+  const _MetCard({required this.data, required this.onTap});
+  final _MeasureCardData data;
+  final VoidCallback onTap;
+
+  static Color _accentColor(String? s) {
+    if (s == 'En cours' || s == 'Acceptée' || s == 'RDV métré' || s == 'Métré programmé') {
+      return AppColors.purple;
+    }
+    if (s == 'À commander' || s == 'Commande en cours') return AppColors.warning;
+    if (s == 'À planifier' || s == 'En pose' || s == 'Chantier à planifier') return AppColors.primary;
+    if (s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé') return AppColors.success;
+    return AppColors.warning;
+  }
+
+  static int _step(String? s) {
+    if (s == null || s == 'Nouvelle demande' || s == 'En attente') return 0;
+    if (s == 'Acceptée' || s == 'RDV métré' || s == 'Métré programmé') return 1;
+    if (s == 'En cours') return 2;
+    if (s == 'À commander') return 3;
+    if (s == 'Commande en cours') return 4;
+    if (s == 'À planifier' || s == 'En pose' || s == 'Chantier à planifier') return 5;
+    return 6;
+  }
+
+  static String _ctaLabel(String? s) {
+    if (s == 'Acceptée' || s == 'Métré programmé' || s == 'RDV métré') return 'Saisir métré';
+    if (s == 'En cours') return 'Saisir métré';
+    if (s == 'À commander') return 'Commander';
+    if (s == 'Commande en cours') return 'Confirmer';
+    if (s == 'À planifier' || s == 'En pose') return 'Planifier pose';
+    if (s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé') return 'Clôturer';
+    return 'Accepter';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _accentColor(data.status);
+    final step = _step(data.status);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.grey100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(width: 4, color: accent),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            data.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.grey900,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _MetStatusBadge(status: data.status, accent: accent),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      data.address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: AppColors.grey400, fontSize: 12),
+                    ),
+                    if (data.updated != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        data.updated!,
+                        style: const TextStyle(color: AppColors.grey300, fontSize: 11),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    // Step dots (même style que l'écran commercial)
+                    Row(
+                      children: List.generate(7, (i) {
+                        final done = i <= step;
+                        final active = i == step;
+                        return Container(
+                          width: active ? 18 : 8,
+                          height: 8,
+                          margin: const EdgeInsets.only(right: 4),
+                          decoration: BoxDecoration(
+                            color: done ? accent : AppColors.grey200,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              side: const BorderSide(color: AppColors.grey200),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: onTap,
+                            child: const Text(
+                              'Voir devis',
+                              style: TextStyle(
+                                color: AppColors.grey700,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: accent,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            onPressed: onTap,
+                            child: Text(
+                              _ctaLabel(data.status),
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetStatusBadge extends StatelessWidget {
+  const _MetStatusBadge({required this.status, required this.accent});
+  final String? status;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = status ?? 'En attente';
+    final bg = accent.withOpacity(0.12);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: accent,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
@@ -1243,7 +1513,7 @@ class _StatusList extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Text(
             emptyLabel,
-            style: const TextStyle(color: Colors.white54),
+            style: const TextStyle(color: AppColors.grey400),
           ),
         ),
       );
@@ -1454,6 +1724,7 @@ class _MeasureRequestSummary extends StatefulWidget {
     required this.onAskInfo,
     required this.onSchedule,
     this.onRefresh,
+    this.workspaceId,
   });
 
   final _MeasureCardData data;
@@ -1461,6 +1732,7 @@ class _MeasureRequestSummary extends StatefulWidget {
   final VoidCallback onAskInfo;
   final Future<DateTime?> Function() onSchedule;
   final VoidCallback? onRefresh;
+  final String? workspaceId;
 
   @override
   State<_MeasureRequestSummary> createState() => _MeasureRequestSummaryState();
@@ -1489,24 +1761,32 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
 
     if (updatedProducts != null && updatedProducts is List) {
       // Update local state and Firestore
-      final updatedDraft = _QuoteDraft.fromMap({
-        ...data.draft!.toMap(),
-        'products': updatedProducts,
-      });
+      final updatedDraft = data.draft != null
+          ? _QuoteDraft.fromMap({
+              ...data.draft!.toMap(),
+              'products': updatedProducts,
+            })
+          : null;
 
       try {
-        final wsId = data.workspaceId; // Ensure we have a workspace ID
-        if (wsId == null) throw 'Workspace ID missing';
+        final wsId = data.workspaceId ?? widget.workspaceId;
+        if (wsId == null) throw 'Workspace ID manquant';
+
+        final updatePayload = <String, dynamic>{
+          'status': 'À commander',
+          'updated': 'Métré terminé',
+          'metreurUpdatedAt': FieldValue.serverTimestamp(),
+        };
+        if (updatedDraft != null) {
+          updatePayload['draft'] = updatedDraft.toMap();
+        }
 
         await FirebaseFirestore.instance
             .collection('workspaces')
             .doc(wsId)
             .collection('devis')
             .doc(data.id)
-            .update({
-          'draft': updatedDraft.toMap(),
-          'updated': DateTime.now().toIso8601String(),
-        });
+            .set(updatePayload, SetOptions(merge: true));
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1545,19 +1825,19 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.grey900, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
           'Demande de métré',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.grey900,
             fontWeight: FontWeight.w800,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_horiz, color: Colors.white70),
+            icon: const Icon(Icons.more_horiz, color: AppColors.grey500),
             onPressed: () {},
           ),
           const SizedBox(width: 6),
@@ -1579,7 +1859,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                           Text(
                             data.title,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: AppColors.grey900,
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                             ),
@@ -1641,7 +1921,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                           Text(
                             'Éléments à métrer',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: AppColors.grey900,
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                             ),
@@ -1661,13 +1941,13 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                                     Text(
                                       '$label : ',
                                       style: const TextStyle(
-                                          color: Colors.white54, fontSize: 13),
+                                          color: AppColors.grey400, fontSize: 13),
                                     ),
                                     Expanded(
                                       child: Text(
                                         value,
                                         style: const TextStyle(
-                                            color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                            color: AppColors.grey900, fontSize: 13, fontWeight: FontWeight.w500),
                                       ),
                                     ),
                                   ],
@@ -1684,9 +1964,9 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                                   margin: const EdgeInsets.only(bottom: 12),
                                   padding: const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.04),
+                                    color: AppColors.grey50,
                                     borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.white12),
+                                    border: Border.all(color: AppColors.grey100),
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1713,12 +1993,12 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                               decoration: BoxDecoration(
-                                                border: Border.all(color: Colors.white12),
+                                                border: Border.all(color: AppColors.grey100),
                                                 borderRadius: BorderRadius.circular(20),
                                               ),
                                               child: Text(
                                                 'Qté: ${p.quantite}',
-                                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                                style: const TextStyle(color: AppColors.grey500, fontSize: 12),
                                               ),
                                             ),
                                         ],
@@ -1757,7 +2037,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                             const Text(
                               'Résumé',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.grey900,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -1783,14 +2063,14 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                             const Text(
                               'Notes commerciales',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.grey900,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               data.note,
-                              style: const TextStyle(color: Colors.white70, height: 1.4),
+                              style: const TextStyle(color: AppColors.grey500, height: 1.4),
                             ),
                           ],
                         ),
@@ -1805,7 +2085,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                             const Text(
                               'Pièces jointes',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: AppColors.grey900,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -1836,11 +2116,11 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                   Expanded(
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                        side: BorderSide(color: AppColors.grey50),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        backgroundColor: Colors.white.withOpacity(0.04),
+                        backgroundColor: AppColors.grey50,
                       ),
                       onPressed: widget.onAskInfo,
                       child: const Text('Demander des infos'),
@@ -1884,12 +2164,16 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
 
                             return Row(
                               mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(hasMeasurements ? Icons.edit : Icons.play_arrow_rounded, color: Colors.black),
                                 const SizedBox(width: 8),
-                                Text(
-                                  hasMeasurements ? 'Modifier le métré' : 'Démarrer le métré',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                Flexible(
+                                  child: Text(
+                                    hasMeasurements ? 'Modifier le métré' : 'Démarrer le métré',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ],
                             );
@@ -1917,9 +2201,9 @@ class _GlassCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: AppColors.grey50,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.grey100),
         boxShadow: const [
           BoxShadow(
             color: Colors.black54,
@@ -1954,7 +2238,7 @@ class _SummaryLine extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.white54, size: 18),
+          Icon(icon, color: AppColors.grey400, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1962,12 +2246,12 @@ class _SummaryLine extends StatelessWidget {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  style: const TextStyle(color: AppColors.grey400, fontSize: 12),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                  style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -1992,9 +2276,9 @@ class _AttachmentRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.04),
+          color: AppColors.grey50,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white12),
+          border: Border.all(color: AppColors.grey100),
         ),
         padding: const EdgeInsets.all(10),
         child: Row(
@@ -2003,16 +2287,16 @@ class _AttachmentRow extends StatelessWidget {
               width: 72,
               height: 52,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: AppColors.grey50,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(data.icon, color: Colors.white70),
+              child: Icon(data.icon, color: AppColors.grey500),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 data.label,
-                style: const TextStyle(color: Colors.white70),
+                style: const TextStyle(color: AppColors.grey500),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -2036,12 +2320,12 @@ class _PillButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextButton.icon(
       style: TextButton.styleFrom(
-        backgroundColor: Colors.white.withOpacity(0.08),
+        backgroundColor: AppColors.grey50,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.white.withOpacity(0.12)),
+          side: BorderSide(color: AppColors.grey50),
         ),
       ),
       onPressed: onPressed,
@@ -2083,3 +2367,53 @@ class _PrimaryAction extends StatelessWidget {
     );
   }
 }
+
+// ─── Bottom nav item ──────────────────────────────────────────────────────────
+class _MetNavItem extends StatelessWidget {
+  const _MetNavItem({required this.icon, required this.label, required this.active, required this.onTap});
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 24, color: active ? AppColors.primary : AppColors.grey400),
+            const SizedBox(height: 3),
+            Text(label, style: TextStyle(fontSize: 10, fontWeight: active ? FontWeight.w700 : FontWeight.w500, color: active ? AppColors.primary : AppColors.grey400)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Données de démonstration ─────────────────────────────────────────────────
+final _kDemoNewRequests = <_MeasureCardData>[
+  _MeasureCardData(id: 'demo1', title: 'Dupont Jean', address: '14 rue Ledru-Rollin, Paris 15e', note: 'Nouvelle demande', status: 'Nouvelle demande', updated: 'Il y a 2 jours', phone: '06 12 34 56 78'),
+  _MeasureCardData(id: 'demo2', title: 'Rousseau Claire', address: '7 bd Victor Hugo, Nice', note: 'Nouveau', status: 'Nouvelle demande', updated: 'Il y a 3 jours', phone: '06 98 76 54 32'),
+];
+
+final _kDemoAccepted = <_MeasureCardData>[
+  _MeasureCardData(id: 'demo3', title: 'Martin Sophie', address: '8 avenue des Arts, Lyon 3e', note: 'RDV Mer 02/07 à 09h00', status: 'En cours', updated: 'RDV programmé', phone: '06 55 44 33 22', meetingAt: DateTime.now().add(const Duration(days: 3))),
+];
+
+final _kDemoToOrder = <_MeasureCardData>[
+  _MeasureCardData(id: 'demo4', title: 'Laurent Céline', address: '5 impasse des Pins, Toulouse', note: 'Métré validé — à commander', status: 'À commander', updated: 'Devis accepté'),
+];
+
+final _kDemoPlan = <_MeasureCardData>[
+  _MeasureCardData(id: 'demo5', title: 'Bernard Marc', address: '22 quai de la Loire, Nantes', note: 'Pose à programmer', status: 'À planifier', updated: 'Commande reçue'),
+  _MeasureCardData(id: 'demo6', title: 'Petit Thomas', address: '3 allée des Roses, Bordeaux', note: 'En cours de pose', status: 'En pose', updated: 'Équipe sur place'),
+];
+
+final _kDemoToClose = <_MeasureCardData>[
+  _MeasureCardData(id: 'demo7', title: 'Moreau Julie', address: '17 rue du Moulin, Strasbourg', note: 'Travaux terminés', status: 'Terminé', updated: 'Terminé le 26/06'),
+];

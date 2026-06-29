@@ -1,8 +1,17 @@
-2import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 const Color _bg = Color(0xFF07090D);
 const Color _accent = Color(0xFF00E676); // Metreur Green
 const Color _cardBg = Color(0xFF13161C);
+
+// PDF accent color matching WorkIt branding
+final _pdfAccent = PdfColor.fromHex('#00F795');
+const _pdfGrey = PdfColors.grey200;
+const _pdfDarkGrey = PdfColors.grey600;
+const _pdfBlack = PdfColors.black;
 
 class MeasurementFormScreen extends StatefulWidget {
   const MeasurementFormScreen({super.key, required this.draftData, this.initialIndex = 0});
@@ -25,6 +34,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
           .toList();
 
   late int _currentIndex;
+  bool _generating = false;
 
   // Temporary local state for measurements
   final Map<int, Map<String, String>> _measurements = {};
@@ -47,18 +57,12 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
                  'cjDroite': p['cjDroite']?.toString() ?? '',
                  'note': p['note']?.toString() ?? '',
                  'ref': p['ref']?.toString() ?? '',
-                 'color': p['couleur']?.toString() ?? '', // Pre-fill with existing color if not modified? 
-                 // Actually color might be different from planned. Be simpler:
-                 // if new color is set, use it. if not, allow user to input.
-                 // let's check if 'couleur' was modified? No, separate field if we want distinct 'couleurReelle' but user asked for just color.
-                 // Let's assume the input fields in schematic override or refine.
+                 'color': p['couleur']?.toString() ?? '',
              };
-              // Special case: if these fields are set, use them.
-             if (p['couleur'] != null) _measurements[i]!['color'] = p['couleur']; 
+             if (p['couleur'] != null) _measurements[i]!['color'] = p['couleur'];
              if (p['quantite'] != null) _measurements[i]!['qty'] = p['quantite'].toString();
         } else {
-             // Pre-populate with planned values for convenience?
-              _measurements[i] = {
+             _measurements[i] = {
                  'color': p['couleur']?.toString() ?? '',
                  'qty': p['quantite']?.toString() ?? '1',
               };
@@ -70,6 +74,45 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   void dispose() {
     _pageControllerCached?.dispose();
     super.dispose();
+  }
+
+  void _splitProduct(int index) {
+    final product = _products[index];
+    final qty = (product['quantite'] is int)
+        ? product['quantite'] as int
+        : int.tryParse(product['quantite']?.toString() ?? '1') ?? 1;
+    if (qty <= 1) return;
+
+    final baseName = product['typeProduit']?.toString() ?? 'Élément';
+    final copies = List.generate(qty, (i) => {
+      ...product,
+      'quantite': 1,
+      '_splitRef': '$baseName ${i + 1}/$qty',
+    });
+
+    // Shift measurements after index to make room for new pages
+    final shifted = <int, Map<String, String>>{};
+    _measurements.forEach((key, value) {
+      if (key < index) {
+        shifted[key] = value;
+      } else if (key == index) {
+        shifted[index] = value; // first copy keeps original measurements
+      } else {
+        shifted[key + qty - 1] = value;
+      }
+    });
+    _measurements.clear();
+    _measurements.addAll(shifted);
+
+    _productsCached!.removeAt(index);
+    _productsCached!.insertAll(index, copies);
+
+    _pageControllerCached?.dispose();
+    _pageControllerCached = null;
+
+    setState(() {
+      _currentIndex = index;
+    });
   }
 
   void _updateMeasurement(int index, String key, String value) {
@@ -84,6 +127,394 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   String _getMeasurement(int index, String key) {
     return _measurements[index]?[key] ?? '';
   }
+
+  // ---------------------------------------------------------------------------
+  // PDF helpers
+  // ---------------------------------------------------------------------------
+
+  /// Fusionne les données de _products avec _measurements pour avoir le plus
+  /// à jour possible.
+  List<Map<String, dynamic>> _buildProductsWithMeasurements() {
+    final result = <Map<String, dynamic>>[];
+    for (int i = 0; i < _products.length; i++) {
+      final base = Map<String, dynamic>.from(_products[i]);
+      final m = _measurements[i];
+      if (m != null) {
+        if (m['width']?.isNotEmpty == true) base['largeurReelle'] = m['width'];
+        if (m['height']?.isNotEmpty == true) base['hauteurReelle'] = m['height'];
+        if (m['cjHaut']?.isNotEmpty == true) base['cjHaut'] = m['cjHaut'];
+        if (m['cjBas']?.isNotEmpty == true) base['cjBas'] = m['cjBas'];
+        if (m['cjGauche']?.isNotEmpty == true) base['cjGauche'] = m['cjGauche'];
+        if (m['cjDroite']?.isNotEmpty == true) base['cjDroite'] = m['cjDroite'];
+        if (m['note']?.isNotEmpty == true) base['note'] = m['note'];
+        if (m['ref']?.isNotEmpty == true) base['ref'] = m['ref'];
+        if (m['color']?.isNotEmpty == true) base['couleur'] = m['color'];
+        if (m['qty']?.isNotEmpty == true) {
+          base['quantite'] = int.tryParse(m['qty']!) ?? base['quantite'];
+        }
+      }
+      result.add(base);
+    }
+    return result;
+  }
+
+  String _fmt(dynamic value, {String fallback = '—'}) {
+    if (value == null) return fallback;
+    final s = value.toString().trim();
+    return s.isEmpty ? fallback : s;
+  }
+
+  String _today() {
+    final now = DateTime.now();
+    final d = now.day.toString().padLeft(2, '0');
+    final mo = now.month.toString().padLeft(2, '0');
+    return '$d/${mo}/${now.year}';
+  }
+
+  // -- Section builders --
+
+  pw.Widget _buildPdfHeader() {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      decoration: pw.BoxDecoration(
+        color: _pdfAccent,
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'WorkIt',
+            style: pw.TextStyle(
+              fontSize: 28,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.black,
+            ),
+          ),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: [
+              pw.Text(
+                'BON DE COMMANDE — MÉTRÉ',
+                style: pw.TextStyle(
+                  fontSize: 13,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.black,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Date : ${_today()}',
+                style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildSectionTitle(String title) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 8),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: pw.BoxDecoration(
+        color: _pdfAccent,
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+      ),
+      child: pw.Text(
+        title.toUpperCase(),
+        style: pw.TextStyle(
+          fontSize: 10,
+          fontWeight: pw.FontWeight.bold,
+          color: PdfColors.black,
+        ),
+      ),
+    );
+  }
+
+  pw.Widget _buildInfoRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 3),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.SizedBox(
+            width: 110,
+            child: pw.Text(
+              label,
+              style: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: _pdfDarkGrey,
+              ),
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Text(
+              value,
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.black),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfClientSection() {
+    final d = widget.draftData;
+    final firstName = _fmt(d['clientFirstName']);
+    final lastName = _fmt(d['clientName']);
+    final fullName = (firstName == '—' && lastName == '—')
+        ? '—'
+        : [if (firstName != '—') firstName, if (lastName != '—') lastName].join(' ');
+
+    final street = _fmt(d['street']);
+    final postal = _fmt(d['postal']);
+    final city = _fmt(d['city']);
+    final addressParts = [
+      if (street != '—') street,
+      if (postal != '—' || city != '—') '${postal != '—' ? postal : ''} ${city != '—' ? city : ''}'.trim(),
+    ];
+    final address = addressParts.isEmpty ? '—' : addressParts.join(', ');
+
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: _pdfGrey,
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Client'),
+          _buildInfoRow('Nom', fullName),
+          _buildInfoRow('Adresse', address),
+          _buildInfoRow('Téléphone', _fmt(d['phone'])),
+          _buildInfoRow('Email', _fmt(d['email'])),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfChantierSection() {
+    final d = widget.draftData;
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: _pdfGrey,
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('Chantier'),
+          _buildInfoRow('Type de chantier', _fmt(d['chantierType'])),
+          _buildInfoRow('Type d\'habitation', _fmt(d['typeHabitation'])),
+          _buildInfoRow('Accessibilité', _fmt(d['accessibilite'])),
+          if (_fmt(d['chantierNotes']) != '—')
+            _buildInfoRow('Notes commerciales', _fmt(d['chantierNotes'])),
+          if (_fmt(d['commentaire']) != '—')
+            _buildInfoRow('Commentaire', _fmt(d['commentaire'])),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfElementsSection(List<Map<String, dynamic>> products) {
+    final elements = <pw.Widget>[
+      _buildSectionTitle('Éléments — ${products.length} article(s)'),
+    ];
+
+    for (int i = 0; i < products.length; i++) {
+      final p = products[i];
+      final isEven = i % 2 == 0;
+      final bgColor = isEven ? PdfColors.white : _pdfGrey;
+
+      // Build type string
+      final typeParts = [
+        _fmt(p['categoryKey']),
+        _fmt(p['typeProduit']),
+        _fmt(p['sousCategorie']),
+        _fmt(p['variante']),
+      ].where((s) => s != '—').toList();
+      final typeStr = typeParts.isEmpty ? '—' : typeParts.join(' > ');
+
+      // Couleur
+      final couleur = _fmt(p['couleur']);
+      final couleurDetail = _fmt(p['couleurDetail']);
+      final couleurStr = couleur == '—'
+          ? '—'
+          : (couleurDetail != '—' ? '$couleur ($couleurDetail)' : couleur);
+
+      // Dimensions prévues
+      final lPrev = _fmt(p['largeur']);
+      final hPrev = _fmt(p['hauteur']);
+      final unite = _fmt(p['unite'], fallback: 'mm');
+      final prevStr = (lPrev == '—' && hPrev == '—')
+          ? '—'
+          : '${lPrev == '—' ? '?' : lPrev} x ${hPrev == '—' ? '?' : hPrev} $unite';
+
+      // Dimensions réelles
+      final lReel = _fmt(p['largeurReelle']);
+      final hReel = _fmt(p['hauteurReelle']);
+      final reelStr = (lReel == '—' && hReel == '—')
+          ? '—'
+          : '${lReel == '—' ? '?' : lReel} x ${hReel == '—' ? '?' : hReel} $unite';
+
+      // Cotes joints
+      final cjHaut = _fmt(p['cjHaut']);
+      final cjBas = _fmt(p['cjBas']);
+      final cjGauche = _fmt(p['cjGauche']);
+      final cjDroite = _fmt(p['cjDroite']);
+      final hasCj = [cjHaut, cjBas, cjGauche, cjDroite].any((s) => s != '—');
+
+      // Note & ref
+      final note = _fmt(p['note']);
+      final ref = _fmt(p['ref']);
+      final qty = _fmt(p['quantite']);
+
+      elements.add(
+        pw.Container(
+          margin: const pw.EdgeInsets.only(bottom: 6),
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(
+            color: bgColor,
+            border: pw.Border.all(color: PdfColors.grey300),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // Element header
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Élément ${i + 1}',
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                      color: _pdfAccent,
+                    ),
+                  ),
+                  if (ref != '—')
+                    pw.Text(
+                      ref,
+                      style: pw.TextStyle(
+                        fontSize: 9,
+                        fontStyle: pw.FontStyle.italic,
+                        color: _pdfDarkGrey,
+                      ),
+                    ),
+                ],
+              ),
+              pw.Divider(color: PdfColors.grey300, thickness: 0.5),
+              // Type
+              _buildInfoRow('Type', typeStr),
+              _buildInfoRow('Couleur', couleurStr),
+              // Dimensions
+              pw.Row(
+                children: [
+                  pw.Expanded(child: _buildInfoRow('Dim. prévues', prevStr)),
+                  pw.Expanded(child: _buildInfoRow('Dim. réelles', reelStr)),
+                ],
+              ),
+              // Cotes joints
+              if (hasCj)
+                pw.Row(
+                  children: [
+                    pw.Expanded(child: _buildInfoRow('CJ Haut', cjHaut)),
+                    pw.Expanded(child: _buildInfoRow('CJ Bas', cjBas)),
+                    pw.Expanded(child: _buildInfoRow('CJ Gauche', cjGauche)),
+                    pw.Expanded(child: _buildInfoRow('CJ Droite', cjDroite)),
+                  ],
+                ),
+              _buildInfoRow('Quantité', qty),
+              if (note != '—') _buildInfoRow('Note métreur', note),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: elements,
+    );
+  }
+
+  pw.Widget _buildPdfFooter() {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(12),
+      decoration: pw.BoxDecoration(
+        color: _pdfGrey,
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'Document généré par WorkIt le ${_today()}',
+            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+          ),
+          pw.SizedBox(height: 16),
+          pw.Row(
+            children: [
+              pw.Text(
+                'Visa métreur :',
+                style: pw.TextStyle(
+                  fontSize: 10,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(width: 120),
+              pw.Container(
+                width: 150,
+                height: 1,
+                color: PdfColors.black,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _generateAndPrintPdf() async {
+    setState(() => _generating = true);
+    try {
+      final pdf = pw.Document();
+      final allProducts = _buildProductsWithMeasurements();
+
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          build: (context) => [
+            _buildPdfHeader(),
+            pw.SizedBox(height: 20),
+            _buildPdfClientSection(),
+            pw.SizedBox(height: 16),
+            _buildPdfChantierSection(),
+            pw.SizedBox(height: 16),
+            _buildPdfElementsSection(allProducts),
+            pw.SizedBox(height: 24),
+            _buildPdfFooter(),
+          ],
+        ),
+      );
+
+      await Printing.layoutPdf(
+        onLayout: (format) async => pdf.save(),
+        name: 'bon_commande_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -102,12 +533,25 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.print_outlined, color: Colors.white70),
-            onPressed: () {
-              // TODO: Print/PDF feature
-            },
-          ),
+          if (_generating)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white70,
+                  ),
+                ),
+              ),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.print_outlined, color: Colors.white70),
+              onPressed: _generateAndPrintPdf,
+            ),
         ],
       ),
       body: SafeArea(
@@ -119,11 +563,17 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
                 itemCount: _products.length,
                 onPageChanged: (idx) => setState(() => _currentIndex = idx),
                 itemBuilder: (context, index) {
+                  final product = _products[index];
+                  final qty = (product['quantite'] is int)
+                      ? product['quantite'] as int
+                      : int.tryParse(product['quantite']?.toString() ?? '1') ?? 1;
+                  final isSplit = product['_splitRef'] != null;
                   return _SchematicEditor(
-                    product: _products[index],
+                    product: product,
                     index: index,
                     measurements: _measurements[index] ?? {},
                     onUpdate: (key, val) => _updateMeasurement(index, key, val),
+                    onSplit: (qty > 1 && !isSplit) ? () => _splitProduct(index) : null,
                   );
                 },
               ),
@@ -186,12 +636,14 @@ class _SchematicEditor extends StatelessWidget {
     required this.index,
     required this.measurements,
     required this.onUpdate,
+    this.onSplit,
   });
 
   final Map<String, dynamic> product;
   final int index;
   final Map<String, String> measurements;
   final Function(String, String) onUpdate;
+  final VoidCallback? onSplit;
 
   @override
   Widget build(BuildContext context) {
@@ -204,7 +656,7 @@ class _SchematicEditor extends StatelessWidget {
         // Calculate available space
         final h = constraints.maxHeight;
         final w = constraints.maxWidth;
-        
+
         // Dynamic sizing based on screen size
         final double frameSize = w < 400 ? 180 : 240;
 
@@ -250,9 +702,41 @@ class _SchematicEditor extends StatelessWidget {
                               'Prévu: $wPrev x $hPrev mm',
                               style: const TextStyle(color: Colors.white54, fontSize: 13),
                             ),
+                            if ((product['_splitRef'] as String?) != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                product['_splitRef'] as String,
+                                style: const TextStyle(color: _accent, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                            ],
                           ],
                         ),
                       ),
+                      if (onSplit != null) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: onSplit,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.orangeAccent.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.orangeAccent.withOpacity(0.5)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.call_split, color: Colors.orangeAccent, size: 14),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Scinder ×${product['quantite']}',
+                                  style: const TextStyle(color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -260,7 +744,7 @@ class _SchematicEditor extends StatelessWidget {
 
                 // Schematic View Container (Frame + CJs)
                 SizedBox(
-                  height: 360, 
+                  height: 360,
                   width: double.infinity,
                   child: Stack(
                     alignment: Alignment.center,
@@ -310,7 +794,7 @@ class _SchematicEditor extends StatelessWidget {
                       Positioned(
                         top: 0,
                         child: _SchematicInput(
-                          label: 'CJ Haut', 
+                          label: 'CJ Haut',
                           value: measurements['cjHaut'],
                           onChanged: (v) => onUpdate('cjHaut', v),
                         ),
@@ -318,9 +802,9 @@ class _SchematicEditor extends StatelessWidget {
 
                       // CJ Bas (Bottom Center)
                       Positioned(
-                        bottom: 0, 
+                        bottom: 0,
                         child: _SchematicInput(
-                          label: 'CJ Bas', 
+                          label: 'CJ Bas',
                           value: measurements['cjBas'],
                           onChanged: (v) => onUpdate('cjBas', v),
                         ),
@@ -330,7 +814,7 @@ class _SchematicEditor extends StatelessWidget {
                       Positioned(
                         left: 0,
                         child: _SchematicInput(
-                          label: 'CJ Gauche', 
+                          label: 'CJ Gauche',
                           value: measurements['cjGauche'],
                            onChanged: (v) => onUpdate('cjGauche', v),
                         ),
@@ -340,7 +824,7 @@ class _SchematicEditor extends StatelessWidget {
                       Positioned(
                         right: 0,
                         child: _SchematicInput(
-                          label: 'CJ Droite', 
+                          label: 'CJ Droite',
                           value: measurements['cjDroite'],
                            onChanged: (v) => onUpdate('cjDroite', v),
                         ),
@@ -348,7 +832,7 @@ class _SchematicEditor extends StatelessWidget {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 20),
 
                 // Main Dimensions Row (Width & Height below the frame)
@@ -358,7 +842,7 @@ class _SchematicEditor extends StatelessWidget {
                      Expanded(
                        child: _MainDimensionInput(
                         label: 'Largeur',
-                        value: measurements['width'], 
+                        value: measurements['width'],
                          onChanged: (v) => onUpdate('width', v),
                       ),
                      ),
@@ -366,13 +850,13 @@ class _SchematicEditor extends StatelessWidget {
                      Expanded(
                        child: _MainDimensionInput(
                         label: 'Hauteur',
-                        value: measurements['height'], 
+                        value: measurements['height'],
                          onChanged: (v) => onUpdate('height', v),
                       ),
                      ),
                   ],
                 ),
-                
+
                 const SizedBox(height: 20),
                 // Footer Inputs
                 Row(
@@ -404,7 +888,7 @@ class _SchematicInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = TextEditingController(text: value)
       ..selection = TextSelection.collapsed(offset: value?.length ?? 0);
-      
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -469,8 +953,8 @@ class _MainDimensionInput extends StatelessWidget {
                 onChanged: onChanged,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(
-                  color: Colors.white, 
-                  fontWeight: FontWeight.w900, 
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
                   fontSize: 18,
                 ),
                 decoration: const InputDecoration(

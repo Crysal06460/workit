@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/onboarding_models.dart';
-import 'invite_team_screen.dart';
+import 'final_save_screen.dart';
 
 class PlanSelectionScreen extends StatefulWidget {
   const PlanSelectionScreen({super.key, required this.data});
@@ -26,82 +26,44 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
   void _continue() {
     widget.data.plan = selectedPlan;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => InviteTeamScreen(data: widget.data)),
+      MaterialPageRoute(builder: (_) => FinalSaveScreen(data: widget.data)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    const bg = Color(0xFF07090D);
+    const accent = Color(0xFF00E676);
     return Scaffold(
-      backgroundColor: const Color(0xFF07090D),
+      backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          'Choisir votre configuration',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-        ),
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF0E1726), Color(0xFF0A1A2F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
-                ),
-                padding: const EdgeInsets.all(18),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: const Icon(
-                        Icons.verified,
-                        color: Color(0xFF00E676),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Choisir la taille de votre équipe',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Sélectionnez la configuration adaptée à votre structure.',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+              const _StepProgress(current: 3, total: 3),
+              const SizedBox(height: 28),
+              const Text(
+                'Ma formule',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 6),
+              const Text(
+                'Choisissez la configuration adaptée à votre équipe.',
+                style: TextStyle(color: Colors.white60, fontSize: 15),
+              ),
+              const SizedBox(height: 20),
               Expanded(
                 child: ListView.separated(
                   itemCount: plans.length,
@@ -117,29 +79,68 @@ class _PlanSelectionScreenState extends State<PlanSelectionScreen> {
                   },
                 ),
               ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
+                height: 52,
                 child: FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF00E676),
+                    backgroundColor: accent,
                     foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
                     textStyle: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w900,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
                   onPressed: _continue,
-                  child: Text('Continuer avec ${selectedPlan.name}'),
+                  child: Text('Créer mon espace — ${selectedPlan.name}'),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _StepProgress extends StatelessWidget {
+  const _StepProgress({required this.current, required this.total});
+
+  final int current;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Étape $current sur $total',
+          style: const TextStyle(color: Colors.white54, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: List.generate(total, (i) {
+            final done = i < current;
+            return Expanded(
+              child: Container(
+                margin: EdgeInsets.only(right: i < total - 1 ? 6 : 0),
+                height: 4,
+                decoration: BoxDecoration(
+                  color: done
+                      ? const Color(0xFF00E676)
+                      : Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
     );
   }
 }
@@ -152,10 +153,8 @@ class PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final borderColor = isSelected ? const Color(0xFF00E676) : Colors.white24;
-    final titleColor = Colors.white;
-    final subtitleColor = Colors.white70;
+    final borderColor =
+        isSelected ? const Color(0xFF00E676) : Colors.white24;
     final seatBadges = plan.seatsByRole.entries.map((entry) {
       final seatLabel = plan.seatLabelForRole(entry.key);
       final pluralLabel = roleDisplayNamePlural(entry.key);
@@ -168,7 +167,8 @@ class PlanCard extends StatelessWidget {
               ? '$seatLabel $singularLabel'
               : '$seatLabel $pluralLabel';
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.08),
           borderRadius: BorderRadius.circular(12),
@@ -183,6 +183,7 @@ class PlanCard extends StatelessWidget {
         ),
       );
     }).toList();
+
     return Card(
       shape: RoundedRectangleBorder(
         side: BorderSide(color: borderColor, width: 1.4),
@@ -191,63 +192,54 @@ class PlanCard extends StatelessWidget {
       color: const Color(0xFF0F1422),
       elevation: isSelected ? 6 : 0,
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        plan.name,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Price hidden for trial flow
-                      // Text(
-                      //   plan.price,
-                      //   style: const TextStyle(color: Colors.white70),
-                      // ),
-                    ],
+                  child: Text(
+                    plan.name,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 if (isSelected)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 8,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00E676).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
+                      color:
+                          const Color(0xFF00E676).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: const Color(0xFF00E676).withOpacity(0.6),
                       ),
                     ),
                     child: const Text(
-                      'Choisi',
+                      'Sélectionné',
                       style: TextStyle(
                         color: Color(0xFF00E676),
                         fontWeight: FontWeight.w700,
+                        fontSize: 13,
                       ),
                     ),
                   ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final badge in seatBadges) ...[
                   badge,
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                 ],
               ],
             ),
