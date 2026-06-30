@@ -1,5 +1,5 @@
 # WorkIt — Handover complet inter-session
-**Dernière mise à jour : 2026-06-29 — REFONTE DESIGN EN COURS**
+**Dernière mise à jour : 2026-06-30 — REFONTE DESIGN EN COURS**
 **Accessible depuis : chrisbeylet@gmail.com ET cbeylet06@gmail.com**
 **Projet Flutter : `/Users/macbook/workit/`**
 
@@ -12,7 +12,7 @@
 - Stack : Flutter + Firebase (Auth, Firestore, Storage, Functions, FCM)
 - **Aucun Riverpod** — StatefulWidget + SharedPreferences uniquement
 - **Champ critique** : `status` (PAS `metreurStatus`) sur les documents `devis`
-- **0 erreur Flutter analyze** au dernier check (2026-06-17)
+- **0 erreur Flutter analyze** au dernier check (2026-06-30)
 - Ce qui reste à faire : Stripe/abonnements + APNs iOS (config manuelle)
 - ⚠️ **REFONTE DESIGN EN COURS (2026-06-29)** — Christophe a démarré une refonte visuelle complète (thème clair, `AppColors` design system). Lire la section 17 avant toute modif des 3 écrans principaux.
 
@@ -769,13 +769,38 @@ Christophe a démarré seul une refonte visuelle complète : passage du thème s
 - Bottom nav maquette : **Mes chantiers / Planning / Photos / Profil**
 - ⚠️ Le screen actuel (`poseurs_home_screen.dart`) n'a probablement pas encore ce design (à vérifier en priorité à la prochaine session, pas encore audité comme Commercial)
 
+### Session 2026-06-30 — Onboarding + nettoyage thème Commercial
+
+**Nouveau : `lib/screens/onboarding_screen.dart`** (créé par Christophe, vérifié/corrigé par Claude)
+- Flow complet thème clair : Splash → Slides (3) → Bienvenue (créer espace / rejoindre équipe) → Corps de métier → Entreprise → Rôle → Création compte → Succès, + branche "Rejoindre une équipe" (code à 6 chiffres) → Succès
+- `main.dart` route vers `OnboardingScreen` au premier lancement (`workit_onboarding_done` non posé en `SharedPreferences`), sinon vers `EntryScreen`
+- **Bugs critiques corrigés dans `_createAccount()`** :
+  - `'adminId': uid` → **`'adminUid': uid`** sur le doc workspace — sans ça, la règle Firestore `request.resource.data.adminUid == uid()` rejetait la création (permission-denied) à CHAQUE inscription
+  - Ajout de `'companyId': workspaceId` sur `users/{uid}` (en plus de `workspaceId`) — sinon cassait les requêtes legacy type dropdown métreur (`commercial_home_screen.dart` filtre par `companyId`)
+- **Bug de layout splash corrigé** : `_buildSplash()` retournait un `Container` nu (pas un `Scaffold`) → dans la `Stack` interne d'`AnimatedSwitcher` (constraints loose), le Container se réduisait à la largeur de son contenu au lieu de remplir l'écran (visible en bleu sur la moitié gauche seulement, blanc à droite). Fix : `Scaffold` + `SizedBox.expand`, cohérent avec toutes les autres pages du flow.
+- Durée du splash : 2300ms → **4500ms** (pour pouvoir l'inspecter en dev sans le rater)
+
+**`lib/screens/entry_screen.dart` réécrit entièrement** — était resté dans l'ancien thème sombre (`#07090D`, vert `#00E676`) alors que c'est l'écran affiché après déconnexion. Maintenant thème clair cohérent (`AppColors`), bouton "Créer mon espace" pointe vers `OnboardingScreen` (plus vers l'ancien `AccountSetupScreen` orphelin).
+
+**`lib/screens/commercial_home_screen.dart` — header** : avatar (initiales) n'est plus cliquable, séparé d'un petit `IconButton` logout dédié à côté (`Icons.logout_rounded`). Déconnexion → `EntryScreen` (plus `SignInScreen` direct). Fini le risque de déconnexion accidentelle au tap sur l'avatar.
+
+**`lib/screens/commercial_home_screen.dart` — écran "Ajouter un devis" (`_AddQuoteScreen`) et bottom sheet "Voir détails" (`_ChantierDetailSheet`)** : nettoyage complet des résidus d'ancien thème sombre qui rendaient du texte/icônes quasi invisibles sur fond clair :
+- `_stepHeader()` : gradient noir `#101728→#0A1221` → carte blanche
+- `_StepBadge` : textes/bordures blanc transparent → gris lisibles
+- Carte "Élément X", bouton "Précédent", hint des champs, icônes (PDF, dropdown, image cassée) : `Colors.white10/24/38/54/70` → équivalents `AppColors.grey200/300/400/500/700`
+- `_statusColor()` (défaut), `_SectionHeader` (défaut), `_DetailRow` (défaut) : blanc → gris foncé — **c'était le pire bug** : tout le détail chantier (téléphone, email, métreur, dates de pose) était blanc sur fond blanc dans le bottom sheet
+
+⚠️ Fichier `/Users/macbook/workit/workit_onboarding_prototype.html` ajouté par Christophe (non encore consulté/intégré par Claude) — probablement un prototype HTML de référence pour l'onboarding.
+
 ### À faire à la prochaine session (ordre conseillé)
 1. Auditer `poseurs_home_screen.dart` (pas encore fait, contrairement à Commercial)
-2. Rebrancher les 4 points identifiés côté Commercial (cf. section 9) : bottom nav fonctionnel, calendrier, accès admin, confirmation logout
+2. Rebrancher les 3 points restants côté Commercial (cf. section 9) : bottom nav fonctionnel, bouton calendrier, accès admin (confirmation logout déjà fait le 2026-06-30)
 3. Ajouter le prix sur les cartes commercial (absent vs maquette)
 4. Vérifier/adapter le nombre de dots de progression par écran (5 pour commercial, 7 pour métreur d'après la maquette)
 5. Décider si on harmonise `app_colors.dart` avec la palette Adobe Color exacte ou si on garde les couleurs actuelles (proches mais différentes)
 6. Section "Actions urgentes" + barres colorées latérales côté métreur (présent en maquette, absent du code)
+7. Vérifier `workit_onboarding_prototype.html` à la racine — comprendre son rôle (prototype de référence ?) et si des écrans onboarding doivent encore être ajustés en fonction
+8. Repasser sur métreur et poseur pour chasser les mêmes résidus d'ancien thème sombre (`Colors.white10/24/38/54/70`, gradients `#101728`) que ceux trouvés et corrigés côté commercial aujourd'hui
 
 ---
 

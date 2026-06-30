@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/theme/app_colors.dart';
 import '../services/auth_navigation_service.dart';
-import 'account_setup_screen.dart';
+import 'onboarding_screen.dart';
 import 'sign_in_screen.dart';
 
+/// Écran d'accueil rapide pour les utilisateurs ayant déjà fait l'onboarding.
+/// (Le splash + slides ne sont montrés qu'une fois, via OnboardingScreen.)
 class EntryScreen extends StatefulWidget {
   const EntryScreen({super.key});
 
@@ -21,7 +24,7 @@ class _EntryScreenState extends State<EntryScreen> {
   Future<void> _handleSignIn(BuildContext context) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      // User is already logged in, check if FaceID is enabled
+      // Utilisateur déjà connecté côté Firebase — vérifier si FaceID est activé
       final prefs = await SharedPreferences.getInstance();
       final faceIdEnabled = prefs.getBool('workit_faceid_enabled') ?? false;
 
@@ -41,399 +44,101 @@ class _EntryScreenState extends State<EntryScreen> {
 
             if (didAuthenticate) {
               if (!mounted) return;
-               await AuthNavigationService().navigateUser(context, user);
-               return;
+              await AuthNavigationService().navigateUser(context, user);
+              return;
             }
           }
         } catch (e) {
           setState(() => _isAuthenticating = false);
-          // Fallback to normal sign in if error
-          print('Error auth: $e');
+          debugPrint('Error auth: $e');
         }
       }
     }
 
     if (!mounted) return;
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const SignInScreen()));
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SignInScreen()),
+    );
   }
 
   void _openSignup(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AccountSetupScreen()),
+      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF07090D),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Positioned(
-                top: -120,
-                left: -60,
-                right: -60,
-                child: Container(
-                  height: 300,
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      colors: [
-                        const Color(0xFF00E676).withOpacity(0.08),
-                        Colors.transparent,
-                      ],
-                      radius: 0.8,
-                    ),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(Icons.factory_outlined, size: 32, color: Colors.white),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Bon retour 👋',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.grey900,
+                  letterSpacing: -0.8,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Connectez-vous pour retrouver vos chantiers.',
+                style: TextStyle(fontSize: 15, color: AppColors.grey400),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isAuthenticating ? null : () => _handleSignIn(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: _isAuthenticating
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text(
+                          'Se connecter',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Center(
+                child: TextButton(
+                  onPressed: () => _openSignup(context),
+                  child: const Text(
+                    'Pas encore de compte — Créer mon espace',
+                    style: TextStyle(color: AppColors.primary, fontSize: 14),
                   ),
                 ),
               ),
-              SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 160, 20, 32),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.06),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white10),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(
-                                  Icons.bolt,
-                                  color: Color(0xFF00E676),
-                                  size: 18,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'WorkIt',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.04),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.white12),
-                            ),
-                            child: Row(
-                              children: const [
-                                Icon(
-                                  Icons.verified,
-                                  color: Colors.white70,
-                                  size: 16,
-                                ),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Espace sécurisé',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 28),
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF0F172A), Color(0xFF081324)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(26),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.06),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF00E676).withOpacity(0.15),
-                              blurRadius: 32,
-                              offset: const Offset(0, 18),
-                            ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF00E676,
-                                    ).withOpacity(0.14),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: const Color(
-                                        0xFF00E676,
-                                      ).withOpacity(0.5),
-                                    ),
-                                  ),
-                                  child: const Text(
-                                    'Bienvenue',
-                                    style: TextStyle(
-                                      color: Color(0xFF00E676),
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.1,
-                                    ),
-                                  ),
-                                ),
-                                const Spacer(),
-                                Icon(
-                                  Icons.auto_awesome,
-                                  color: Colors.white.withOpacity(0.7),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 18),
-                            Text(
-                              'Prêt à piloter vos chantiers ?',
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.4,
-                                height: 1.1,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            const SizedBox(height: 22),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF00E676),
-                                  foregroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 16,
-                                  ),
-                                  textStyle: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                onPressed: _isAuthenticating
-                                    ? null
-                                    : () => _handleSignIn(context),
-                                child: _isAuthenticating
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.black,
-                                        ),
-                                      )
-                                    : const Text('Se connecter'),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 44),
-                      Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0E1220),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.white10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.25),
-                              blurRadius: 18,
-                              offset: const Offset(0, 12),
-                            ),
-                          ],
-                        ),
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.06),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: Colors.white12),
-                              ),
-                              child: const Icon(
-                                Icons.rocket_launch_outlined,
-                                color: Color(0xFF00E676),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'Créer mon espace',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 17,
-                                    ),
-                                  ),
-                                  SizedBox(height: 6),
-                                  Text(
-                                    'Inscription gratuite en 3 étapes.',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => _openSignup(context),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: const [
-                                  Text(
-                                    'Commencer',
-                                    style: TextStyle(
-                                      color: Color(0xFF00E676),
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                  SizedBox(width: 4),
-                                  Icon(
-                                    Icons.arrow_forward,
-                                    color: Color(0xFF00E676),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      const SizedBox(height: 16),
-                      Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Text(
-                            'Accès dédié aux équipes commerciales, métreurs, poseurs.',
-                            style: const TextStyle(color: Colors.white60),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              const SizedBox(height: 8),
             ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _MetricPill extends StatelessWidget {
-  const _MetricPill({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white12),
-        ),
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(color: Colors.white60, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InlineBadge extends StatelessWidget {
-  const _InlineBadge({required this.label, required this.icon});
-
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: const Color(0xFF00E676), size: 16),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
           ),
-        ],
+        ),
       ),
     );
   }

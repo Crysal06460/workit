@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WorkIt — Prototype Onboarding</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.9.0/dist/tabler-icons.min.css">
+<style>
+:root{--blue:#2563EB;--blue-l:#EFF6FF;--purple:#7C3AED;--purple-l:#F5F3FF;--green:#059669;--green-l:#ECFDF5;--warn:#D97706;--warn-l:#FFFBEB;--red:#DC2626;--red-l:#FEF2F2;--g50:#F9FAFB;--g100:#F3F4F6;--g200:#E5E7EB;--g300:#D1D5DB;--g400:#9CA3AF;--g500:#6B7280;--g600:#4B5563;--g700:#374151;--g900:#111827}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+body{background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px;padding:20px}
+h1{color:#fff;font-size:14px;font-weight:500;opacity:.6;letter-spacing:.5px}
+.phone{width:375px;height:680px;background:#fff;border-radius:44px;border:8px solid #2a2a3e;overflow:hidden;position:relative;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;display:none;flex-direction:column}
+.screen.active{display:flex}
+.nav-row{display:flex;justify-content:center;gap:8px;align-items:center}
+.nav-dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.25);cursor:pointer;border:none;transition:.2s}
+.nav-dot.on{background:#fff}
+.nav-labels{display:flex;gap:0;justify-content:center}
+.nav-label{font-size:10px;color:rgba(255,255,255,.4);width:42px;text-align:center;cursor:pointer;transition:.2s}
+.nav-label.on{color:#fff}
+
+/* ── SPLASH ── */
+#s0{background:var(--blue);align-items:center;justify-content:center}
+.splash-logo{width:80px;height:80px;background:rgba(255,255,255,.18);border-radius:22px;border:1.5px solid rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;margin-bottom:20px}
+.splash-logo i{font-size:42px;color:#fff}
+.splash-title{font-size:32px;font-weight:800;color:#fff;letter-spacing:-1.2px;margin-bottom:8px}
+.splash-sub{font-size:14px;color:rgba(255,255,255,.7);text-align:center;line-height:1.5;margin-bottom:36px}
+.splash-dots{display:flex;gap:7px}
+.splash-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35)}
+
+/* ── SLIDES ── */
+#s1{background:#fff}
+.slide-skip{align-self:flex-end;padding:14px 16px;font-size:13px;color:var(--g400);border:none;background:none;cursor:pointer}
+.slide-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 36px;text-align:center}
+.slide-icon{width:100px;height:100px;border-radius:28px;display:flex;align-items:center;justify-content:center;margin-bottom:26px}
+.slide-icon i{font-size:50px}
+.slide-title{font-size:21px;font-weight:800;color:var(--g900);letter-spacing:-.5px;margin-bottom:10px}
+.slide-sub{font-size:14px;color:var(--g400);line-height:1.6}
+.slide-footer{padding:0 24px 32px;display:flex;flex-direction:column;gap:16px;align-items:center}
+.slide-pips{display:flex;gap:5px}
+.slide-pip{height:4px;border-radius:2px;background:var(--g200);transition:.25s}
+.slide-pip.on{background:var(--blue);width:22px}
+.slide-pip:not(.on){width:8px}
+
+/* ── ENTRY ── */
+#s2{background:var(--g50);padding:28px 20px 24px}
+.page-head{margin-bottom:24px}
+.page-h1{font-size:26px;font-weight:800;color:var(--g900);letter-spacing:-.7px;margin-bottom:5px}
+.page-h2{font-size:14px;color:var(--g400)}
+.entry-card{background:#fff;border-radius:20px;border:1px solid var(--g200);padding:18px;display:flex;align-items:center;gap:14px;cursor:pointer;margin-bottom:12px;transition:.15s}
+.entry-card:hover{border-color:var(--g300);box-shadow:0 4px 12px rgba(0,0,0,.06)}
+.entry-icon{width:54px;height:54px;border-radius:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.entry-icon i{font-size:26px}
+.entry-text h3{font-size:14px;font-weight:700;color:var(--g900);margin-bottom:3px}
+.entry-text p{font-size:12px;color:var(--g400);line-height:1.4}
+.entry-chevron{margin-left:auto;color:var(--g300);font-size:20px}
+.sign-in-link{text-align:center;margin-top:auto;font-size:13px;color:var(--blue);cursor:pointer;padding:10px}
+
+/* ── TRADES ── */
+#s3{background:var(--g50)}
+.top-bar{display:flex;align-items:center;padding:12px 16px 6px;gap:10px}
+.back-btn{width:36px;height:36px;background:var(--g100);border-radius:12px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.back-btn i{font-size:17px;color:var(--g600)}
+.step-pips{display:flex;gap:4px;flex:1;justify-content:center}
+.step-pip{height:3px;border-radius:2px;background:var(--g200);transition:.25s}
+.step-pip.done,.step-pip.cur{background:var(--blue)}
+.step-pip.cur{width:20px}
+.step-pip:not(.cur){width:7px}
+.screen-scroll{flex:1;overflow-y:auto;padding:0 16px 14px}
+.trade-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:6px}
+.trade-cell{background:#fff;border:1px solid var(--g200);border-radius:14px;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;position:relative;transition:.15s;padding:8px}
+.trade-cell.sel{background:var(--blue-l);border-color:var(--blue);border-width:1.5px}
+.trade-cell i{font-size:24px;color:var(--g400)}
+.trade-cell.sel i{color:var(--blue)}
+.trade-cell .tl{font-size:10px;font-weight:600;color:var(--g600);text-align:center;line-height:1.2}
+.trade-cell.sel .tl{color:var(--blue)}
+.trade-cell .ts{font-size:9px;color:var(--g400);text-align:center}
+.trade-cell.sel .ts{color:var(--blue)}
+.trade-check{position:absolute;top:6px;right:6px;width:14px;height:14px;background:var(--blue);border-radius:50%;display:none;align-items:center;justify-content:center}
+.trade-check.show{display:flex}
+.trade-check i{font-size:8px;color:#fff}
+.bottom-bar{background:#fff;border-top:1px solid var(--g100);padding:12px 16px 20px}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;min-height:0}
+.tag{background:var(--blue-l);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;color:var(--blue)}
+
+/* ── COMPANY ── */
+#s4{background:var(--g50)}
+.size-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.size-cell{background:#fff;border:1px solid var(--g200);border-radius:14px;padding:12px 14px;cursor:pointer;transition:.15s}
+.size-cell.sel{background:var(--blue-l);border-color:var(--blue);border-width:1.5px}
+.size-cell .big{font-size:18px;font-weight:800;color:var(--g900)}
+.size-cell.sel .big{color:var(--blue)}
+.size-cell .sml{font-size:11px;color:var(--g400)}
+.size-cell.sel .sml{color:var(--blue)}
+
+/* ── ROLE ── */
+#s5{background:var(--g50)}
+.role-card{background:#fff;border:1px solid var(--g200);border-radius:16px;padding:15px;display:flex;align-items:center;gap:12px;cursor:pointer;margin-bottom:10px;transition:.15s}
+.role-icon{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.role-icon i{font-size:22px}
+.role-text h3{font-size:14px;font-weight:700;color:var(--g900);margin-bottom:2px}
+.role-text p{font-size:12px;color:var(--g400)}
+.role-check{width:20px;height:20px;border-radius:50%;border:1px solid var(--g200);margin-left:auto;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:.15s}
+
+/* ── ACCOUNT ── */
+#s6{background:var(--g50)}
+.form-row{display:flex;gap:10px}
+.field{margin-bottom:14px;flex:1}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--g600);margin-bottom:5px}
+.field input{width:100%;border:1px solid var(--g200);border-radius:12px;background:#fff;padding:11px 14px;font-size:14px;color:var(--g900);outline:none;transition:.15s}
+.field input:focus{border-color:var(--blue);border-width:1.5px}
+.cgu{display:flex;gap:10px;align-items:flex-start;margin-top:6px}
+.cgu-box{width:18px;height:18px;border-radius:5px;border:1px solid var(--g300);background:var(--blue);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.cgu-box i{font-size:10px;color:#fff}
+.cgu p{font-size:12px;color:var(--g400);line-height:1.5}
+.cgu span{color:var(--blue)}
+
+/* ── SUCCESS ── */
+#s7{background:var(--g50);padding:24px}
+.succ-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.succ-circle{width:84px;height:84px;border-radius:50%;background:var(--green-l);display:flex;align-items:center;justify-content:center;margin-bottom:20px}
+.succ-circle i{font-size:40px;color:var(--green)}
+.succ-h{font-size:22px;font-weight:800;color:var(--g900);margin-bottom:5px;text-align:center}
+.succ-p{font-size:13px;color:var(--g400);text-align:center;margin-bottom:22px;line-height:1.5}
+.recap{background:#fff;border-radius:16px;border:1px solid var(--g100);width:100%;margin-bottom:0}
+.recap-row{padding:10px 16px;display:flex;justify-content:space-between;font-size:13px;border-bottom:1px solid var(--g100)}
+.recap-row:last-child{border:none}
+.recap-row span{color:var(--g400)}
+.recap-row strong{color:var(--g900);font-weight:600;text-align:right;max-width:60%}
+
+/* ── JOIN ── */
+#s8{background:var(--g50)}
+.code-row{display:flex;gap:6px;justify-content:center;padding:6px 0 18px}
+.code-box{width:46px;height:58px;background:#fff;border:1px solid var(--g200);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;color:var(--g900)}
+.or-line{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.or-line hr{flex:1;border:none;border-top:1px solid var(--g200)}
+.or-line span{font-size:12px;color:var(--g300)}
+.info-box{background:var(--g50);border-radius:12px;border:1px solid var(--g100);padding:14px;font-size:12px;color:var(--g400);line-height:1.5}
+
+/* ── SHARED ── */
+.pri-btn{width:100%;background:var(--blue);color:#fff;border:none;border-radius:14px;padding:15px;font-size:15px;font-weight:700;cursor:pointer;transition:.15s}
+.pri-btn:hover{background:#1d4ed8}
+.pri-btn:disabled{background:var(--g200);color:var(--g400);cursor:not-allowed}
+.sec-btn{width:100%;background:#fff;color:var(--g700);border:1px solid var(--g200);border-radius:14px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px}
+.hint{font-size:11px;color:var(--g300);margin-top:6px}
+.label-sm{font-size:12px;font-weight:600;color:var(--g600);margin-bottom:0}
+</style>
+</head>
+<body>
+
+<h1>WORKIT — PROTOTYPE ONBOARDING</h1>
+
+<div class="phone">
+
+<!-- S0 SPLASH -->
+<div class="screen active" id="s0">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center">
+    <div class="splash-logo"><i class="ti ti-building-factory-2" aria-hidden="true"></i></div>
+    <div class="splash-title">WorkIt</div>
+    <div class="splash-sub">Gérez vos chantiers<br>du devis à la pose</div>
+    <div class="splash-dots">
+      <div class="splash-dot" style="opacity:.9"></div>
+      <div class="splash-dot" style="opacity:.6"></div>
+      <div class="splash-dot" style="opacity:.35"></div>
+    </div>
+  </div>
+</div>
+
+<!-- S1 SLIDES -->
+<div class="screen" id="s1">
+  <button class="slide-skip" onclick="goScreen(2)">Passer</button>
+  <div class="slide-body" id="slide-body">
+    <div class="slide-icon" style="background:var(--blue-l)"><i class="ti ti-file-invoice" style="color:var(--blue)" aria-hidden="true"></i></div>
+    <div class="slide-title">Devis pros en quelques clics</div>
+    <div class="slide-sub">Chiffrage adapté à votre corps de métier, modèles prêts à l'emploi.</div>
+  </div>
+  <div class="slide-footer">
+    <div class="slide-pips">
+      <div class="slide-pip on" id="pip0"></div>
+      <div class="slide-pip" id="pip1"></div>
+      <div class="slide-pip" id="pip2"></div>
+    </div>
+    <button class="pri-btn" id="slide-btn" onclick="nextSlide()">Suivant</button>
+  </div>
+</div>
+
+<!-- S2 ENTRY -->
+<div class="screen" id="s2">
+  <div class="page-head">
+    <div class="page-h1">Bienvenue 👋</div>
+    <div class="page-h2">Comment souhaitez-vous démarrer ?</div>
+  </div>
+  <div class="entry-card" onclick="goScreen(3)">
+    <div class="entry-icon" style="background:var(--blue-l)"><i class="ti ti-building" style="color:var(--blue)" aria-hidden="true"></i></div>
+    <div class="entry-text">
+      <h3>Créer mon espace entreprise</h3>
+      <p>Je configure WorkIt pour mon équipe et mes chantiers.</p>
+    </div>
+    <i class="ti ti-chevron-right entry-chevron" aria-hidden="true"></i>
+  </div>
+  <div class="entry-card" onclick="goScreen(8)">
+    <div class="entry-icon" style="background:var(--purple-l)"><i class="ti ti-users-plus" style="color:var(--purple)" aria-hidden="true"></i></div>
+    <div class="entry-text">
+      <h3>Rejoindre une équipe</h3>
+      <p>Mon responsable m'a invité avec un code ou un lien.</p>
+    </div>
+    <i class="ti ti-chevron-right entry-chevron" aria-hidden="true"></i>
+  </div>
+  <div class="sign-in-link" onclick="goScreen(0)">J'ai déjà un compte — Se connecter</div>
+</div>
+
+<!-- S3 TRADES -->
+<div class="screen" id="s3">
+  <div class="top-bar">
+    <button class="back-btn" onclick="goScreen(2)"><i class="ti ti-arrow-left" aria-hidden="true"></i></button>
+    <div class="step-pips">
+      <div class="step-pip cur done"></div>
+      <div class="step-pip"></div><div class="step-pip"></div><div class="step-pip"></div>
+    </div>
+    <div style="width:36px"></div>
+  </div>
+  <div class="screen-scroll">
+    <div class="page-head" style="margin-top:6px">
+      <div class="page-h1" style="font-size:21px">Votre activité ⚙️</div>
+      <div class="page-h2">Sélectionnez votre ou vos corps de métier.</div>
+    </div>
+    <div class="trade-grid" id="trade-grid"></div>
+  </div>
+  <div class="bottom-bar">
+    <div class="tags" id="trade-tags" style="min-height:0"></div>
+    <button class="pri-btn" id="trades-btn" disabled onclick="goScreen(4)">Continuer</button>
+  </div>
+</div>
+
+<!-- S4 COMPANY -->
+<div class="screen" id="s4">
+  <div class="top-bar">
+    <button class="back-btn" onclick="goScreen(3)"><i class="ti ti-arrow-left" aria-hidden="true"></i></button>
+    <div class="step-pips">
+      <div class="step-pip done"></div>
+      <div class="step-pip cur done"></div>
+      <div class="step-pip"></div><div class="step-pip"></div>
+    </div>
+    <div style="width:36px"></div>
+  </div>
+  <div class="screen-scroll">
+    <div class="page-head" style="margin-top:6px">
+      <div class="page-h1" style="font-size:21px">Votre entreprise 🏢</div>
+      <div class="page-h2">Ces informations apparaîtront sur vos devis.</div>
+    </div>
+    <div class="field">
+      <label>Nom de l'entreprise *</label>
+      <input type="text" id="co-name" placeholder="Ex : Plomberie Dupont & Fils" oninput="checkCompany()">
+    </div>
+    <div class="field">
+      <label>SIRET (optionnel)</label>
+      <input type="text" placeholder="000 000 000 00000">
+    </div>
+    <div class="label-sm" style="margin-top:8px">Taille de l'équipe</div>
+    <div class="size-grid" id="size-grid"></div>
+    <p class="hint" style="margin-top:10px">Modifiable dans les réglages.</p>
+  </div>
+  <div class="bottom-bar">
+    <button class="pri-btn" id="co-btn" disabled onclick="goScreen(5)">Continuer</button>
+  </div>
+</div>
+
+<!-- S5 ROLE -->
+<div class="screen" id="s5">
+  <div class="top-bar">
+    <button class="back-btn" onclick="goScreen(4)"><i class="ti ti-arrow-left" aria-hidden="true"></i></button>
+    <div class="step-pips">
+      <div class="step-pip done"></div><div class="step-pip done"></div>
+      <div class="step-pip cur done"></div><div class="step-pip"></div>
+    </div>
+    <div style="width:36px"></div>
+  </div>
+  <div class="screen-scroll">
+    <div class="page-head" style="margin-top:6px">
+      <div class="page-h1" style="font-size:21px">Votre rôle 🎯</div>
+      <div class="page-h2">L'interface WorkIt s'adapte entièrement à votre rôle.</div>
+    </div>
+    <div id="role-list"></div>
+  </div>
+  <div class="bottom-bar">
+    <button class="pri-btn" id="role-btn" disabled onclick="goScreen(6)">Continuer</button>
+  </div>
+</div>
+
+<!-- S6 ACCOUNT -->
+<div class="screen" id="s6">
+  <div class="top-bar">
+    <button class="back-btn" onclick="goScreen(5)"><i class="ti ti-arrow-left" aria-hidden="true"></i></button>
+    <div class="step-pips">
+      <div class="step-pip done"></div><div class="step-pip done"></div>
+      <div class="step-pip done"></div><div class="step-pip cur done"></div>
+    </div>
+    <div style="width:36px"></div>
+  </div>
+  <div class="screen-scroll">
+    <div class="page-head" style="margin-top:6px">
+      <div class="page-h1" style="font-size:21px">Créer mon compte 🔐</div>
+      <div class="page-h2">Dernière étape — vous y êtes presque.</div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Prénom</label><input type="text" placeholder="Yann"></div>
+      <div class="field"><label>Nom</label><input type="text" placeholder="Martin"></div>
+    </div>
+    <div class="field"><label>Email professionnel</label><input type="email" placeholder="yann@monentreprise.fr"></div>
+    <div class="field"><label>Mot de passe</label><input type="password" placeholder="8 caractères minimum"></div>
+    <div class="cgu">
+      <div class="cgu-box"><i class="ti ti-check" aria-hidden="true"></i></div>
+      <p>J'accepte les <span>Conditions d'utilisation</span> et la <span>Politique de confidentialité</span>.</p>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <button class="pri-btn" onclick="goScreen(7)">Créer mon espace WorkIt</button>
+  </div>
+</div>
+
+<!-- S7 SUCCESS -->
+<div class="screen" id="s7">
+  <div class="succ-wrap">
+    <div class="succ-circle"><i class="ti ti-check" aria-hidden="true"></i></div>
+    <div class="succ-h">Votre espace est prêt !</div>
+    <div class="succ-p">WorkIt est configuré.<br>Bienvenue dans l'équipe.</div>
+    <div class="recap" style="margin-bottom:0">
+      <div class="recap-row"><span>Entreprise</span><strong>Mon Entreprise</strong></div>
+      <div class="recap-row"><span>Corps de métier</span><strong id="succ-trades">—</strong></div>
+      <div class="recap-row"><span>Rôle</span><strong id="succ-role">—</strong></div>
+    </div>
+  </div>
+  <div style="padding:0 24px 28px">
+    <button class="sec-btn"><i class="ti ti-mail" style="margin-right:5px" aria-hidden="true"></i>Inviter mon équipe</button>
+    <button class="pri-btn" onclick="goScreen(0)">Commencer →</button>
+  </div>
+</div>
+
+<!-- S8 JOIN -->
+<div class="screen" id="s8">
+  <div class="top-bar">
+    <button class="back-btn" onclick="goScreen(2)"><i class="ti ti-arrow-left" aria-hidden="true"></i></button>
+    <div style="flex:1"></div><div style="width:36px"></div>
+  </div>
+  <div class="screen-scroll">
+    <div class="page-head" style="margin-top:6px">
+      <div class="page-h1" style="font-size:21px">Code d'invitation 🔗</div>
+      <div class="page-h2">Saisissez le code reçu de votre responsable.</div>
+    </div>
+    <div class="code-row">
+      <div class="code-box">4</div><div class="code-box">2</div>
+      <div class="code-box" style="border-color:var(--blue);border-width:2px">7</div>
+      <div class="code-box"></div><div class="code-box"></div><div class="code-box"></div>
+    </div>
+    <div class="or-line"><hr><span>ou</span><hr></div>
+    <div class="field">
+      <label>Email avec lequel vous avez été invité</label>
+      <input type="email" placeholder="votre@email.fr">
+    </div>
+    <div class="info-box">💡 Pas encore invité ? Demandez à votre responsable de vous envoyer une invitation depuis son espace Admin WorkIt.</div>
+  </div>
+  <div class="bottom-bar">
+    <button class="pri-btn" onclick="goScreen(0)">Rejoindre l'équipe</button>
+  </div>
+</div>
+
+</div>
+
+<!-- Navigation -->
+<div class="nav-row" id="nav-dots"></div>
+<div class="nav-labels" id="nav-labels"></div>
+
+<script>
+const screens=['s0','s1','s2','s3','s4','s5','s6','s7','s8'];
+const labels=['Splash','Slides','Choix','Métiers','Entreprise','Rôle','Compte','Succès','Rejoindre'];
+const trades=[
+  {icon:'ti-window',l:'Menuiserie ext.',s:'Fermeture'},
+  {icon:'ti-door',l:'Menuiserie int.',s:'Intérieure'},
+  {icon:'ti-droplet',l:'Plomberie',s:'Sanitaire'},
+  {icon:'ti-bolt',l:'Électricité',s:''},
+  {icon:'ti-brush',l:'Peinture',s:'Enduits'},
+  {icon:'ti-grid-dots',l:'Carrelage',s:'Sols'},
+  {icon:'ti-layers-intersect',l:'Isolation',s:'ITI/ITE'},
+  {icon:'ti-lock',l:'Serrurerie',s:'Métallerie'},
+  {icon:'ti-wind',l:'Climatisation',s:'CVC'},
+  {icon:'ti-home-2',l:'Charpente',s:'Couverture'},
+  {icon:'ti-crop',l:'Vitrerie',s:'Miroiterie'},
+  {icon:'ti-plus',l:'Autre',s:''},
+];
+const sizes=[
+  {k:'solo',l:'1',s:'Artisan solo'},{k:'2-5',l:'2–5',s:'Petite équipe'},
+  {k:'6-20',l:'6–20',s:'Équipe moyenne'},{k:'20+',l:'20+',s:'Grande entreprise'},
+];
+const roles=[
+  {k:'admin',l:'Gérant / Admin',s:'Équipe, accès et statistiques',icon:'ti-shield-check',c:'#6366F1',cl:'rgba(99,102,241,.1)'},
+  {k:'commercial',l:'Commercial',s:'Devis, prospects et affaires',icon:'ti-briefcase',c:'#2563EB',cl:'rgba(37,99,235,.1)'},
+  {k:'metreur',l:'Métreur / Études',s:'Métrés, chiffrage et commandes',icon:'ti-ruler',c:'#7C3AED',cl:'rgba(124,58,237,.1)'},
+  {k:'poseur',l:'Poseur / Technicien',s:'Interventions et avancement',icon:'ti-tool',c:'#059669',cl:'rgba(5,150,105,.1)'},
+];
+const slideData=[
+  {icon:'ti-file-invoice',bg:'#EFF6FF',ic:'#2563EB',t:'Devis pros en quelques clics',s:'Chiffrage adapté à votre corps de métier, modèles prêts à l\'emploi.'},
+  {icon:'ti-users',bg:'#F5F3FF',ic:'#7C3AED',t:'Coordonnez vos équipes terrain',s:'Commercial, métreur, poseur — chacun voit exactement ce qu\'il lui faut.'},
+  {icon:'ti-map-pin',bg:'#ECFDF5',ic:'#059669',t:'Chaque chantier suivi en temps réel',s:'Du premier contact à la pose terminée, tout en un seul endroit.'},
+];
+
+let cur=0,slideIdx=0,selTrades=new Set(),selSize=null,selRole=null;
+
+function goScreen(n){
+  document.getElementById(screens[cur]).classList.remove('active');
+  document.getElementById(screens[n]).classList.add('active');
+  cur=n;
+  document.querySelectorAll('.nav-dot').forEach((d,i)=>d.classList.toggle('on',i===n));
+  document.querySelectorAll('.nav-label').forEach((d,i)=>d.classList.toggle('on',i===n));
+  if(n===7){
+    const arr=[...selTrades].map(i=>trades[i].l);
+    document.getElementById('succ-trades').textContent=arr.length<=2?arr.join(', '):(arr.slice(0,2).join(', ')+' +'+(arr.length-2));
+    document.getElementById('succ-role').textContent=roles.find(r=>r.k===selRole)?.l||'—';
+  }
+}
+
+function nextSlide(){
+  slideIdx=(slideIdx+1)%3;
+  if(slideIdx===0){goScreen(2);return;}
+  const d=slideData[slideIdx];
+  document.getElementById('slide-body').innerHTML=`<div class="slide-icon" style="background:${d.bg}"><i class="ti ${d.icon}" style="color:${d.ic}"></i></div><div class="slide-title">${d.t}</div><div class="slide-sub">${d.s}</div>`;
+  [0,1,2].forEach(i=>document.getElementById('pip'+i).classList.toggle('on',i===slideIdx));
+  document.getElementById('slide-btn').textContent=slideIdx===2?'Commencer':'Suivant';
+}
+
+function buildTrades(){
+  const g=document.getElementById('trade-grid');
+  trades.forEach((t,i)=>{
+    const c=document.createElement('div');
+    c.className='trade-cell';
+    c.id='tc'+i;
+    c.innerHTML=`<i class="ti ${t.icon}"></i><span class="tl">${t.l}</span>${t.s?`<span class="ts">${t.s}</span>`:''}<div class="trade-check" id="tck${i}"><i class="ti ti-check"></i></div>`;
+    c.onclick=()=>{
+      selTrades.has(i)?selTrades.delete(i):selTrades.add(i);
+      c.classList.toggle('sel',selTrades.has(i));
+      document.getElementById('tck'+i).classList.toggle('show',selTrades.has(i));
+      updateTags();
+      document.getElementById('trades-btn').disabled=selTrades.size===0;
+    };
+    g.appendChild(c);
+  });
+}
+
+function updateTags(){
+  const t=document.getElementById('trade-tags');
+  const arr=[...selTrades];
+  t.innerHTML='';
+  arr.slice(0,5).forEach(i=>{const d=document.createElement('div');d.className='tag';d.textContent=trades[i].l;t.appendChild(d);});
+  if(arr.length>5){const d=document.createElement('div');d.className='tag';d.textContent='+'+(arr.length-5);t.appendChild(d);}
+}
+
+function buildSizes(){
+  const g=document.getElementById('size-grid');
+  sizes.forEach(sz=>{
+    const c=document.createElement('div');
+    c.className='size-cell';c.id='sz'+sz.k;
+    c.innerHTML=`<div class="big">${sz.l}</div><div class="sml">${sz.s}</div>`;
+    c.onclick=()=>{
+      if(selSize)document.getElementById('sz'+selSize)?.classList.remove('sel');
+      selSize=sz.k;c.classList.add('sel');checkCompany();
+    };
+    g.appendChild(c);
+  });
+}
+
+function checkCompany(){
+  document.getElementById('co-btn').disabled=document.getElementById('co-name').value.trim().length<2;
+}
+
+function buildRoles(){
+  const g=document.getElementById('role-list');
+  roles.forEach(r=>{
+    const c=document.createElement('div');
+    c.className='role-card';c.id='rc'+r.k;
+    c.innerHTML=`<div class="role-icon" style="background:${r.cl}"><i class="ti ${r.icon}" style="color:${r.c}"></i></div><div class="role-text"><h3>${r.l}</h3><p>${r.s}</p></div><div class="role-check" id="rck${r.k}"></div>`;
+    c.onclick=()=>{
+      if(selRole){
+        const prev=document.getElementById('rc'+selRole);
+        if(prev){prev.style.borderColor='';prev.style.background='';}
+        const pChk=document.getElementById('rck'+selRole);
+        if(pChk){pChk.style.background='';pChk.style.borderColor='';pChk.innerHTML='';}
+      }
+      selRole=r.k;
+      c.style.borderColor=r.c;c.style.background=r.cl;
+      const chk=document.getElementById('rck'+r.k);
+      chk.style.background=r.c;chk.style.borderColor=r.c;
+      chk.innerHTML=`<i class="ti ti-check" style="font-size:11px;color:#fff"></i>`;
+      document.getElementById('role-btn').disabled=false;
+    };
+    g.appendChild(c);
+  });
+}
+
+function buildNav(){
+  const dots=document.getElementById('nav-dots');
+  const lbls=document.getElementById('nav-labels');
+  screens.forEach((id,i)=>{
+    const b=document.createElement('button');
+    b.className='nav-dot'+(i===0?' on':'');
+    b.title=labels[i];b.onclick=()=>goScreen(i);
+    dots.appendChild(b);
+    const l=document.createElement('div');
+    l.className='nav-label'+(i===0?' on':'');
+    l.textContent=labels[i];l.onclick=()=>goScreen(i);
+    lbls.appendChild(l);
+  });
+}
+
+buildTrades();buildSizes();buildRoles();buildNav();
+</script>
+</body>
+</html>

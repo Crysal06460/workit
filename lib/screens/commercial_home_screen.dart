@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_home_screen.dart';
+import 'entry_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/dynamic_dropdown_field.dart';
@@ -117,36 +118,39 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
             ],
           ),
           actions: [
-            // Avatar initiales + logout sur tap long
-            GestureDetector(
-              onTap: () async {
-                await FirebaseAuth.instance.signOut();
-                if (!mounted) return;
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const SignInScreen()),
-                  (_) => false,
-                );
-              },
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  _initials(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    letterSpacing: 0.5,
-                  ),
+            // Avatar initiales (affichage uniquement)
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                _initials(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 6),
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: AppColors.grey400, size: 22),
+              tooltip: 'Déconnexion',
+              onPressed: () async {
+                await FirebaseAuth.instance.signOut();
+                if (!mounted) return;
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const EntryScreen()),
+                  (_) => false,
+                );
+              },
+            ),
+            const SizedBox(width: 10),
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(52),
@@ -1598,13 +1602,12 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF101728), Color(0xFF0A1221)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.grey100),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -1626,7 +1629,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                     height: 2,
                     margin: const EdgeInsets.symmetric(horizontal: 6),
                     decoration: BoxDecoration(
-                      color: done ? _commercialAccent : Colors.white12,
+                      color: done ? _commercialAccent : AppColors.grey200,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -1789,7 +1792,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       decoration: BoxDecoration(
         color: AppColors.grey50,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(color: AppColors.grey200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2196,8 +2199,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                             if (currentStep > 0)
                               OutlinedButton(
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.white,
-                                  side: const BorderSide(color: Colors.white38),
+                                  foregroundColor: AppColors.grey700,
+                                  side: const BorderSide(color: AppColors.grey300),
                                 ),
                                 onPressed: () {
                                   currentStep = (currentStep - 1).clamp(0, steps.length - 1);
@@ -2355,7 +2358,7 @@ class _ActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = primary ? AppColors.primary : AppColors.grey100;
     final fg = primary ? Colors.white : AppColors.grey700;
-    final border = primary ? Colors.transparent : Colors.white24;
+    final border = primary ? Colors.transparent : AppColors.grey200;
     return Material(
       color: bg,
       borderRadius: BorderRadius.circular(16),
@@ -2429,21 +2432,21 @@ class _StepBadge extends StatelessWidget {
     final Color fill = done
         ? _commercialAccent
         : active
-            ? _commercialAccent.withOpacity(0.85)
-            : AppColors.grey100;
-    final Color textColor = done || active ? Colors.black : Colors.white70;
+            ? _commercialAccent
+            : AppColors.grey200;
+    final Color textColor = done || active ? Colors.white : AppColors.grey500;
     final Color labelColor = done
         ? _commercialAccent
         : active
             ? AppColors.grey900
-            : Colors.white54;
+            : AppColors.grey400;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(active ? 0.05 : 0.02),
+        color: active ? _commercialAccent.withOpacity(0.08) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: active ? _commercialAccent.withOpacity(0.6) : Colors.white12),
+        border: Border.all(color: active ? _commercialAccent.withOpacity(0.5) : Colors.transparent),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -2543,7 +2546,7 @@ class _LabeledField extends StatelessWidget {
               filled: true,
               fillColor: AppColors.grey50,
               hintText: hintText,
-              hintStyle: const TextStyle(color: Colors.white38),
+              hintStyle: const TextStyle(color: AppColors.grey400),
               counterText: maxLength != null ? '' : null,
               errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12),
               border: OutlineInputBorder(
@@ -2617,7 +2620,7 @@ class _DropdownField extends StatelessWidget {
               isExpanded: true,
               dropdownColor: _commercialCard,
               style: const TextStyle(color: AppColors.grey900),
-              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
+              icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.grey500),
               items: items
                     .map(
                       (e) => DropdownMenuItem(
@@ -3455,7 +3458,7 @@ class _ChantierDetailSheet extends StatelessWidget {
                       style: TextStyle(color: _commercialAccent, fontWeight: FontWeight.w600),
                     ),
                     Spacer(),
-                    Icon(Icons.open_in_new, color: Colors.white38, size: 18),
+                    Icon(Icons.open_in_new, color: AppColors.grey400, size: 18),
                   ],
                 ),
               ),
@@ -3577,7 +3580,7 @@ class _ChantierDetailSheet extends StatelessWidget {
                           width: 100,
                           height: 100,
                           color: AppColors.grey100,
-                          child: const Icon(Icons.broken_image, color: Colors.white38),
+                          child: const Icon(Icons.broken_image, color: AppColors.grey400),
                         ),
                       ),
                     ),
@@ -3610,7 +3613,7 @@ class _ChantierDetailSheet extends StatelessWidget {
       case 'À clôturer':
         return Colors.orangeAccent;
       default:
-        return Colors.white54;
+        return AppColors.grey400;
     }
   }
 
@@ -3635,7 +3638,7 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       label,
       style: TextStyle(
-        color: color ?? Colors.white,
+        color: color ?? AppColors.grey900,
         fontWeight: FontWeight.w800,
         fontSize: 15,
       ),
@@ -3663,13 +3666,13 @@ class _DetailRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(
           children: [
-            Icon(icon, color: iconColor ?? Colors.white54, size: 18),
+            Icon(icon, color: iconColor ?? AppColors.grey400, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 label,
                 style: TextStyle(
-                  color: onTap != null ? _commercialAccent : Colors.white70,
+                  color: onTap != null ? _commercialAccent : AppColors.grey700,
                   decoration: onTap != null ? TextDecoration.underline : null,
                 ),
               ),
