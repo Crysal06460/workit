@@ -44,33 +44,35 @@
 
 ---
 
-## 🔧 IMPLÉMENTATIONS RÉALISÉES
+## 🔧 IMPLÉMENTATIONS RÉALISÉES (08 juillet 2026)
 
-### 1. 🔥 Correction flux onboarding dual → unifié
+### 1. 🔥 Correction flux onboarding dual → unifié ✅ *Commit f042a5a*
 - Ajout du champ `journeyType` dans `OnboardingData` pour tracker le parcours (structured/artisan)
 - Ajout de `trialSessionId` propagation dans la chaîne AccountSetupScreen → CreateWorkspaceScreen → PlanSelectionScreen → InviteTeamScreen
 - Ajout de l'import manquant de `onboarding_models.dart` dans `admin_team_tab.dart`
+- Ajout de `SelectMetierScreen` dans le flux (CreateWorkspaceScreen → SelectMetierScreen → PlanSelectionScreen)
 
-### 2. 🔐 Secure invitation codes (UUID-like generation)
-- Remplacé les codes hardcodés par une fonction `generateInviteCode()` qui produit des codes aléatoires à 8 caractères hexadécimaux
+### 2. 🔐 Secure invitation codes (UUID-like generation) ✅ *Commit f042a5a*
+- Remplacé les codes hardcodés (COMMERCIAL/METREUR/POSEURS) par `_generateSecureCode()` qui produit des codes hexadécimaux aléatoires à 8 caractères via `Random.secure()`
 - Mise à jour de `OnboardingData.generatedCodes` pour utiliser la génération sécurisée
 
-### 3. 🧭 Unified navigation flow fix
-- `JourneySelectionScreen` passe maintenant `journeyType` + `trialSessionId` à `AccountSetupScreen`
-- `AccountSetupScreen` reçoit et transmet ces données
-- `CreateWorkspaceScreen` reçoit `trialSessionId` et `journeyType`
+### 3. 🧭 Unified navigation flow fix ✅ *Commit f042a5a*
+- `JourneySelectionScreen` passe `journeyType` + `trialSessionId` à `AccountSetupScreen`
+- `AccountSetupScreen` reçoit et transmet ces données à `CreateWorkspaceScreen`
+- `CreateWorkspaceScreen` reçoit `trialSessionId` et `journeyType` et les intègre dans `OnboardingData`
 
-### 4. 🏗️ Complete `SelectMetierScreen` avec tous les métiers
-- Ajout de tous les corps de métier du second œuvre
-- Liaison correcte dans le flux
+### 4. 🏗️ Complete `SelectMetierScreen` avec tous les métiers ✅ *Commit f042a5a*
+- Ajout de 12 corps de métier du second œuvre (était limité à 1)
+- Navigation correcte vers `PlanSelectionScreen` au lieu de `AccountSetupScreen`
 
-### 5. 🐛 Bug fixes
+### 5. 🐛 Bug fixes ✅ *Commit f042a5a*
 - Correction de l'import manquant `onboarding_models.dart` dans `admin_team_tab.dart`
-- `roleDisplayName` et `roleDisplayNamePlural` maintenant disponibles dans admin_team_tab
-- Ajout de gestion d'erreur Firestore pour les collections sans index
+- `roleDisplayName` et `roleDisplayNamePlural` maintenant disponibles dans `admin_team_tab`
+- `EntryScreen` : FaceID échoue mais user auth → navigue quand même vers home (évite boucle)
+- `CreateWorkspaceScreen` : ne hardcode plus `tradeKey`, passe par `SelectMetierScreen`
 
-### 6. 📄 Statut document
-- Ce fichier `STATUT-AVANCEMENT.md`
+### 6. 📄 Statut document ✅ *Commit c85d4d8*
+- Fichier `STATUT-AVANCEMENT.md` créé avec diagnostic complet et plan
 
 ---
 
