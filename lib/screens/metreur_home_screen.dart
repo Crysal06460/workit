@@ -99,6 +99,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         .doc(_workspaceId)
         .collection('devis')
         .orderBy('createdAt', descending: true)
+        .limit(50)
         .snapshots()
         .listen(_onDevisSnapshot, onError: (_) => _loadFromPrefs());
   }

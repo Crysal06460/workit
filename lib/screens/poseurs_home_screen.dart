@@ -84,6 +84,7 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
           .collection('devis')
           .where('poseurIds', arrayContains: _userId)
           .orderBy('poseDate', descending: false)
+          .limit(50)
           .get();
 
       final aFaire = <_ChantierData>[];

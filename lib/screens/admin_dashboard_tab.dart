@@ -334,6 +334,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
           .doc(widget.workspaceId)
           .collection('devis')
           .orderBy('createdAt', descending: true)
+          .limit(50)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {

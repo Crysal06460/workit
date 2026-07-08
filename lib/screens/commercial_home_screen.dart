@@ -166,8 +166,9 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                           .collection('devis')
                           // Removed redundant where clause to avoid index requirement
                           .orderBy('createdAt', descending: true)
+                          .limit(50)
                           .snapshots(),
-                  builder: (context, snapshot) {
+                    builder: (context, snapshot) {
                     final allDocs = snapshot.data?.docs ?? [];
                     final docs = _searchQuery.isEmpty
                         ? allDocs
