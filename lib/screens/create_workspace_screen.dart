@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/onboarding_models.dart';
 import 'plan_selection_screen.dart';
+import 'select_metier_screen.dart';
 
 class CreateWorkspaceScreen extends StatefulWidget {
   const CreateWorkspaceScreen({
@@ -14,12 +15,16 @@ class CreateWorkspaceScreen extends StatefulWidget {
     required this.lastName,
     required this.email,
     required this.uid,
+    this.trialSessionId,
+    this.journeyType,
   });
 
   final String firstName;
   final String lastName;
   final String email;
   final String uid;
+  final String? trialSessionId;
+  final String? journeyType;
 
   @override
   State<CreateWorkspaceScreen> createState() => _CreateWorkspaceScreenState();
@@ -71,10 +76,11 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
       ..adminUid = widget.uid
       ..creatorFirstName = widget.firstName
       ..creatorLastName = widget.lastName
-      ..tradeKey = 'menuiserie_aluminium';
+      ..journeyType = widget.journeyType
+      ..trialSessionId = widget.trialSessionId;
 
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PlanSelectionScreen(data: data)),
+      MaterialPageRoute(builder: (_) => SelectMetierScreen(data: data)),
     );
   }
 

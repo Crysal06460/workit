@@ -1,3 +1,5 @@
+import 'dart:math';
+
 const onboardingRoles = ['commercial', 'metreur', 'poseur'];
 
 String roleDisplayName(String roleKey) {
@@ -155,10 +157,16 @@ class OnboardingData {
   String? creatorLastName;
   final Map<String, List<String>> invites;
 
+  /// Génère un code d'invitation sécurisé à 8 caractères hex
+  static String _generateSecureCode() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(4, (_) => random.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join().toUpperCase();
+  }
+
   final Map<String, String> generatedCodes = {
-    'commercial': 'COMMERCIAL',
-    'metreur': 'METREUR',
-    'poseur': 'POSEURS',
+    for (final role in onboardingRoles)
+      role: _generateSecureCode(),
   };
 
   int inviteCount(String roleKey) => invites[roleKey]?.length ?? 0;

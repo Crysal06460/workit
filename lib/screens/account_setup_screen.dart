@@ -4,7 +4,14 @@ import 'package:flutter/material.dart';
 import 'create_workspace_screen.dart';
 
 class AccountSetupScreen extends StatefulWidget {
-  const AccountSetupScreen({super.key});
+  const AccountSetupScreen({
+    super.key,
+    this.trialSessionId,
+    this.journeyType,
+  });
+
+  final String? trialSessionId;
+  final String? journeyType;
 
   @override
   State<AccountSetupScreen> createState() => _AccountSetupScreenState();
@@ -50,6 +57,8 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
           lastName: lastName,
           email: email,
           uid: cred.user?.uid ?? '',
+          trialSessionId: widget.trialSessionId,
+          journeyType: widget.journeyType,
         ),
       ));
     } on FirebaseAuthException catch (e) {

@@ -119,7 +119,10 @@ class _JourneySelectionScreenState extends State<JourneySelectionScreen> {
                       : () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => const AccountSetupScreen(),
+                              builder: (_) => AccountSetupScreen(
+                                trialSessionId: widget.trialSessionId,
+                                journeyType: selectedJourney,
+                              ),
                             ),
                           );
                         },

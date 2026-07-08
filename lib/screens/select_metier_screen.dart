@@ -3,9 +3,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/onboarding_models.dart';
 import 'account_setup_screen.dart';
+import 'plan_selection_screen.dart';
 
 const _metierOptions = <String, String>{
   'menuiserie_aluminium': 'Menuiserie Extérieure & Fermeture',
+  'menuiserie_interieure': 'Menuiserie Intérieure',
+  'plomberie_sanitaire': 'Plomberie – Sanitaire',
+  'electricite_courants_faibles': 'Électricité – Courants faibles',
+  'chauffage_climatisation_ventilation': 'Chauffage – Clim – Ventilation',
+  'peinture_revetements': 'Peinture – Revêtements',
+  'carrelage_maconnerie_fine': 'Carrelage – Maçonnerie fine',
+  'cuisine_amenagement_interieur': 'Cuisine – Aménagement intérieur',
+  'salle_de_bain_etancheite': 'Salle de bain – Étanchéité',
+  'sols_exterieurs_amenagements': 'Sols extérieurs – Aménagements',
+  'vitrerie_miroiterie': 'Vitrerie – Miroiterie',
+  'automatismes_portails': 'Automatismes – Portails',
 };
 
 class SelectMetierScreen extends StatefulWidget {
@@ -41,7 +53,7 @@ class _SelectMetierScreenState extends State<SelectMetierScreen> {
     await prefs.setString('workit_trade_key', selectedKey!);
     if (!mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AccountSetupScreen()),
+      MaterialPageRoute(builder: (_) => PlanSelectionScreen(data: widget.data)),
     );
   }
 

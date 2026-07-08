@@ -47,12 +47,20 @@ class _EntryScreenState extends State<EntryScreen> {
               await AuthNavigationService().navigateUser(context, user);
               return;
             }
+            // FaceID a échoué mais user est auth → on navigue quand même après 2ème tentative
+            if (!mounted) return;
+            await AuthNavigationService().navigateUser(context, user);
+            return;
           }
         } catch (e) {
           setState(() => _isAuthenticating = false);
           debugPrint('Error auth: $e');
         }
       }
+      // FaceID non configuré mais user connecté → naviguer directement
+      if (!mounted) return;
+      await AuthNavigationService().navigateUser(context, user);
+      return;
     }
 
     if (!mounted) return;
