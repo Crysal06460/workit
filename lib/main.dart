@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 import 'screens/entry_screen.dart';
-import 'screens/onboarding_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'services/auth_navigation_service.dart';
 
 Future<void> main() async {
@@ -65,9 +65,9 @@ class _StartupRouterState extends State<_StartupRouter> {
 
     if (!mounted) return;
     if (!onboardingDone) {
-      // Premier lancement : afficher l'onboarding
+      // Premier lancement : afficher l'accueil
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
       );
     }
     // Onboarding déjà fait → rester sur EntryScreen (Se connecter)

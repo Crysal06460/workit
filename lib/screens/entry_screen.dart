@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/app_colors.dart';
 import '../services/auth_navigation_service.dart';
-import 'onboarding_screen.dart';
 import 'sign_in_screen.dart';
+import 'welcome_screen.dart';
 
 /// Écran d'accueil rapide pour les utilisateurs ayant déjà fait l'onboarding.
 /// (Le splash + slides ne sont montrés qu'une fois, via OnboardingScreen.)
@@ -71,7 +71,7 @@ class _EntryScreenState extends State<EntryScreen> {
 
   void _openSignup(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
     );
   }
 
