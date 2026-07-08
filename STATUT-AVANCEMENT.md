@@ -23,6 +23,7 @@
 
 ### 🔧 Services
 - DevisService (création + 4 transitions statut + notifications), AuthNavigationService, TrialService, WorkspaceRepository
+- **Nouveau**: StripeService (lib/services/stripe_service.dart)
 
 ---
 
@@ -30,68 +31,89 @@
 
 | Commit | Changement |
 |--------|-----------|
-| `f042a5a` | Unified onboarding flow (journeyType + trialSessionId propagation), secure invite codes (Random.secure hex), SelectMetierScreen with 12 métiers, EntryScreen FaceID fallback, admin_team_tab import fix |
-| `8e17cf1` | Redirection du flow onboarding : EntryScreen "S'inscrire" → WelcomeScreen (exit OnboardingScreen obsolète), main.dart _StartupRouter → WelcomeScreen |
-| `ed1ad82` | Pagination Firestore (limit 50) sur tous les streams devis : commercial, métreur, admin, poseur |
+| `f042a5a` | Unified onboarding flow, secure invite codes, SelectMetierScreen 12 métiers, EntryScreen FaceID fix |
+| `8e17cf1` | Redirection onboarding → WelcomeScreen, _StartupRouter fix |
+| `ed1ad82` | Pagination Firestore (limit 50) sur tous les streams devis |
+| *(ce commit)* | Ajout fonctions Stripe (7x callable), StripeService Dart, correction import FieldValue |
+
+---
+
+## 📊 Priorités d'avancement
+
+### Priorité 1 : Cloud Functions ✅ (tout existant)
+| Fonction | Statut | Fichier |
+|---|---|---|
+| `analyzeDevis` | ✅ Existe | functions/index.js (l.34-86) |
+| `createInvitation` | ✅ Existe | functions/index.js (l.111-143) |
+| `sendInvitationEmail` | ✅ Existe | functions/index.js (l.208-257) |
+| `provisionAccounts` | ✅ Existe | functions/index.js (l.263-404) |
+| `onDevisStatusChange` | ✅ Existe | functions/index.js (l.481-643) |
+| `getInvitationByToken` | ✅ Existe | functions/index.js (l.648-664) |
+| `consumeInvitation` | ✅ Existe | functions/index.js (l.670-742) |
+| **Stripe (7 nouvelles)** | ✅ Créées | functions/index.js (l.743+) |
+
+### Priorité 2 : Index Firestore Composites ✅
+| Collection | Champs | Statut |
+|---|---|---|
+| devis | `poseurIds` (ARRAY_CONTAINS) + `poseDate` (ASC) | ✅ Existe dans firestore.indexes.json |
+
+**Analyse** : Aucune autre requête `where` + `orderBy` combinée trouvée dans le code.
+- Tous les streams devis utilisent `orderBy('createdAt')` seul (pas de where combiné)
+- Queries users avec `where('companyId')+where('role')` sans orderBy — index implicite suffit
+
+### Priorité 3 : Stripe ✅
+| Action | Statut | Fichier |
+|---|---|---|
+| Service Dart `StripeService` | ✅ Créé | lib/services/stripe_service.dart |
+| `stripeCreatePaymentIntent` | ✅ Créée | functions/index.js |
+| `stripeCreateCheckoutSession` | ✅ Créée | functions/index.js |
+| `stripeGetSubscription` | ✅ Créée | functions/index.js |
+| `stripeCancelSubscription` | ✅ Créée | functions/index.js |
+| `stripeGetOrCreateCustomer` | ✅ Créée | functions/index.js |
+| `stripeWebhook` | ✅ Créée | functions/index.js |
+| Dépendance `stripe` npm | ✅ Ajoutée | functions/package.json |
+| Dépendance `flutter_stripe` | ✅ Ajoutée | pubspec.yaml |
+| Import `FieldValue` | ✅ Corrigé | functions/index.js |
+
+### Priorité 4 : Corrections de bugs 🔍
+- [ ] Revue des écrans existants
+
+### Priorité 5 : Améliorations UX/UI 🔍
+- [ ] Navigation, transitions, états vides
 
 ---
 
 ## ❌ Problèmes restants
 
-### P1 — Non bloquant pour démo fonctionnelle
-1. **OnboardingScreen.dart** (1865 lignes) — fichier vestige du flow parallèle direct-Firestore. Plus importé nulle part. À supprimer après vérification.
-2. **Cloud Functions** — `provisionAccounts`, `getInvitationByToken`, `consumeInvitation` non déployées. Les codes d'invitation sont générés côté client.
-3. **firestore.indexes.json** — existe mais peut nécessiter des index composites supplémentaires selon les requêtes.
-
 ### P2 — Améliorations souhaitables
-4. **Riverpod** — Aucun screen migré. Tous en StatefulWidget+setState. Migration prévue Sem 3-4 du plan agent.
-5. **Mode offline Firestore** — `FirebaseFirestore.instance.settings.persistenceEnabled` non configuré.
-6. **Tests** — Aucun test unitaire/widget/E2E. Coverage 0%.
-
-### P3 — Fonctionnalités manquantes
-7. **Stripe** — Cloud Functions Stripe non implémentées (dépend d'un compte Stripe Business externe).
-8. **Notifications push FCM** — FirebaseMessaging configuré dans main.dart mais pas intégré dans les écrans.
-9. **Pagination complète** — Limit 50 ajoutée mais pas de pagination "load more" (nécessite un cursor).
-10. **Rate limiting** — Pas de Cloud Functions anti-abuse.
+1. **Offline persistence** — `FirebaseFirestore.instance.settings.persistenceEnabled` non configuré dans main.dart
+2. **Tests** — Aucun test unitaire/widget/E2E. Coverage 0%.
+3. **OnboardingScreen.dart** (1865 lignes) — fichier vestige du flow direct-Firestore. Plus importé nulle part.
+4. **Stripe** — Dépend d'un compte Stripe Business ; nécessite clés API dans Firebase Secrets
+5. **Notifications push FCM** — FirebaseMessaging configuré mais pas intégré dans les écrans (callback `onMessage`)
+6. **Pagination complète** — limit(50) ajoutée mais pas de pagination "load more" (cursor-based)
 
 ---
 
 ## 📊 Indicateurs clés
 
 | Métrique | Valeur |
-|----------|--------|
-| Fichiers Dart | ~42 |
-| Lignes de code | ~18 000 |
+|---|---|
+| Fichiers Dart | ~43 |
+| Cloud Functions | 14 exports |
 | Écrans | ~25 |
-| Services | 4 |
-| Modèles | 1 (onboarding_models) |
-| Tests | 0 |
-| Riverpod migration | 0% |
-| Pagination Firestore | ✅ limit(50) sur tous les streams |
-| Flow onboarding unifié | ✅ |
+| Services | 5 |
+| Flux onboarding unifié | ✅ |
 | Codes invitation sécurisés | ✅ (Random.secure hex) |
+| Offline persistence | ❌ |
+| Tests | 0 |
 
 ---
 
-## 📝 Décisions d'architecture
+## 🔜 Prochaines étapes
 
-1. **Flow unifié**: `WelcomeScreen → TrialActivationScreen → JourneySelectionScreen → AccountSetupScreen → CreateWorkspaceScreen → SelectMetierScreen → PlanSelectionScreen → InviteTeamScreen → AdminSummaryScreen`. OnboardingScreen.dart déprécié.
-2. **Design clair** (light theme) prime sur sombre. AppTheme.light est le thème par défaut.
-3. **Pas de Riverpod pour MVP** — StatefulWidget+setState suffit pour la version livrable.
-4. **Codes invitation côté client** en attendant Cloud Functions.
-5. **Pagination limit(50)** sur tous les streams — suffisant pour le volume actuel.
-
----
-
-## 🔜 Prochaines étapes (ordre de priorité)
-
-1. 🧹 Supprimer le fichier `onboarding_screen.dart` vestige (après vérification des imports)
-2. 🧪 Ajouter `FirebaseFirestore.instance.settings = Settings(persistenceEnabled: true)` pour offline
-3. 📦 Déployer Cloud Functions d'invitation (provisionAccounts)
-4. 📊 Ajouter les index composites manquants
-5. 🔔 Intégrer FCM notifications push
-6. 🧪 Tests unitaires (au moins sur DevisService et TrialService)
-
----
-
-**Prochaine revue**: 09 juillet 2026
+1. 🔔 Intégrer FCM notifications push dans les écrans (callbacks `onMessage`, `onResume`)
+2. 🧹 Supprimer `onboarding_screen.dart` vestige
+3. 🧪 Ajouter offline persistence dans main.dart
+4. 📦 Déployer Cloud Functions (npm ci + firebase deploy --only functions)
+5. 🧪 Tests unitaires sur DevisService et StripeService

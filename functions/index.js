@@ -12,7 +12,7 @@ const {onCall} = require("firebase-functions/v2/https");
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {initializeApp} = require("firebase-admin/app");
 const admin = require("firebase-admin");
-const {getFirestore, Timestamp} = require("firebase-admin/firestore");
+const {getFirestore, Timestamp, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const OpenAI = require("openai");
 const Mailjet = require("node-mailjet");
@@ -738,5 +738,346 @@ exports.consumeInvitation = onCall(
         companyId,
         invitationId: token,
       };
+    },
+);
+
+// ─── Stripe Cloud Functions ──────────────────────────────────────────────────
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+
+/**
+ * Retourne un client Stripe initialisé.
+ * @return {import('stripe').Stripe}
+ */
+function getStripeClient() {
+  if (!STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY non configurée");
+  }
+  // Lazy import pour éviter de charger stripe si pas utilisé
+  const Stripe = require("stripe");
+  return new Stripe(STRIPE_SECRET_KEY, {apiVersion: "2025-02-24.acacia"});
+}
+
+/**
+ * Crée un PaymentIntent pour un paiement unique.
+ */
+exports.stripeCreatePaymentIntent = onCall(
+    {region: "europe-west1", secrets: ["STRIPE_SECRET_KEY"]},
+    async (request) => {
+      const caller = request.auth && request.auth.uid;
+      if (!caller) throw new Error("Non autorisé");
+
+      const {amount, currency = "eur", customerId, description} =
+        request.data || {};
+      if (!amount || amount <= 0) throw new Error("Montant invalide");
+
+      try {
+        const stripe = getStripeClient();
+        const params = {
+          amount,
+          currency,
+          automatic_payment_methods: {enabled: true},
+          description: description || "Paiement WorkIt",
+        };
+        if (customerId) params.customer = customerId;
+
+        const intent = await stripe.paymentIntents.create(params);
+        return {
+          paymentIntentId: intent.id,
+          clientSecret: intent.client_secret,
+          status: intent.status,
+        };
+      } catch (e) {
+        logger.error("stripeCreatePaymentIntent error:", e);
+        throw new Error(`Erreur Stripe: ${e.message}`);
+      }
+    },
+);
+
+/**
+ * Crée une session Checkout Stripe (paiement unique ou abonnement).
+ */
+exports.stripeCreateCheckoutSession = onCall(
+    {
+      region: "europe-west1",
+      secrets: ["STRIPE_SECRET_KEY"],
+    },
+    async (request) => {
+      const caller = request.auth && request.auth.uid;
+      if (!caller) throw new Error("Non autorisé");
+
+      const {
+        successUrl,
+        cancelUrl,
+        priceId,
+        mode = "subscription",
+        customerId,
+        workspaceId,
+        planId,
+      } = request.data || {};
+
+      if (!successUrl || !cancelUrl) {
+        throw new Error("successUrl et cancelUrl requis");
+      }
+
+      try {
+        const stripe = getStripeClient();
+        const sessionParams = {
+          success_url: successUrl,
+          cancel_url: cancelUrl,
+          mode,
+          billing_address_collection: "required",
+          metadata: {
+            workspaceId: workspaceId || "",
+            planId: planId || "",
+            createdBy: caller,
+          },
+        };
+
+        if (mode === "subscription" && priceId) {
+          sessionParams.line_items = [
+            {price: priceId, quantity: 1},
+          ];
+        } else if (mode === "payment" && request.data.amount) {
+          sessionParams.line_items = [
+            {
+              price_data: {
+                currency: "eur",
+                product_data: {name: "Paiement WorkIt"},
+                unit_amount: request.data.amount,
+              },
+              quantity: 1,
+            },
+          ];
+        }
+
+        if (customerId) sessionParams.customer = customerId;
+
+        const session = await stripe.checkout.sessions.create(sessionParams);
+        return {
+          sessionId: session.id,
+          url: session.url,
+        };
+      } catch (e) {
+        logger.error("stripeCreateCheckoutSession error:", e);
+        throw new Error(`Erreur Stripe: ${e.message}`);
+      }
+    },
+);
+
+/**
+ * Récupère l'abonnement Stripe actif d'un workspace.
+ */
+exports.stripeGetSubscription = onCall(
+    {
+      region: "europe-west1",
+      secrets: ["STRIPE_SECRET_KEY"],
+    },
+    async (request) => {
+      const caller = request.auth && request.auth.uid;
+      if (!caller) throw new Error("Non autorisé");
+
+      const {workspaceId} = request.data || {};
+      if (!workspaceId) throw new Error("workspaceId requis");
+
+      try {
+        const snapshot = await db
+            .collection("workspaces").doc(workspaceId).get();
+        if (!snapshot.exists) throw new Error("Workspace introuvable");
+        const ws = snapshot.data();
+        const stripeSubId = ws?.stripeSubscriptionId;
+        if (!stripeSubId) return {}; // Pas d'abonnement
+
+        const stripe = getStripeClient();
+        const sub = await stripe.subscriptions.retrieve(stripeSubId);
+        return {
+          subscriptionId: sub.id,
+          status: sub.status,
+          currentPeriodEnd: sub.current_period_end,
+          planId: sub.metadata?.planId || null,
+        };
+      } catch (e) {
+        logger.error("stripeGetSubscription error:", e);
+        // Si l'abonnement Stripe n'existe plus, nettoyer
+        if (e.type === "StripeInvalidRequestError") {
+          await db.collection("workspaces").doc(workspaceId).update({
+            stripeSubscriptionId: FieldValue.delete(),
+          });
+          return {};
+        }
+        throw new Error(`Erreur Stripe: ${e.message}`);
+      }
+    },
+);
+
+/**
+ * Annule l'abonnement Stripe d'un workspace.
+ */
+exports.stripeCancelSubscription = onCall(
+    {
+      region: "europe-west1",
+      secrets: ["STRIPE_SECRET_KEY"],
+    },
+    async (request) => {
+      const caller = request.auth && request.auth.uid;
+      if (!caller) throw new Error("Non autorisé");
+
+      const {workspaceId} = request.data || {};
+      if (!workspaceId) throw new Error("workspaceId requis");
+
+      try {
+        const snapshot = await db
+            .collection("workspaces").doc(workspaceId).get();
+        if (!snapshot.exists) throw new Error("Workspace introuvable");
+        const ws = snapshot.data();
+        const stripeSubId = ws?.stripeSubscriptionId;
+        if (!stripeSubId) {
+          return {status: "no_subscription"};
+        }
+
+        const stripe = getStripeClient();
+        await stripe.subscriptions.cancel(stripeSubId);
+
+        // Nettoyer le workspace
+        await db.collection("workspaces").doc(workspaceId).update({
+          stripeSubscriptionId: FieldValue.delete(),
+          subscriptionStatus: "cancelled",
+          cancelledAt: Timestamp.now(),
+        });
+
+        return {status: "cancelled", subscriptionId: stripeSubId};
+      } catch (e) {
+        logger.error("stripeCancelSubscription error:", e);
+        throw new Error(`Erreur Stripe: ${e.message}`);
+      }
+    },
+);
+
+/**
+ * Récupère ou crée un Customer Stripe pour un workspace.
+ */
+exports.stripeGetOrCreateCustomer = onCall(
+    {
+      region: "europe-west1",
+      secrets: ["STRIPE_SECRET_KEY"],
+    },
+    async (request) => {
+      const caller = request.auth && request.auth.uid;
+      if (!caller) throw new Error("Non autorisé");
+
+      const {email, workspaceId, name} = request.data || {};
+      if (!email || !workspaceId) {
+        throw new Error("email et workspaceId requis");
+      }
+
+      try {
+        // Vérifier si déjà un customerId
+        const wsSnap = await db
+            .collection("workspaces").doc(workspaceId).get();
+        const existingCustomerId = wsSnap.data()?.stripeCustomerId;
+        if (existingCustomerId) {
+          return {customerId: existingCustomerId};
+        }
+
+        const stripe = getStripeClient();
+        const customer = await stripe.customers.create({
+          email,
+          name: name || "",
+          metadata: {workspaceId},
+        });
+
+        // Sauvegarder l'ID
+        await db.collection("workspaces").doc(workspaceId).update({
+          stripeCustomerId: customer.id,
+        });
+
+        return {customerId: customer.id};
+      } catch (e) {
+        logger.error("stripeGetOrCreateCustomer error:", e);
+        throw new Error(`Erreur Stripe: ${e.message}`);
+      }
+    },
+);
+
+/**
+ * Webhook Stripe — traite les événements entrants.
+ * (Nécessite un déploiement HTTP pour être complet.)
+ */
+exports.stripeWebhook = onCall(
+    {
+      region: "europe-west1",
+      secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"],
+    },
+    async (request) => {
+      const {rawBody, signature} = request.data || {};
+      if (!rawBody || !signature) {
+        throw new Error("rawBody et signature requis");
+      }
+
+      try {
+        const stripe = getStripeClient();
+        const event = stripe.webhooks.constructEvent(
+            rawBody, signature, STRIPE_WEBHOOK_SECRET,
+        );
+
+        switch (event.type) {
+          case "checkout.session.completed": {
+            const session = event.data.object;
+            const workspaceId = session.metadata?.workspaceId;
+            const subscriptionId = session.subscription;
+            const customerId = session.customer;
+
+            if (workspaceId && subscriptionId) {
+              await db.collection("workspaces").doc(workspaceId).update({
+                stripeSubscriptionId: subscriptionId,
+                stripeCustomerId: customerId,
+                subscriptionStatus: "active",
+                subscribedAt: Timestamp.now(),
+              });
+            }
+            break;
+          }
+
+          case "customer.subscription.deleted": {
+            const sub = event.data.object;
+            // Trouver le workspace par subscriptionId
+            const wsSnap = await db
+                .collection("workspaces")
+                .where("stripeSubscriptionId", "==", sub.id)
+                .get();
+            for (const doc of wsSnap.docs) {
+              await doc.ref.update({
+                subscriptionStatus: "expired",
+                stripeSubscriptionId: FieldValue.delete(),
+                expiredAt: Timestamp.now(),
+              });
+            }
+            break;
+          }
+
+          case "invoice.payment_failed": {
+            const invoice = event.data.object;
+            const subId = invoice.subscription;
+            if (subId) {
+              const wsSnap = await db
+                  .collection("workspaces")
+                  .where("stripeSubscriptionId", "==", subId)
+                  .get();
+              for (const doc of wsSnap.docs) {
+                await doc.ref.update({
+                  subscriptionStatus: "past_due",
+                });
+              }
+            }
+            break;
+          }
+        }
+
+        return {received: true};
+      } catch (e) {
+        logger.error("stripeWebhook error:", e);
+        throw new Error(`Erreur webhook: ${e.message}`);
+      }
     },
 );
