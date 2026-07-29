@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/dictionary_service.dart';
 import '../models/onboarding_models.dart';
-import 'account_setup_screen.dart';
-
-const _metierOptions = <String, String>{
-  'menuiserie_aluminium': 'Menuiserie Extérieure & Fermeture',
-};
+import 'plan_selection_screen.dart';
 
 class SelectMetierScreen extends StatefulWidget {
   const SelectMetierScreen({super.key, required this.data});
@@ -19,14 +16,26 @@ class SelectMetierScreen extends StatefulWidget {
 
 class _SelectMetierScreenState extends State<SelectMetierScreen> {
   String? selectedKey;
+  Map<String, String> _metierOptions = {};
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     selectedKey = widget.data.tradeKey;
-    if (_metierOptions.length == 1 && selectedKey == null) {
-      selectedKey = _metierOptions.keys.first;
-    }
+    _loadMetiers();
+  }
+
+  Future<void> _loadMetiers() async {
+    final metiers = await DictionaryService.instance.metiers();
+    if (!mounted) return;
+    setState(() {
+      _metierOptions = metiers;
+      _loading = false;
+      if (_metierOptions.length == 1 && selectedKey == null) {
+        selectedKey = _metierOptions.keys.first;
+      }
+    });
   }
 
   Future<void> _saveAndContinue() async {
@@ -41,7 +50,7 @@ class _SelectMetierScreenState extends State<SelectMetierScreen> {
     await prefs.setString('workit_trade_key', selectedKey!);
     if (!mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AccountSetupScreen()),
+      MaterialPageRoute(builder: (_) => PlanSelectionScreen(data: widget.data)),
     );
   }
 
@@ -117,7 +126,9 @@ class _SelectMetierScreenState extends State<SelectMetierScreen> {
               ),
               const SizedBox(height: 18),
               Expanded(
-                child: ListView.separated(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator(color: accent))
+                    : ListView.separated(
                   itemCount: _metierOptions.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, index) {

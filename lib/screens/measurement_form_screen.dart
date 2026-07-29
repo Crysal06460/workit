@@ -3,6 +3,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import '../core/dictionary_service.dart';
+
 const Color _bg = Color(0xFF07090D);
 const Color _accent = Color(0xFF00E676); // Metreur Green
 const Color _cardBg = Color(0xFF13161C);
@@ -35,39 +37,58 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
 
   late int _currentIndex;
   bool _generating = false;
+  bool _loadingFields = true;
 
-  // Temporary local state for measurements
+  /// Champs de métré résolus (dictionnaire) par index de produit — `null`
+  /// tant que non chargés, ou si le produit n'a pas de métier/catégorie
+  /// reconnue (repli sur le footer générique uniquement).
+  final Map<int, MetreCategoryFields?> _fieldDefs = {};
+
+  // Valeurs saisies par produit, indexées par clé de champ (celles du
+  // dictionnaire + les clés universelles 'couleur'/'quantite'/'ref'/'note').
   final Map<int, Map<String, String>> _measurements = {};
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
-    // Initialize measurements from existing product data
+    // Initialise les valeurs déjà saisies à partir des données existantes du
+    // produit — générique : reprend telle quelle toute valeur déjà stockée.
     final products = (widget.draftData['products'] as List<dynamic>? ?? []);
+    const nonMeasurementKeys = {
+      'metierKey', 'categoryKey', 'sousCategorie', 'typeProduit', 'variante',
+      'couleurDetail', 'largeur', 'hauteur', 'unite', '_splitRef',
+    };
     for (int i = 0; i < products.length; i++) {
-        final p = products[i] as Map<String, dynamic>;
-        if (p['largeurReelle'] != null || p['hauteurReelle'] != null || p['cjHaut'] != null) {
-             _measurements[i] = {
-                'width': p['largeurReelle']?.toString() ?? '',
-                'height': p['hauteurReelle']?.toString() ?? '',
-                 'cjHaut': p['cjHaut']?.toString() ?? '',
-                 'cjBas': p['cjBas']?.toString() ?? '',
-                 'cjGauche': p['cjGauche']?.toString() ?? '',
-                 'cjDroite': p['cjDroite']?.toString() ?? '',
-                 'note': p['note']?.toString() ?? '',
-                 'ref': p['ref']?.toString() ?? '',
-                 'color': p['couleur']?.toString() ?? '',
-             };
-             if (p['couleur'] != null) _measurements[i]!['color'] = p['couleur'];
-             if (p['quantite'] != null) _measurements[i]!['qty'] = p['quantite'].toString();
-        } else {
-             _measurements[i] = {
-                 'color': p['couleur']?.toString() ?? '',
-                 'qty': p['quantite']?.toString() ?? '1',
-              };
-        }
+      final p = products[i] as Map<String, dynamic>;
+      final values = <String, String>{
+        'couleur': p['couleur']?.toString() ?? '',
+        'quantite': p['quantite']?.toString() ?? '1',
+        'ref': p['ref']?.toString() ?? '',
+        'note': p['note']?.toString() ?? '',
+      };
+      for (final entry in p.entries) {
+        if (nonMeasurementKeys.contains(entry.key) || values.containsKey(entry.key)) continue;
+        if (entry.value == null) continue;
+        values[entry.key] = entry.value.toString();
+      }
+      _measurements[i] = values;
     }
+    _loadFieldDefs(products);
+  }
+
+  Future<void> _loadFieldDefs(List<dynamic> products) async {
+    for (int i = 0; i < products.length; i++) {
+      final p = products[i] as Map<String, dynamic>;
+      final metierKey = p['metierKey']?.toString();
+      final categoryKey = p['categoryKey']?.toString();
+      if (metierKey == null || categoryKey == null) {
+        _fieldDefs[i] = null;
+        continue;
+      }
+      _fieldDefs[i] = await DictionaryService.instance.metreFieldsFor(metierKey, categoryKey);
+    }
+    if (mounted) setState(() => _loadingFields = false);
   }
 
   @override
@@ -124,34 +145,27 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
     });
   }
 
-  String _getMeasurement(int index, String key) {
-    return _measurements[index]?[key] ?? '';
-  }
-
   // ---------------------------------------------------------------------------
   // PDF helpers
   // ---------------------------------------------------------------------------
 
   /// Fusionne les données de _products avec _measurements pour avoir le plus
-  /// à jour possible.
+  /// à jour possible. Générique : chaque clé de mesure (dictionnaire ou
+  /// universelle) s'écrit directement sous son propre nom sur le produit.
   List<Map<String, dynamic>> _buildProductsWithMeasurements() {
     final result = <Map<String, dynamic>>[];
     for (int i = 0; i < _products.length; i++) {
       final base = Map<String, dynamic>.from(_products[i]);
       final m = _measurements[i];
       if (m != null) {
-        if (m['width']?.isNotEmpty == true) base['largeurReelle'] = m['width'];
-        if (m['height']?.isNotEmpty == true) base['hauteurReelle'] = m['height'];
-        if (m['cjHaut']?.isNotEmpty == true) base['cjHaut'] = m['cjHaut'];
-        if (m['cjBas']?.isNotEmpty == true) base['cjBas'] = m['cjBas'];
-        if (m['cjGauche']?.isNotEmpty == true) base['cjGauche'] = m['cjGauche'];
-        if (m['cjDroite']?.isNotEmpty == true) base['cjDroite'] = m['cjDroite'];
-        if (m['note']?.isNotEmpty == true) base['note'] = m['note'];
-        if (m['ref']?.isNotEmpty == true) base['ref'] = m['ref'];
-        if (m['color']?.isNotEmpty == true) base['couleur'] = m['color'];
-        if (m['qty']?.isNotEmpty == true) {
-          base['quantite'] = int.tryParse(m['qty']!) ?? base['quantite'];
-        }
+        m.forEach((key, value) {
+          if (value.isEmpty) return;
+          if (key == 'quantite') {
+            base['quantite'] = int.tryParse(value) ?? base['quantite'];
+          } else {
+            base[key] = value;
+          }
+        });
       }
       result.add(base);
     }
@@ -355,19 +369,19 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
           ? '—'
           : '${lPrev == '—' ? '?' : lPrev} x ${hPrev == '—' ? '?' : hPrev} $unite';
 
-      // Dimensions réelles
-      final lReel = _fmt(p['largeurReelle']);
-      final hReel = _fmt(p['hauteurReelle']);
-      final reelStr = (lReel == '—' && hReel == '—')
-          ? '—'
-          : '${lReel == '—' ? '?' : lReel} x ${hReel == '—' ? '?' : hReel} $unite';
-
-      // Cotes joints
-      final cjHaut = _fmt(p['cjHaut']);
-      final cjBas = _fmt(p['cjBas']);
-      final cjGauche = _fmt(p['cjGauche']);
-      final cjDroite = _fmt(p['cjDroite']);
-      final hasCj = [cjHaut, cjBas, cjGauche, cjDroite].any((s) => s != '—');
+      // Champs de métré spécifiques au métier/catégorie (dictionnaire),
+      // affichés génériquement avec leur libellé ; repli sur la clé brute
+      // si la catégorie n'a pas (ou plus) de définition connue.
+      final fieldDef = _fieldDefs[i];
+      final metreRows = <pw.Widget>[];
+      if (fieldDef != null) {
+        for (final field in fieldDef.fields) {
+          final value = p[field.key];
+          if (value == null || value.toString().trim().isEmpty) continue;
+          final unitSuffix = field.unit != null ? ' ${field.unit}' : '';
+          metreRows.add(_buildInfoRow(field.label, '$value$unitSuffix'));
+        }
+      }
 
       // Note & ref
       final note = _fmt(p['note']);
@@ -413,23 +427,10 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
               // Type
               _buildInfoRow('Type', typeStr),
               _buildInfoRow('Couleur', couleurStr),
-              // Dimensions
-              pw.Row(
-                children: [
-                  pw.Expanded(child: _buildInfoRow('Dim. prévues', prevStr)),
-                  pw.Expanded(child: _buildInfoRow('Dim. réelles', reelStr)),
-                ],
-              ),
-              // Cotes joints
-              if (hasCj)
-                pw.Row(
-                  children: [
-                    pw.Expanded(child: _buildInfoRow('CJ Haut', cjHaut)),
-                    pw.Expanded(child: _buildInfoRow('CJ Bas', cjBas)),
-                    pw.Expanded(child: _buildInfoRow('CJ Gauche', cjGauche)),
-                    pw.Expanded(child: _buildInfoRow('CJ Droite', cjDroite)),
-                  ],
-                ),
+              _buildInfoRow('Dim. prévues', prevStr),
+              // Champs de métré spécifiques (dimensions réelles, couvre-joints,
+              // ou tout autre champ propre au métier/catégorie)
+              ...metreRows,
               _buildInfoRow('Quantité', qty),
               if (note != '—') _buildInfoRow('Note métreur', note),
             ],
@@ -555,7 +556,9 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: _loadingFields
+            ? const Center(child: CircularProgressIndicator(color: _accent))
+            : Column(
           children: [
             Expanded(
               child: PageView.builder(
@@ -568,9 +571,10 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
                       ? product['quantite'] as int
                       : int.tryParse(product['quantite']?.toString() ?? '1') ?? 1;
                   final isSplit = product['_splitRef'] != null;
-                  return _SchematicEditor(
+                  return _MeasurementEditor(
                     product: product,
                     index: index,
+                    fields: _fieldDefs[index],
                     measurements: _measurements[index] ?? {},
                     onUpdate: (key, val) => _updateMeasurement(index, key, val),
                     onSplit: (qty > 1 && !isSplit) ? () => _splitProduct(index) : null,
@@ -588,30 +592,9 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
                     curve: Curves.easeInOut,
                   );
                 } else {
-                  // Merge measurements back into products
-                  final updatedProducts = List<Map<String, dynamic>>.from(_products);
-                  _measurements.forEach((index, data) {
-                    if (index < updatedProducts.length) {
-                       final existing = updatedProducts[index];
-                       updatedProducts[index] = {
-                         ...existing,
-                         'largeurReelle': data['width'],
-                         'hauteurReelle': data['height'],
-                         'cjHaut': data['cjHaut'],
-                         'cjBas': data['cjBas'],
-                         'cjGauche': data['cjGauche'],
-                         'cjDroite': data['cjDroite'],
-                         'note': data['note'],
-                         'ref': data['ref'],
-                         // Allow updating color/qty if changed
-                         if (data['color']?.isNotEmpty == true) 'couleur': data['color'],
-                         if (data['qty']?.isNotEmpty == true) 'quantite': int.tryParse(data['qty']!) ?? existing['quantite'],
-                       };
-                    }
-                  });
-
-                  // Return updated data
-                  Navigator.of(context).pop(updatedProducts);
+                  // Retourne les produits avec toutes les mesures fusionnées
+                  // (générique : voir _buildProductsWithMeasurements).
+                  Navigator.of(context).pop(_buildProductsWithMeasurements());
                 }
               },
               onPrev: () {
@@ -630,10 +613,21 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   }
 }
 
-class _SchematicEditor extends StatelessWidget {
-  const _SchematicEditor({
+MetreFieldDef? _findField(List<MetreFieldDef> fields, String key) {
+  for (final f in fields) {
+    if (f.key == key) return f;
+  }
+  return null;
+}
+
+/// Éditeur de métré générique : rend soit le schéma visuel (ouvertures
+/// menuiserie avec couvre-joints), soit une liste de champs adaptée au
+/// métier/catégorie du produit — piloté par [fields] (dictionnaire).
+class _MeasurementEditor extends StatelessWidget {
+  const _MeasurementEditor({
     required this.product,
     required this.index,
+    required this.fields,
     required this.measurements,
     required this.onUpdate,
     this.onSplit,
@@ -641,9 +635,44 @@ class _SchematicEditor extends StatelessWidget {
 
   final Map<String, dynamic> product;
   final int index;
+  final MetreCategoryFields? fields;
   final Map<String, String> measurements;
   final Function(String, String) onUpdate;
   final VoidCallback? onSplit;
+
+  Widget _buildGenericField(MetreFieldDef field) {
+    final value = measurements[field.key];
+    switch (field.type) {
+      case 'dropdown':
+        return _GenericDropdownField(
+          label: field.label,
+          value: value,
+          choices: field.choices,
+          onChanged: (v) => onUpdate(field.key, v ?? ''),
+        );
+      case 'boolean':
+        return _GenericSwitchField(
+          label: field.label,
+          value: value == 'true',
+          onChanged: (v) => onUpdate(field.key, v.toString()),
+        );
+      case 'number':
+        return _FooterInput(
+          label: field.unit != null ? '${field.label} (${field.unit})' : field.label,
+          hint: field.unit ?? 'Ex: 0',
+          value: value,
+          keyboardType: TextInputType.number,
+          onChanged: (v) => onUpdate(field.key, v),
+        );
+      default:
+        return _FooterInput(
+          label: field.label,
+          hint: '',
+          value: value,
+          onChanged: (v) => onUpdate(field.key, v),
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -651,13 +680,27 @@ class _SchematicEditor extends StatelessWidget {
     final wPrev = product['largeur']?.toString() ?? '-';
     final hPrev = product['hauteur']?.toString() ?? '-';
 
+    final allFields = fields?.fields ?? const <MetreFieldDef>[];
+    final largeurField = _findField(allFields, 'largeurReelle');
+    final hauteurField = _findField(allFields, 'hauteurReelle');
+    final cjHaut = _findField(allFields, 'cjHaut');
+    final cjBas = _findField(allFields, 'cjBas');
+    final cjGauche = _findField(allFields, 'cjGauche');
+    final cjDroite = _findField(allFields, 'cjDroite');
+    final hasCj = cjHaut != null || cjBas != null || cjGauche != null || cjDroite != null;
+    final isSchematic = fields?.render == 'schematic_ouverture' &&
+        largeurField != null &&
+        hauteurField != null &&
+        hasCj;
+
+    final schematicKeys = {'largeurReelle', 'hauteurReelle', 'cjHaut', 'cjBas', 'cjGauche', 'cjDroite'};
+    final otherFields = isSchematic
+        ? allFields.where((f) => !schematicKeys.contains(f.key)).toList()
+        : allFields;
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Calculate available space
-        final h = constraints.maxHeight;
         final w = constraints.maxWidth;
-
-        // Dynamic sizing based on screen size
         final double frameSize = w < 400 ? 180 : 240;
 
         return SingleChildScrollView(
@@ -682,7 +725,7 @@ class _SchematicEditor extends StatelessWidget {
                           color: _accent.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.window, color: _accent),
+                        child: Icon(isSchematic ? Icons.window : Icons.build_outlined, color: _accent),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -742,133 +785,150 @@ class _SchematicEditor extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // Schematic View Container (Frame + CJs)
-                SizedBox(
-                  height: 360,
-                  width: double.infinity,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Central Frame Visual with Note
-                      Container(
-                        width: frameSize,
-                        height: frameSize,
-                        decoration: BoxDecoration(
-                          color: _cardBg,
-                          border: Border.all(color: Colors.white24, width: 2),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Text('NOTE',
-                                  style: TextStyle(
-                                      color: Colors.white30,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 10)),
-                              const SizedBox(height: 4),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: TextField(
-                                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                                  textAlign: TextAlign.center,
-                                  decoration: const InputDecoration(
-                                    hintText: 'Ajouter une note...',
-                                    hintStyle: TextStyle(color: Colors.white12),
-                                    border: InputBorder.none,
-                                    isDense: true,
+                if (isSchematic) ...[
+                  // Schematic View Container (Frame + CJs)
+                  SizedBox(
+                    height: 360,
+                    width: double.infinity,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Central Frame Visual with Note
+                        Container(
+                          width: frameSize,
+                          height: frameSize,
+                          decoration: BoxDecoration(
+                            color: _cardBg,
+                            border: Border.all(color: Colors.white24, width: 2),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('NOTE',
+                                    style: TextStyle(
+                                        color: Colors.white30,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 10)),
+                                const SizedBox(height: 4),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  child: TextField(
+                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                    textAlign: TextAlign.center,
+                                    decoration: const InputDecoration(
+                                      hintText: 'Ajouter une note...',
+                                      hintStyle: TextStyle(color: Colors.white12),
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                    ),
+                                    onChanged: (v) => onUpdate('note', v),
+                                    controller: TextEditingController(text: measurements['note'])
+                                      ..selection = TextSelection.collapsed(
+                                          offset: measurements['note']?.length ?? 0),
                                   ),
-                                  onChanged: (v) => onUpdate('note', v),
-                                  controller: TextEditingController(text: measurements['note'])
-                                    ..selection = TextSelection.collapsed(
-                                        offset: measurements['note']?.length ?? 0),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                      ),
 
-                      // CJ Haut (Top Center)
-                      Positioned(
-                        top: 0,
-                        child: _SchematicInput(
-                          label: 'CJ Haut',
-                          value: measurements['cjHaut'],
-                          onChanged: (v) => onUpdate('cjHaut', v),
+                        if (cjHaut != null)
+                          Positioned(
+                            top: 0,
+                            child: _SchematicInput(
+                              label: 'CJ Haut',
+                              value: measurements['cjHaut'],
+                              onChanged: (v) => onUpdate('cjHaut', v),
+                            ),
+                          ),
+                        if (cjBas != null)
+                          Positioned(
+                            bottom: 0,
+                            child: _SchematicInput(
+                              label: 'CJ Bas',
+                              value: measurements['cjBas'],
+                              onChanged: (v) => onUpdate('cjBas', v),
+                            ),
+                          ),
+                        if (cjGauche != null)
+                          Positioned(
+                            left: 0,
+                            child: _SchematicInput(
+                              label: 'CJ Gauche',
+                              value: measurements['cjGauche'],
+                              onChanged: (v) => onUpdate('cjGauche', v),
+                            ),
+                          ),
+                        if (cjDroite != null)
+                          Positioned(
+                            right: 0,
+                            child: _SchematicInput(
+                              label: 'CJ Droite',
+                              value: measurements['cjDroite'],
+                              onChanged: (v) => onUpdate('cjDroite', v),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Main Dimensions Row (Width & Height below the frame)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: _MainDimensionInput(
+                          label: 'Largeur',
+                          value: measurements['largeurReelle'],
+                          onChanged: (v) => onUpdate('largeurReelle', v),
                         ),
                       ),
-
-                      // CJ Bas (Bottom Center)
-                      Positioned(
-                        bottom: 0,
-                        child: _SchematicInput(
-                          label: 'CJ Bas',
-                          value: measurements['cjBas'],
-                          onChanged: (v) => onUpdate('cjBas', v),
-                        ),
-                      ),
-
-                      // CJ Gauche (Left Center)
-                      Positioned(
-                        left: 0,
-                        child: _SchematicInput(
-                          label: 'CJ Gauche',
-                          value: measurements['cjGauche'],
-                           onChanged: (v) => onUpdate('cjGauche', v),
-                        ),
-                      ),
-
-                      // CJ Droite (Right Center)
-                      Positioned(
-                        right: 0,
-                        child: _SchematicInput(
-                          label: 'CJ Droite',
-                          value: measurements['cjDroite'],
-                           onChanged: (v) => onUpdate('cjDroite', v),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _MainDimensionInput(
+                          label: 'Hauteur',
+                          value: measurements['hauteurReelle'],
+                          onChanged: (v) => onUpdate('hauteurReelle', v),
                         ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 20),
+                ] else if (allFields.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'Aucun champ de métré spécifique pour cet élément — utilisez la note ci-dessous.',
+                      style: TextStyle(color: Colors.white38, fontSize: 13),
+                    ),
+                  ),
 
-                const SizedBox(height: 20),
+                // Champs spécifiques au métier/catégorie (liste générique),
+                // ou champs restants après le schéma visuel.
+                for (final field in otherFields) ...[
+                  _buildGenericField(field),
+                  const SizedBox(height: 14),
+                ],
 
-                // Main Dimensions Row (Width & Height below the frame)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                     Expanded(
-                       child: _MainDimensionInput(
-                        label: 'Largeur',
-                        value: measurements['width'],
-                         onChanged: (v) => onUpdate('width', v),
-                      ),
-                     ),
-                     const SizedBox(width: 16),
-                     Expanded(
-                       child: _MainDimensionInput(
-                        label: 'Hauteur',
-                        value: measurements['height'],
-                         onChanged: (v) => onUpdate('height', v),
-                      ),
-                     ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-                // Footer Inputs
+                const SizedBox(height: 6),
+                // Footer universel (toutes catégories)
                 Row(
                   children: [
-                    Expanded(child: _FooterInput(label: 'Couleur', hint: 'Ex: RAL 9010', value: measurements['color'], onChanged: (v) => onUpdate('color', v))),
+                    Expanded(child: _FooterInput(label: 'Couleur', hint: 'Ex: RAL 9010', value: measurements['couleur'], onChanged: (v) => onUpdate('couleur', v))),
                     const SizedBox(width: 12),
-                    Expanded(child: _FooterInput(label: 'Quantité', hint: 'Ex: 1', value: measurements['qty'], onChanged: (v) => onUpdate('qty', v))),
+                    Expanded(child: _FooterInput(label: 'Quantité', hint: 'Ex: 1', value: measurements['quantite'], keyboardType: TextInputType.number, onChanged: (v) => onUpdate('quantite', v))),
                   ],
                 ),
-                 const SizedBox(height: 12),
+                const SizedBox(height: 12),
                 _FooterInput(label: 'Référence / Emplacement', hint: 'Ex: Salon fenêtre gauche', value: measurements['ref'], onChanged: (v) => onUpdate('ref', v)),
-
+                if (!isSchematic) ...[
+                  const SizedBox(height: 12),
+                  _FooterInput(label: 'Note', hint: 'Remarque libre pour ce chantier', value: measurements['note'], onChanged: (v) => onUpdate('note', v)),
+                ],
               ],
             ),
           ),
@@ -973,11 +1033,18 @@ class _MainDimensionInput extends StatelessWidget {
 }
 
 class _FooterInput extends StatelessWidget {
-  const _FooterInput({required this.label, required this.hint, required this.onChanged, this.value});
+  const _FooterInput({
+    required this.label,
+    required this.hint,
+    required this.onChanged,
+    this.value,
+    this.keyboardType = TextInputType.text,
+  });
   final String label;
   final String hint;
   final ValueChanged<String> onChanged;
   final String? value;
+  final TextInputType keyboardType;
 
   @override
   Widget build(BuildContext context) {
@@ -998,6 +1065,7 @@ class _FooterInput extends StatelessWidget {
           child: TextField(
             controller: controller,
             onChanged: onChanged,
+            keyboardType: keyboardType,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: hint,
@@ -1008,6 +1076,85 @@ class _FooterInput extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _GenericDropdownField extends StatelessWidget {
+  const _GenericDropdownField({
+    required this.label,
+    required this.choices,
+    required this.onChanged,
+    this.value,
+  });
+
+  final String label;
+  final List<String> choices;
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveValue = (value != null && choices.contains(value)) ? value : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: effectiveValue,
+              isExpanded: true,
+              dropdownColor: _cardBg,
+              hint: const Text('Choisir…', style: TextStyle(color: Colors.white24)),
+              style: const TextStyle(color: Colors.white),
+              items: choices
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GenericSwitchField extends StatelessWidget {
+  const _GenericSwitchField({required this.label, required this.value, required this.onChanged});
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+          ),
+          Switch(
+            value: value,
+            activeColor: _accent,
+            onChanged: onChanged,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -88,6 +88,14 @@ service cloud.firestore {
           get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
           myWorkspaceId() == workspaceId
         );
+
+        // ── Messagerie interne du chantier ──────────────────────────────
+        match /messages/{messageId} {
+          allow read, write: if isAuth() && (
+            get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+            myWorkspaceId() == workspaceId
+          );
+        }
       }
 
       // ── Sous-collection invites/ ────────────────────────────────────────

@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'chantier_chat_screen.dart';
 import 'measurement_form_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
@@ -1538,6 +1539,7 @@ class _StatusList extends StatelessWidget {
 
 class _ProductFormData {
   const _ProductFormData({
+    this.metierKey,
     this.categoryKey,
     this.sousCategorie,
     this.typeProduit,
@@ -1559,6 +1561,9 @@ class _ProductFormData {
     this.ref,
   });
 
+  /// Métier choisi pour cet élément (voir _ProductFormData équivalent dans
+  /// commercial_home_screen.dart — un devis peut mélanger plusieurs métiers).
+  final String? metierKey;
   final String? categoryKey;
   final String? sousCategorie;
   final String? typeProduit;
@@ -1581,6 +1586,7 @@ class _ProductFormData {
 
   Map<String, dynamic> toMap() {
     return {
+      'metierKey': metierKey,
       'categoryKey': categoryKey,
       'sousCategorie': sousCategorie,
       'typeProduit': typeProduit,
@@ -1605,6 +1611,7 @@ class _ProductFormData {
 
   factory _ProductFormData.fromMap(Map<String, dynamic> map) {
     return _ProductFormData(
+      metierKey: map['metierKey']?.toString(),
       categoryKey: map['categoryKey']?.toString(),
       sousCategorie: map['sousCategorie']?.toString(),
       typeProduit: map['typeProduit']?.toString(),
@@ -1836,6 +1843,11 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
           ),
         ),
         actions: [
+          ChatEntryButton(
+            devisId: data.id,
+            clientLabel: data.title,
+            color: _metreurAccent,
+          ),
           IconButton(
             icon: const Icon(Icons.more_horiz, color: AppColors.grey500),
             onPressed: () {},

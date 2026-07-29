@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/onboarding_models.dart';
-import 'plan_selection_screen.dart';
+import 'select_metier_screen.dart';
 
 class CreateWorkspaceScreen extends StatefulWidget {
   const CreateWorkspaceScreen({
@@ -70,11 +70,10 @@ class _CreateWorkspaceScreenState extends State<CreateWorkspaceScreen> {
       ..adminEmail = widget.email
       ..adminUid = widget.uid
       ..creatorFirstName = widget.firstName
-      ..creatorLastName = widget.lastName
-      ..tradeKey = 'menuiserie_aluminium';
+      ..creatorLastName = widget.lastName;
 
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PlanSelectionScreen(data: data)),
+      MaterialPageRoute(builder: (_) => SelectMetierScreen(data: data)),
     );
   }
 

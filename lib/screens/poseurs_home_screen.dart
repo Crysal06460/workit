@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'chantier_chat_screen.dart';
 import 'settings_screen.dart';
 import 'sign_in_screen.dart';
 import '../core/theme/app_colors.dart';
@@ -512,6 +513,14 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
             fontSize: 16,
           ),
         ),
+        actions: [
+          ChatEntryButton(
+            devisId: data.id,
+            clientLabel: data.clientDisplay,
+            color: AppColors.rolePoseur,
+          ),
+          const SizedBox(width: 6),
+        ],
       ),
       body: SafeArea(
         child: Column(

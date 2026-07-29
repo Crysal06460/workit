@@ -49,6 +49,7 @@ abstract class AppColors {
   static const Color roleCommercial = primary;
   static const Color roleMetteur    = purple;
   static const Color rolePoseur     = success;
+  static const Color roleAdmin      = warning;
 
   // ── Statuts (badge bg / badge text) ───────────────────
   static const Color statusAttenteBg  = warningLight;

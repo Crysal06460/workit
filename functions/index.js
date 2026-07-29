@@ -9,7 +9,8 @@
 
 const {setGlobalOptions} = require("firebase-functions");
 const {onCall} = require("firebase-functions/v2/https");
-const {onDocumentWritten} = require("firebase-functions/v2/firestore");
+const {onDocumentWritten, onDocumentCreated} =
+  require("firebase-functions/v2/firestore");
 const {initializeApp} = require("firebase-admin/app");
 const admin = require("firebase-admin");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
@@ -455,8 +456,9 @@ async function getTokenByUid(uid) {
  * @param {string[]} tokens
  * @param {string} title
  * @param {string} body
+ * @param {Object<string, string>} [data] Payload additionnel pour le deep-link.
  */
-async function sendNotification(tokens, title, body) {
+async function sendNotification(tokens, title, body, data) {
   if (!tokens || tokens.length === 0) return;
   const uniqueTokens = [...new Set(tokens.filter(Boolean))];
   if (uniqueTokens.length === 0) return;
@@ -464,6 +466,7 @@ async function sendNotification(tokens, title, body) {
     await admin.messaging().sendEachForMulticast({
       tokens: uniqueTokens,
       notification: {title, body},
+      data: data || {},
       android: {priority: "high"},
       apns: {payload: {aps: {sound: "default"}}},
     });
@@ -472,16 +475,47 @@ async function sendNotification(tokens, title, body) {
   }
 }
 
+/**
+ * Formate une Timestamp Firestore (ou date-like) en chaînes FR.
+ * @param {*} ts Timestamp Firestore, Date, ou string.
+ * @return {{dateStr: string, timeStr: string, dateTimeStr: string}}
+ */
+function formatFrDateTime(ts) {
+  if (!ts) return {dateStr: "", timeStr: "", dateTimeStr: ""};
+  try {
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const dateStr = d.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+    const timeStr = d.toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const dateTimeStr = d.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "long",
+    }) + " à " + timeStr;
+    return {dateStr, timeStr, dateTimeStr};
+  } catch (_) {
+    const s = String(ts);
+    return {dateStr: s, timeStr: "", dateTimeStr: s};
+  }
+}
+
 // ─── Cloud Function : onDevisStatusChange ───────────────────────────────────
 
 /**
  * Se déclenche à chaque écriture sur un document devis.
- * Envoie des notifications FCM selon le changement de metreurStatus.
+ * Envoie des notifications FCM selon le changement de statut et selon
+ * certains champs (note du métreur) qui ne passent pas par le statut.
  */
 exports.onDevisStatusChange = onDocumentWritten(
     "workspaces/{workspaceId}/devis/{devisId}",
     async (event) => {
       const workspaceId = event.params.workspaceId;
+      const devisId = event.params.devisId;
 
       const before = event.data.before.exists ?
         event.data.before.data() : null;
@@ -490,29 +524,50 @@ exports.onDevisStatusChange = onDocumentWritten(
 
       if (!after) return null; // Document supprimé, rien à faire.
 
-      // 'status' est le champ actif ; 'metreurStatus' est l'ancien nom
-      const statusBefore = before ?
-        (before.status || before.metreurStatus || null) : null;
-      const statusAfter = after.status || after.metreurStatus || null;
-
-      // Ignorer si le statut n'a pas changé
-      if (statusBefore === statusAfter) return null;
-
       const client = after.clientName || after.client || "client inconnu";
-      const address = after.address || after.adresse || "";
       const userId = after.userId || after.commercialId || null;
+      const baseData = {workspaceId, devisId};
 
       try {
-      // ── Création du devis (before = null) ──
-      // after.metreurStatus = 'Nouvelle demande'
+        // ── Note du métreur ('metreurNote') — indépendant du statut ──
+        const noteBefore = before ? (before.metreurNote || null) : null;
+        const noteAfter = after.metreurNote || null;
+        if (noteAfter && noteAfter !== noteBefore) {
+          const tokens = userId ? await getTokenByUid(userId) : [];
+          await sendNotification(
+              tokens,
+              "📋 Message du métreur",
+              `${client} : ${noteAfter}`,
+              {...baseData, type: "metreurNote"},
+          );
+        }
+
+        // 'status' est le champ actif ; 'metreurStatus' est l'ancien nom
+        const statusBefore = before ?
+          (before.status || before.metreurStatus || null) : null;
+        const statusAfter = after.status || after.metreurStatus || null;
+
+        // Ignorer la suite si le statut n'a pas changé
+        if (statusBefore === statusAfter) return null;
+
+        // ── Création du devis (before = null) ──
+        // after.metreurStatus = 'Nouvelle demande'
         if (before === null && statusAfter === "Nouvelle demande") {
-          const metreurTokens = await getTokensByRole(workspaceId, "metreur");
+          // Si un métreur précis a été choisi par le commercial, ne notifier
+          // que lui (+ admins) — les autres métreurs ne le verront pas dans
+          // leur liste de toute façon. Sinon ("Peu importe"), notifier toute
+          // l'équipe de métreurs.
+          const assignedMetreurId = after.metreurId || after.assignedMetreurId;
+          const metreurTokens = assignedMetreurId ?
+            await getTokenByUid(assignedMetreurId) :
+            await getTokensByRole(workspaceId, "metreur");
           const adminTokens = await getTokensByRole(workspaceId, "admin");
           const tokens = [...metreurTokens, ...adminTokens];
           await sendNotification(
               tokens,
-              "🔔 Nouveau chantier à métrer",
-              `${client} - ${address}`,
+              "🔔 Nouveau métré à réaliser",
+              `Un nouveau métré est à réaliser pour le chantier ${client}`,
+              {...baseData, type: "status"},
           );
           return null;
         }
@@ -526,6 +581,21 @@ exports.onDevisStatusChange = onDocumentWritten(
               tokens,
               "📅 Métré planifié",
               `Le chantier de ${client} va être métré par ${metreurName}`,
+              {...baseData, type: "status"},
+          );
+          return null;
+        }
+
+        // ── Status → 'En cours' (RDV de métré programmé) ──
+        if (statusAfter === "En cours") {
+          const tokens = userId ? await getTokenByUid(userId) : [];
+          const {dateStr, timeStr} = formatFrDateTime(after.meetingAt);
+          const when = timeStr ? `le ${dateStr} à ${timeStr}` : `le ${dateStr}`;
+          await sendNotification(
+              tokens,
+              "📅 Rendez-vous de métré confirmé",
+              `Le métré du chantier de ${client} est programmé ${when}`,
+              {...baseData, type: "status"},
           );
           return null;
         }
@@ -540,6 +610,7 @@ exports.onDevisStatusChange = onDocumentWritten(
               "✅ Métré terminé",
               `Le métré de ${client} est terminé. ` +
               `La commande peut être passée.`,
+              {...baseData, type: "status"},
           );
           return null;
         }
@@ -551,6 +622,7 @@ exports.onDevisStatusChange = onDocumentWritten(
               tokens,
               "📦 Commande passée",
               `Le chantier ${client} est commandé`,
+              {...baseData, type: "status"},
           );
           return null;
         }
@@ -561,29 +633,8 @@ exports.onDevisStatusChange = onDocumentWritten(
             Array.isArray(after.poseurIds) ? after.poseurIds : [];
           const poseurNames = after.poseurNames || "l'équipe de pose";
           const poseDate = after.poseDate || after.dateDebut || "";
-          let poseDateStr = "";
-          let poseDateTimeStr = "";
-          if (poseDate) {
-            try {
-              const d = poseDate.toDate ?
-                poseDate.toDate() : new Date(poseDate);
-              poseDateStr = d.toLocaleDateString("fr-FR", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-              });
-              poseDateTimeStr = d.toLocaleDateString("fr-FR", {
-                day: "2-digit",
-                month: "long",
-              }) + " à " + d.toLocaleTimeString("fr-FR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-            } catch (_) {
-              poseDateStr = String(poseDate);
-              poseDateTimeStr = poseDateStr;
-            }
-          }
+          const {dateStr: poseDateStr, dateTimeStr: poseDateTimeStr} =
+            formatFrDateTime(poseDate);
 
           // Tokens poseurs
           const poseurTokenPromises = poseurIds.map((id) => getTokenByUid(id));
@@ -600,11 +651,13 @@ exports.onDevisStatusChange = onDocumentWritten(
                 poseurTokens,
                 "🏗️ Nouveau chantier assigné",
                 `${client} le ${poseDateTimeStr}`,
+                {...baseData, type: "status"},
             ),
             sendNotification(
                 managerTokens,
                 "📋 Pose programmée",
                 `${client} le ${poseDateStr} par ${poseurNames}`,
+                {...baseData, type: "status"},
             ),
           ]);
           return null;
@@ -619,6 +672,7 @@ exports.onDevisStatusChange = onDocumentWritten(
               tokens,
               "🎉 Chantier terminé",
               `Le chantier ${client} a été clôturé avec succès`,
+              {...baseData, type: "status"},
           );
           return null;
         }
@@ -632,11 +686,76 @@ exports.onDevisStatusChange = onDocumentWritten(
               tokens,
               "⚠️ Problème chantier",
               `Un problème a été signalé sur le chantier ${client}`,
+              {...baseData, type: "status"},
           );
           return null;
         }
       } catch (e) {
         logger.error("onDevisStatusChange error:", e);
+      }
+
+      return null;
+    });
+
+// ─── Cloud Function : onChantierMessageCreated ──────────────────────────────
+
+/**
+ * Se déclenche à chaque nouveau message dans la messagerie d'un chantier.
+ * Notifie tous les participants du dossier (commercial, métreur, poseurs,
+ * admins) sauf l'auteur du message.
+ */
+exports.onChantierMessageCreated = onDocumentCreated(
+    "workspaces/{workspaceId}/devis/{devisId}/messages/{messageId}",
+    async (event) => {
+      const workspaceId = event.params.workspaceId;
+      const devisId = event.params.devisId;
+      const messageSnap = event.data;
+      if (!messageSnap) return null;
+
+      const message = messageSnap.data();
+      const senderId = message.senderId;
+      const senderName = message.senderName || "Un membre de l'équipe";
+      const text = (message.text || "").toString();
+
+      try {
+        const devisDoc = await db
+            .doc(`workspaces/${workspaceId}/devis/${devisId}`)
+            .get();
+        if (!devisDoc.exists) return null;
+        const devis = devisDoc.data();
+        const client = devis.clientName || devis.client || "un chantier";
+
+        const recipientIds = [
+          devis.userId || devis.commercialId,
+          devis.metreurId,
+          ...(Array.isArray(devis.poseurIds) ? devis.poseurIds : []),
+        ].filter((id) => id && id !== senderId);
+
+        const recipientTokenArrays = await Promise.all(
+            recipientIds.map((id) => getTokenByUid(id)),
+        );
+        const adminTokens = await getTokensByRole(workspaceId, "admin");
+
+        // Exclure le token de l'auteur (au cas où il serait aussi admin).
+        const senderTokens = new Set(await getTokenByUid(senderId));
+        const tokens = [
+          ...recipientTokenArrays.flat(),
+          ...adminTokens,
+        ].filter((t) => !senderTokens.has(t));
+
+        const preview = text.length > 80 ? text.substring(0, 80) + "…" : text;
+        const body = text ?
+          `${senderName} : ${preview}` :
+          `${senderName} a envoyé une pièce jointe`;
+
+        await sendNotification(
+            tokens,
+            `💬 Nouveau message — ${client}`,
+            body,
+            {workspaceId, devisId, type: "chat"},
+        );
+      } catch (e) {
+        logger.error("onChantierMessageCreated error:", e);
       }
 
       return null;

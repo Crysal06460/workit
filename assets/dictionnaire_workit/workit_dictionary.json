@@ -347,6 +347,145 @@
           }
         }
       },
+      "metre_fields": {
+        "menuiseries_exterieures": {
+          "render": "schematic_ouverture",
+          "fields": [
+            {"key": "largeurReelle", "label": "Largeur tableau réelle (3 points, plus petite)", "type": "number", "unit": "mm"},
+            {"key": "hauteurReelle", "label": "Hauteur tableau réelle (3 points, plus petite)", "type": "number", "unit": "mm"},
+            {"key": "cjHaut", "label": "Couvre-joint Haut", "type": "number", "unit": "mm"},
+            {"key": "cjBas", "label": "Couvre-joint Bas", "type": "number", "unit": "mm"},
+            {"key": "cjGauche", "label": "Couvre-joint Gauche", "type": "number", "unit": "mm"},
+            {"key": "cjDroite", "label": "Couvre-joint Droite", "type": "number", "unit": "mm"},
+            {"key": "modePose", "label": "Mode de pose", "type": "dropdown", "choices": ["Applique intérieure", "Applique extérieure", "Tunnel", "Rénovation sur dormant conservé"]},
+            {"key": "profondeurTableau", "label": "Profondeur du tableau / épaisseur du mur", "type": "number", "unit": "mm"},
+            {"key": "natureSupport", "label": "Nature du support de fixation", "type": "dropdown", "choices": ["Maçonnerie", "Béton", "Ossature bois", "Ossature métallique"]},
+            {"key": "deposeAncien", "label": "Dépose d'un ancien dormant nécessaire", "type": "boolean"},
+            {"key": "sensOuverture", "label": "Sens d'ouverture à confirmer", "type": "dropdown", "choices": ["Gauche", "Droite", "Sans objet"]},
+            {"key": "accesChantier", "label": "Contraintes d'accès chantier", "type": "dropdown", "choices": ["RDC", "Étage - échafaudage", "Étage - nacelle nécessaire"]},
+            {"key": "refExistante", "label": "Référence / couleur RAL de l'existant relevée sur site", "type": "text"},
+            {"key": "vrIntegre", "label": "Volet roulant intégré à réintégrer", "type": "boolean"}
+          ]
+        },
+        "volets_roulants": {
+          "render": "list",
+          "fields": [
+            {"key": "typeCoffre", "label": "Type de coffre existant", "type": "dropdown", "choices": ["Tunnel / linteau maçonné", "Bloc-baie", "Monobloc rénovation", "Neuf - aucun"]},
+            {"key": "largeurTunnel", "label": "Largeur du tunnel / coffre", "type": "number", "unit": "mm"},
+            {"key": "profondeurCoffre", "label": "Profondeur du coffre tunnel", "type": "number", "unit": "mm"},
+            {"key": "hauteurTablier", "label": "Hauteur du tablier à commander", "type": "number", "unit": "mm"},
+            {"key": "manoeuvre", "label": "Type de manœuvre relevé / souhaité", "type": "dropdown", "choices": ["Manuel sangle/manivelle", "Motorisé filaire", "Motorisé radio"]},
+            {"key": "pointElectrique", "label": "Point électrique disponible à proximité", "type": "boolean"},
+            {"key": "etatCoffre", "label": "État du coffre existant", "type": "dropdown", "choices": ["Conservé bon état", "À déposer", "À habiller"]},
+            {"key": "couleurLames", "label": "Couleur des lames relevée", "type": "text"}
+          ]
+        },
+        "volets_battants": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurEntreGonds", "label": "Largeur entre gonds / tableau (3 points, plus petite)", "type": "number", "unit": "mm"},
+            {"key": "hauteurLinteauAppui", "label": "Hauteur entre linteau et appui", "type": "number", "unit": "mm"},
+            {"key": "typePose", "label": "Type de pose", "type": "dropdown", "choices": ["Feuillure", "Tableau", "Applique"]},
+            {"key": "natureSupportGonds", "label": "Nature du support de fixation des gonds", "type": "dropdown", "choices": ["Bois", "Maçonnerie", "Béton", "Métal"]},
+            {"key": "quincaillerieExistante", "label": "Type de quincaillerie existante à remplacer", "type": "dropdown", "choices": ["Arrêt marseillais", "Arrêt espagnol", "Crémaillère"]},
+            {"key": "sensOuverture", "label": "Sens d'ouverture à confirmer", "type": "dropdown", "choices": ["Gauche", "Droite"]}
+          ]
+        },
+        "stores_exterieurs": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurFacade", "label": "Largeur de façade disponible", "type": "number", "unit": "mm"},
+            {"key": "avanceeMax", "label": "Avancée maximale sans obstacle", "type": "number", "unit": "mm"},
+            {"key": "hauteurLibre", "label": "Hauteur libre sous obstacle (gouttière/balcon)", "type": "number", "unit": "mm"},
+            {"key": "natureSupport", "label": "Nature du support de fixation", "type": "dropdown", "choices": ["Mur maçonné", "Bardage", "Ossature bois", "BA13 seul - renfort requis"]},
+            {"key": "alimentationElectrique", "label": "Alimentation électrique à proximité", "type": "boolean"},
+            {"key": "exposition", "label": "Exposition de la façade", "type": "dropdown", "choices": ["Nord", "Sud", "Est", "Ouest"]},
+            {"key": "obstacles", "label": "Obstacles identifiés (gouttière, volet, coffret)", "type": "text"}
+          ]
+        },
+        "stores_interieurs": {
+          "render": "list",
+          "fields": [
+            {"key": "typePose", "label": "Type de pose", "type": "dropdown", "choices": ["Applique", "Embrasure", "Plafond"]},
+            {"key": "largeurEmbrasure", "label": "Largeur de l'embrasure ou du tableau", "type": "number", "unit": "mm"},
+            {"key": "profondeurEmbrasure", "label": "Profondeur d'embrasure disponible", "type": "number", "unit": "mm"},
+            {"key": "obstaclesEmbrasure", "label": "Obstacles dans l'embrasure (poignée, tuyau, moulure)", "type": "text"},
+            {"key": "degagementLateral", "label": "Dégagement latéral disponible côté applique", "type": "number", "unit": "mm"}
+          ]
+        },
+        "portes_garage": {
+          "render": "schematic_ouverture",
+          "fields": [
+            {"key": "largeurReelle", "label": "Largeur tableau", "type": "number", "unit": "mm"},
+            {"key": "hauteurReelle", "label": "Hauteur tableau", "type": "number", "unit": "mm"},
+            {"key": "retombeeLinteau", "label": "Retombée de linteau", "type": "number", "unit": "mm"},
+            {"key": "hauteurPassage", "label": "Hauteur sous plafond / passage disponible", "type": "number", "unit": "mm"},
+            {"key": "profondeurPlafond", "label": "Profondeur du plafond disponible", "type": "number", "unit": "mm"},
+            {"key": "profondeurTableau", "label": "Épaisseur du tableau (profondeur mur)", "type": "number", "unit": "mm"},
+            {"key": "ecoinconGauche", "label": "Écoinçon gauche", "type": "number", "unit": "mm"},
+            {"key": "ecoinconDroit", "label": "Écoinçon droit", "type": "number", "unit": "mm"},
+            {"key": "modePose", "label": "Mode de pose retenu", "type": "dropdown", "choices": ["Applique intérieure", "Tunnel", "Applique extérieure"]},
+            {"key": "pointElectrique", "label": "Point électrique motorisation disponible", "type": "boolean"}
+          ]
+        },
+        "portails": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurPassage", "label": "Largeur de passage utile entre piliers (3 hauteurs, plus petite)", "type": "number", "unit": "mm"},
+            {"key": "typePortail", "label": "Type de portail", "type": "dropdown", "choices": ["Battant", "Coulissant"]},
+            {"key": "longueurRefoulement", "label": "Longueur de refoulement disponible (coulissant)", "type": "number", "unit": "mm"},
+            {"key": "reculVerins", "label": "Entraxe / recul nécessaire pour vérins ou bras", "type": "number", "unit": "mm"},
+            {"key": "naturePiliers", "label": "Nature des piliers", "type": "dropdown", "choices": ["Maçonnerie existante", "Piliers alu à créer", "Piliers béton à créer"]},
+            {"key": "denivele", "label": "Dénivelé / pente du sol", "type": "number", "unit": "mm"},
+            {"key": "alimentationElectrique", "label": "Alimentation électrique à proximité", "type": "boolean"}
+          ]
+        },
+        "pergolas": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurPose", "label": "Largeur de pose (sol, mi-hauteur, fixation haute)", "type": "number", "unit": "mm"},
+            {"key": "avancee", "label": "Avancée / profondeur", "type": "number", "unit": "mm"},
+            {"key": "natureMurFixation", "label": "Nature du mur de fixation", "type": "dropdown", "choices": ["Maçonnerie", "Bardage", "Ossature bois", "Autoportée - aucun mur"]},
+            {"key": "debordGouttiere", "label": "Débord de toiture ou gouttière gênant l'ouverture des lames", "type": "boolean"},
+            {"key": "typeSol", "label": "Type de sol existant", "type": "dropdown", "choices": ["Terrasse dallée", "Dalle béton", "Terre à préparer"]},
+            {"key": "epaisseurRevetement", "label": "Épaisseur du futur revêtement de sol à anticiper", "type": "number", "unit": "mm"},
+            {"key": "evacuationEP", "label": "Évacuation des eaux pluviales prévue", "type": "dropdown", "choices": ["Gouttière existante", "À créer", "Raccordement réseau"]}
+          ]
+        },
+        "moustiquaires": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurEntreDormants", "label": "Largeur entre dormants (3 points, plus petite)", "type": "number", "unit": "mm"},
+            {"key": "hauteurEntreDormants", "label": "Hauteur entre dormants", "type": "number", "unit": "mm"},
+            {"key": "espaceFeuillure", "label": "Espace de fixation disponible en feuillure", "type": "number", "unit": "mm"},
+            {"key": "typeOuvrant", "label": "Type d'ouvrant à équiper", "type": "dropdown", "choices": ["Fenêtre battante", "Porte-fenêtre", "Baie coulissante"]},
+            {"key": "poigneeGenante", "label": "Poignée / gâche saillante gênant la pose", "type": "boolean"}
+          ]
+        },
+        "clotures": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurLineaire", "label": "Longueur totale du linéaire", "type": "number", "unit": "m"},
+            {"key": "nbPoteaux", "label": "Nombre de poteaux / piliers nécessaires", "type": "number"},
+            {"key": "denivele", "label": "Dénivelé du terrain sur le linéaire", "type": "number", "unit": "mm"},
+            {"key": "typePose", "label": "Type de pose", "type": "dropdown", "choices": ["Sur muret existant", "Scellement au sol", "Sur platine"]},
+            {"key": "natureSol", "label": "Nature du sol", "type": "dropdown", "choices": ["Terre", "Béton", "Muret maçonné"]},
+            {"key": "reseauxEnterres", "label": "Présence de réseaux enterrés sur le tracé", "type": "boolean"},
+            {"key": "bornage", "label": "Limite de propriété matérialisée / bornage", "type": "boolean"}
+          ]
+        },
+        "garde_corps": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurLineaire", "label": "Longueur du linéaire à équiper", "type": "number", "unit": "mm"},
+            {"key": "epaisseurDalle", "label": "Épaisseur de la dalle / nez de dalle", "type": "number", "unit": "mm"},
+            {"key": "hauteurFixation", "label": "Hauteur de fixation requise selon usage", "type": "dropdown", "choices": ["90 cm escalier", "1 m balcon épaisseur <50cm", "80 cm balcon épaisseur ≥50cm"]},
+            {"key": "typeFixation", "label": "Type de fixation", "type": "dropdown", "choices": ["Applique latérale", "Nez de dalle", "Sur poteaux au sol"]},
+            {"key": "natureSupport", "label": "Nature du support", "type": "dropdown", "choices": ["Béton", "Acier", "Bois"]},
+            {"key": "mainCouranteExistante", "label": "Main courante existante à conserver", "type": "boolean"}
+          ]
+        }
+      },
       "options": {
         "couleurs": {
           "ral": "Tous RAL",
@@ -501,6 +640,51 @@
               "Ponçage fin inclus"
             ]
           }
+        }
+      },
+      "metre_fields": {
+        "cloisons": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurLineaire", "label": "Longueur du linéaire de cloison", "type": "number", "unit": "m"},
+            {"key": "hauteurReelle", "label": "Hauteur sol-plafond réelle (plusieurs points)", "type": "number", "unit": "mm"},
+            {"key": "epaisseurDisponible", "label": "Épaisseur totale disponible pour l'ossature", "type": "number", "unit": "mm"},
+            {"key": "natureFixation", "label": "Nature du sol/plafond de fixation", "type": "dropdown", "choices": ["Dalle béton", "Plancher bois", "Faux plafond existant"]},
+            {"key": "reseauxIntegres", "label": "Réseaux à intégrer (électricité/plomberie)", "type": "boolean"},
+            {"key": "performanceRequise", "label": "Performance requise", "type": "dropdown", "choices": ["Standard", "Phonique renforcé", "Coupe-feu EI30-EI60"]},
+            {"key": "porteIntegree", "label": "Porte(s) à intégrer et dimensions du bloc-porte", "type": "text"}
+          ]
+        },
+        "doublages_isolation": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurLineaire", "label": "Linéaire de mur à doubler", "type": "number", "unit": "m"},
+            {"key": "hauteurReelle", "label": "Hauteur sol-plafond", "type": "number", "unit": "mm"},
+            {"key": "etatSupport", "label": "État du mur support", "type": "dropdown", "choices": ["Sain", "Humidité à traiter", "Irrégulier - rattrapage nécessaire"]},
+            {"key": "pontsThermiques", "label": "Ponts thermiques identifiés", "type": "boolean"},
+            {"key": "epaisseurIsolant", "label": "Épaisseur d'isolant nécessaire", "type": "dropdown", "choices": ["45mm", "70mm", "100mm", "140mm"]},
+            {"key": "tableauxARetourner", "label": "Tableaux de fenêtres/portes à retourner en isolation", "type": "boolean"}
+          ]
+        },
+        "plafonds": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface totale", "type": "number", "unit": "m²"},
+            {"key": "hauteurActuelle", "label": "Hauteur sous plafond actuelle (plusieurs points)", "type": "number", "unit": "mm"},
+            {"key": "hauteurLibreRequise", "label": "Hauteur libre minimale requise après travaux", "type": "number", "unit": "mm"},
+            {"key": "reseauxPlenum", "label": "Réseaux présents dans le plénum", "type": "dropdown", "choices": ["Gaines VMC", "Électricité", "Plomberie", "Aucun"]},
+            {"key": "spotsPrevu", "label": "Nombre et emplacement des spots/luminaires prévus", "type": "text"},
+            {"key": "structureExistante", "label": "Type de structure existante", "type": "dropdown", "choices": ["Dalle béton", "Plancher bois", "Charpente apparente"]}
+          ]
+        },
+        "enduits": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface à traiter", "type": "number", "unit": "m²"},
+            {"key": "etatSupport", "label": "État actuel du support", "type": "dropdown", "choices": ["Neuf - joints seulement", "Fissuré", "Réfection complète"]},
+            {"key": "finitionDemandee", "label": "Finition demandée", "type": "dropdown", "choices": ["Prêt à peindre", "Finition soignée talochée", "Sans ponçage"]},
+            {"key": "anglesParticuliers", "label": "Angles/arêtes particulières à traiter", "type": "boolean"}
+          ]
         }
       },
       "options": {
@@ -695,6 +879,64 @@
           }
         }
       },
+      "metre_fields": {
+        "tableaux_electriques": {
+          "render": "list",
+          "fields": [
+            {"key": "emplacementActuel", "label": "Emplacement actuel du tableau", "type": "dropdown", "choices": ["Garage", "Cellier", "Placard technique", "À créer"]},
+            {"key": "nbRangeesLibres", "label": "Nombre de rangées libres / à ajouter", "type": "number"},
+            {"key": "nbModulesDisponibles", "label": "Nombre de modules disponibles", "type": "number"},
+            {"key": "etatTableau", "label": "État du tableau existant", "type": "dropdown", "choices": ["Ancien sans différentiel", "Aux normes NF C15-100", "Absent"]},
+            {"key": "presenceTerre", "label": "Présence de la terre", "type": "boolean"},
+            {"key": "distanceCompteur", "label": "Distance au compteur / point de livraison", "type": "number", "unit": "m"},
+            {"key": "marqueExistante", "label": "Marque / référence existante", "type": "text"}
+          ]
+        },
+        "cablage_circuits": {
+          "render": "list",
+          "fields": [
+            {"key": "nbPointsLumineux", "label": "Nombre de points lumineux par pièce", "type": "text"},
+            {"key": "nbPrises16A", "label": "Nombre de prises 16A par pièce", "type": "text"},
+            {"key": "prisesSpecialisees", "label": "Prises spécialisées (four, LV, LL)", "type": "dropdown", "choices": ["Aucune", "1", "2", "3+"]},
+            {"key": "longueurCable", "label": "Longueur de câble estimée par circuit", "type": "number", "unit": "m"},
+            {"key": "modePose", "label": "Mode de pose", "type": "dropdown", "choices": ["Encastré/saignée", "Apparent goulotte", "Faux plafond", "Sous plancher"]},
+            {"key": "natureSupport", "label": "Nature du support", "type": "dropdown", "choices": ["Placo", "Maçonnerie", "Béton banché"]},
+            {"key": "accesCombles", "label": "Accès combles/vide sanitaire pour passage de câbles", "type": "boolean"}
+          ]
+        },
+        "domotique": {
+          "render": "list",
+          "fields": [
+            {"key": "emplacementBox", "label": "Emplacement prévu de la box domotique", "type": "text"},
+            {"key": "couvertureWifi", "label": "Qualité de couverture Wifi sur site", "type": "dropdown", "choices": ["Bonne", "Faible - répéteur nécessaire"]},
+            {"key": "protocole", "label": "Protocole souhaité", "type": "dropdown", "choices": ["Zigbee", "Z-Wave", "Wifi", "RTS-IO"]},
+            {"key": "nbPointsAEquiper", "label": "Nombre de points à équiper (volets, prises, éclairage)", "type": "number"},
+            {"key": "reseauCompatible", "label": "Réseau existant compatible déjà en place", "type": "boolean"}
+          ]
+        },
+        "courants_faibles": {
+          "render": "list",
+          "fields": [
+            {"key": "nbPrisesRJ45", "label": "Nombre de prises RJ45 par pièce", "type": "text"},
+            {"key": "emplacementBaie", "label": "Emplacement de la baie de brassage", "type": "text"},
+            {"key": "nbCameras", "label": "Nombre et emplacement des caméras", "type": "text"},
+            {"key": "distanceCameraEnregistreur", "label": "Distance caméra - enregistreur/switch", "type": "number", "unit": "m"},
+            {"key": "alimentationCamera", "label": "Alimentation caméra", "type": "dropdown", "choices": ["PoE", "12V", "Batterie"]},
+            {"key": "natureMurFixation", "label": "Nature du mur de fixation caméra", "type": "dropdown", "choices": ["Maçonnerie", "Bardage", "Bois"]}
+          ]
+        },
+        "irve": {
+          "render": "list",
+          "fields": [
+            {"key": "distanceTableauBorne", "label": "Distance tableau électrique - emplacement de la borne", "type": "number", "unit": "m"},
+            {"key": "sectionCable", "label": "Section de câble nécessaire selon distance/puissance", "type": "dropdown", "choices": ["6 mm²", "10 mm²", "16 mm²"]},
+            {"key": "typeCourant", "label": "Type de courant disponible", "type": "dropdown", "choices": ["Monophasé", "Triphasé"]},
+            {"key": "espaceTableauDisponible", "label": "Espace disponible au tableau pour module dédié", "type": "boolean"},
+            {"key": "parcoursCable", "label": "Type de parcours du câble", "type": "dropdown", "choices": ["Apparent goulotte", "Enterré", "Encastré"]},
+            {"key": "supportBorne", "label": "Support de fixation de la borne", "type": "dropdown", "choices": ["Mur", "Sur pied à sceller"]}
+          ]
+        }
+      },
       "options": {
         "couleurs": {
           "appareillage": ["Blanc", "Noir", "Alu", "Anthracite"],
@@ -874,6 +1116,61 @@
           "options": {
             "capacite_l_j": ["10L/j", "20L/j", "40L/j", "80L/j"]
           }
+        }
+      },
+      "metre_fields": {
+        "climatisation": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurLiaison", "label": "Longueur de liaison frigorifique nécessaire", "type": "number", "unit": "m"},
+            {"key": "denivele", "label": "Dénivelé entre unité intérieure et extérieure", "type": "number", "unit": "m"},
+            {"key": "emplacementUE", "label": "Emplacement de l'unité extérieure", "type": "dropdown", "choices": ["Sol", "Mural", "Toiture-terrasse"]},
+            {"key": "degagementUE", "label": "Dégagement libre autour de l'unité extérieure", "type": "number", "unit": "cm"},
+            {"key": "distanceCondensats", "label": "Distance d'évacuation des condensats", "type": "number", "unit": "m"},
+            {"key": "alimentationDediee", "label": "Alimentation électrique dédiée à proximité", "type": "boolean"},
+            {"key": "natureMurTraversee", "label": "Nature du mur de traversée pour la liaison", "type": "dropdown", "choices": ["Maçonnerie", "Béton", "Ossature bois"]}
+          ]
+        },
+        "pompes_a_chaleur": {
+          "render": "list",
+          "fields": [
+            {"key": "emplacementUE", "label": "Emplacement de l'unité extérieure", "type": "dropdown", "choices": ["Jardin/sol", "Terrasse", "Façade"]},
+            {"key": "degagementUE", "label": "Dégagement libre autour de l'unité", "type": "number", "unit": "cm"},
+            {"key": "distanceUEInterieure", "label": "Distance unité extérieure - unité intérieure/ballon", "type": "number", "unit": "m"},
+            {"key": "distanceVoisinage", "label": "Distance à la limite de propriété/voisinage (acoustique)", "type": "number", "unit": "m"},
+            {"key": "natureSol", "label": "Nature du sol de pose", "type": "dropdown", "choices": ["Dalle béton à couler", "Existante", "Plots anti-vibratiles"]},
+            {"key": "emetteursExistants", "label": "Émetteurs existants compatibles", "type": "dropdown", "choices": ["Radiateurs eau chaude", "Plancher chauffant", "Aucun - à créer"]}
+          ]
+        },
+        "chauffage": {
+          "render": "list",
+          "fields": [
+            {"key": "typeEvacuation", "label": "Type d'évacuation existante", "type": "dropdown", "choices": ["Ventouse", "Cheminée à tuber", "Aucune"]},
+            {"key": "longueurTubage", "label": "Longueur de tubage nécessaire", "type": "number", "unit": "m"},
+            {"key": "distanceOuvrants", "label": "Distance sortie ventouse - ouvrants/entrée d'air", "type": "number", "unit": "cm"},
+            {"key": "etatConduit", "label": "État du conduit de fumée existant", "type": "dropdown", "choices": ["Bon état", "À diagnostiquer", "Absent"]},
+            {"key": "energieDisponible", "label": "Énergie disponible sur site", "type": "dropdown", "choices": ["Gaz de ville", "Fioul - cuve existante", "Électricité"]},
+            {"key": "distanceCombustibles", "label": "Distance de sécurité aux matériaux combustibles (poêle)", "type": "number", "unit": "cm"}
+          ]
+        },
+        "ventilation": {
+          "render": "list",
+          "fields": [
+            {"key": "diametreGaine", "label": "Diamètre de gaine nécessaire par pièce", "type": "dropdown", "choices": ["80mm", "100mm", "125mm", "150mm"]},
+            {"key": "longueurGaine", "label": "Longueur de gaine par point d'extraction", "type": "number", "unit": "m"},
+            {"key": "nbCoudes", "label": "Nombre de coudes à 90° sur le parcours", "type": "number"},
+            {"key": "accesCombles", "label": "Accès combles/faux plafond pour passage de gaines", "type": "boolean"},
+            {"key": "isolationCombles", "label": "Isolation thermique des combles à ce niveau", "type": "dropdown", "choices": ["Isolé", "Non isolé - gaine isolée requise"]},
+            {"key": "emplacementCaisson", "label": "Emplacement du caisson VMC", "type": "text"}
+          ]
+        },
+        "traitement_air": {
+          "render": "list",
+          "fields": [
+            {"key": "volumePiece", "label": "Volume de la pièce à traiter", "type": "number", "unit": "m³"},
+            {"key": "priseElectrique", "label": "Prise électrique disponible à proximité", "type": "boolean"},
+            {"key": "evacuationDeshumidificateur", "label": "Évacuation pour déshumidificateur", "type": "dropdown", "choices": ["Avec évacuation vers extérieur", "Bac à vider manuellement"]}
+          ]
         }
       },
       "options": {
@@ -1121,6 +1418,96 @@
           }
         }
       },
+      "metre_fields": {
+        "alimentation_eau": {
+          "render": "list",
+          "fields": [
+            {"key": "materiauExistant", "label": "Matériau tuyauterie existante détecté", "type": "dropdown", "choices": ["PER", "Multicouche", "Cuivre", "Plomb à remplacer", "Inconnu"]},
+            {"key": "diametreArrivee", "label": "Diamètre arrivée générale", "type": "dropdown", "choices": ["12mm", "16mm", "20mm", "26mm"]},
+            {"key": "pression", "label": "Pression au point le plus défavorable", "type": "dropdown", "choices": ["Normale", "Faible", "À vérifier avec manomètre"]},
+            {"key": "nbPointsEau", "label": "Nombre de points d'eau à raccorder", "type": "number"},
+            {"key": "distanceNourrice", "label": "Distance nourrice/collecteur au point le plus éloigné", "type": "number", "unit": "m"},
+            {"key": "typeReseau", "label": "Réseau encastré ou apparent", "type": "dropdown", "choices": ["Encastré", "Apparent", "Goulotte"]},
+            {"key": "accesSaignee", "label": "Accès pour saignée ou percement possible", "type": "boolean"}
+          ]
+        },
+        "evacuation": {
+          "render": "list",
+          "fields": [
+            {"key": "diametreExistant", "label": "Diamètre évacuation existante", "type": "dropdown", "choices": ["32mm", "40mm", "50mm", "80mm", "100mm"]},
+            {"key": "distanceColonne", "label": "Distance du point d'évacuation à la colonne de chute", "type": "number", "unit": "m"},
+            {"key": "pente", "label": "Pente mesurée ou estimée", "type": "dropdown", "choices": ["<1%", "1-2%", "2-3%", "Non mesurable"]},
+            {"key": "typeEvacuation", "label": "Type d'évacuation", "type": "dropdown", "choices": ["Sol", "Murale", "Aucune - à créer"]},
+            {"key": "siphonExistant", "label": "Présence d'un siphon existant et état", "type": "dropdown", "choices": ["Bon état", "À remplacer", "Absent"]},
+            {"key": "hauteurDisponible", "label": "Hauteur disponible sous plafond pour passage de gaine", "type": "number", "unit": "cm"}
+          ]
+        },
+        "chauffe_eau": {
+          "render": "list",
+          "fields": [
+            {"key": "emplacementPrevu", "label": "Emplacement prévu", "type": "dropdown", "choices": ["Salle de bain", "Cellier-buanderie", "Cuisine", "Extérieur abrité"]},
+            {"key": "volumeDisponible", "label": "Volume disponible autour de l'appareil (L x P x H)", "type": "text"},
+            {"key": "distancePointsEau", "label": "Distance aux points d'eau les plus éloignés", "type": "number", "unit": "m"},
+            {"key": "distanceBaignoire", "label": "Distance à la baignoire/douche (volume 3, mini 60cm)", "type": "number", "unit": "cm"},
+            {"key": "ancienPresent", "label": "Ancien chauffe-eau présent", "type": "boolean"},
+            {"key": "volumeAncien", "label": "Volume de l'ancien appareil", "type": "number", "unit": "L"},
+            {"key": "evacuationCondensats", "label": "Évacuation des condensats disponible (si thermodynamique)", "type": "dropdown", "choices": ["Oui existante", "Non à créer", "Non applicable"]},
+            {"key": "alimentationDediee", "label": "Alimentation électrique dédiée disponible", "type": "boolean"},
+            {"key": "accesManutention", "label": "Accès pour manutention de l'appareil", "type": "dropdown", "choices": ["Facile", "Escalier étroit", "Portes à démonter"]}
+          ]
+        },
+        "wc": {
+          "render": "list",
+          "fields": [
+            {"key": "typeSortie", "label": "Type de sortie évacuation existante", "type": "dropdown", "choices": ["Horizontale", "Verticale", "À créer"]},
+            {"key": "distanceAxe", "label": "Distance axe évacuation au mur", "type": "number", "unit": "cm"},
+            {"key": "diametreEvacuation", "label": "Diamètre évacuation", "type": "dropdown", "choices": ["DN90", "DN100"]},
+            {"key": "positionArrivee", "label": "Position arrivée eau froide par rapport au sol/mur", "type": "number", "unit": "cm"},
+            {"key": "cloisonCompatible", "label": "Cloison compatible bâti-support", "type": "boolean"},
+            {"key": "epaisseurCloison", "label": "Épaisseur cloison/habillage disponible pour bâti-support", "type": "number", "unit": "cm"},
+            {"key": "alimentationElectrique", "label": "Alimentation électrique à proximité (abattant japonais/broyeur)", "type": "boolean"},
+            {"key": "distanceColonne", "label": "Distance à la colonne de chute (si WC broyeur)", "type": "number", "unit": "cm"}
+          ]
+        },
+        "salles_de_bain": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensionsEmplacement", "label": "Dimensions réelles de l'emplacement receveur/baignoire", "type": "text"},
+            {"key": "positionArriveesEau", "label": "Position des arrivées eau chaude/froide existantes", "type": "text"},
+            {"key": "positionEvacuationSol", "label": "Position évacuation sol existante", "type": "number", "unit": "cm"},
+            {"key": "natureSol", "label": "Nature du sol existant", "type": "dropdown", "choices": ["Carrelage", "Chape brute", "Plancher bois"]},
+            {"key": "epaisseurReceveur", "label": "Épaisseur disponible pour receveur extra-plat ou à carreler", "type": "number", "unit": "mm"},
+            {"key": "etancheiteExistante", "label": "Étanchéité existante en bon état", "type": "dropdown", "choices": ["Oui", "Non", "Inconnue - à refaire"]},
+            {"key": "sensOuverturePossible", "label": "Sens d'ouverture porte de douche possible", "type": "dropdown", "choices": ["Gauche", "Droite", "Coulissante uniquement"]},
+            {"key": "reseauElectriqueProximite", "label": "Réseau électrique VMC/prise rasoir à proximité", "type": "boolean"}
+          ]
+        },
+        "cuisines_plomberie": {
+          "render": "list",
+          "fields": [
+            {"key": "positionEvacuation", "label": "Position évacuation existante sous évier", "type": "number", "unit": "cm"},
+            {"key": "diametreEvacuation", "label": "Diamètre évacuation actuelle", "type": "dropdown", "choices": ["32mm", "40mm", "50mm"]},
+            {"key": "alimentationEF", "label": "Alimentation eau froide présente sous évier", "type": "boolean"},
+            {"key": "alimentationEC", "label": "Alimentation eau chaude présente sous évier", "type": "boolean"},
+            {"key": "distanceLaveVaisselle", "label": "Distance lave-vaisselle prévu au raccord évacuation", "type": "number", "unit": "m"},
+            {"key": "typeRaccordEvacuation", "label": "Type de raccord évacuation cuisine existant", "type": "dropdown", "choices": ["Siphon simple", "Siphon double sortie", "Raccord en Y à créer"]},
+            {"key": "planTravail", "label": "Nature du plan de travail au-dessus", "type": "dropdown", "choices": ["Percé pour évier existant", "À découper"]}
+          ]
+        },
+        "depannage": {
+          "render": "list",
+          "fields": [
+            {"key": "typeIntervention", "label": "Type d'intervention", "type": "dropdown", "choices": ["Recherche de fuite", "Débouchage", "Réparation ponctuelle"]},
+            {"key": "localisationDesordre", "label": "Localisation présumée du désordre", "type": "text"},
+            {"key": "accessibiliteZone", "label": "Accessibilité de la zone", "type": "dropdown", "choices": ["Visible", "Encastrée - à ouvrir", "Sous dalle - non destructif requis"]},
+            {"key": "ancienneteInstallation", "label": "Ancienneté approximative de l'installation", "type": "number", "unit": "années"},
+            {"key": "materiauCanalisations", "label": "Matériau des canalisations concernées", "type": "dropdown", "choices": ["PER", "Cuivre", "Plomb", "PVC", "Inconnu"]},
+            {"key": "degatsEaux", "label": "Dégâts des eaux constatés", "type": "boolean"},
+            {"key": "zoneImpactee", "label": "Zone impactée", "type": "text"},
+            {"key": "equipementSpecifique", "label": "Nécessité d'équipement spécifique", "type": "dropdown", "choices": ["Caméra endoscopique", "Détection acoustique", "Aucun"]}
+          ]
+        }
+      },
       "options": {
         "marques": ["GROHE", "Hansgrohe", "Jacob Delafon", "Geberit", "Ideal Standard"],
         "materiaux_tuyaux": ["PER", "Multicouche", "Cuivre", "PVC"],
@@ -1337,6 +1724,67 @@
           }
         }
       },
+      "metre_fields": {
+        "peinture_interieure": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface développée à peindre (mur + plafond séparés)", "type": "number", "unit": "m²"},
+            {"key": "hauteurSousPlafond", "label": "Hauteur sous plafond", "type": "number", "unit": "m"},
+            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Bon état", "Fissures", "Tâches/auréoles", "Moisissures"]},
+            {"key": "natureSupport", "label": "Nature du support actuel", "type": "dropdown", "choices": ["Peinture", "Papier peint à déposer", "Enduit brut", "Placo neuf"]},
+            {"key": "nbCouches", "label": "Nombre de couches nécessaire estimé", "type": "dropdown", "choices": ["1", "2", "3"]},
+            {"key": "reprises", "label": "Reprises à prévoir", "type": "dropdown", "choices": ["Rebouchage ponctuel", "Ratissage complet", "Aucune"]},
+            {"key": "elementsAProteger", "label": "Éléments à protéger/déposer", "type": "text"},
+            {"key": "traceHumidite", "label": "Odeur d'humidité ou trace de moisissure", "type": "boolean"}
+          ]
+        },
+        "peinture_exterieure": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceFacade", "label": "Surface façade à traiter", "type": "number", "unit": "m²"},
+            {"key": "hauteurTravail", "label": "Hauteur de travail (>3m = échafaudage)", "type": "number", "unit": "m"},
+            {"key": "moyenAcces", "label": "Moyen d'accès nécessaire", "type": "dropdown", "choices": ["Échelle", "Échafaudage fixe", "Nacelle"]},
+            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Sain", "Fissures superficielles", "Fissures structurelles - à signaler", "Décollements"]},
+            {"key": "moussesSalissures", "label": "Présence de mousses ou salissures", "type": "dropdown", "choices": ["Aucune", "Légère", "Importante - nettoyage HP requis"]},
+            {"key": "exposition", "label": "Exposition dominante", "type": "dropdown", "choices": ["Nord", "Sud", "Est", "Ouest"]},
+            {"key": "protectionAbords", "label": "Protection des abords nécessaire", "type": "dropdown", "choices": ["Bâches sol", "Protection véhicules/voisinage", "Aucune"]}
+          ]
+        },
+        "papiers_peints": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface murale à tapisser", "type": "number", "unit": "m²"},
+            {"key": "hauteurReelle", "label": "Hauteur sol-plafond (plusieurs points, garder le max)", "type": "number", "unit": "m"},
+            {"key": "ancienRevetement", "label": "Présence ancien revêtement à déposer", "type": "dropdown", "choices": ["Aucun", "Papier simple", "Papier + colle forte - plusieurs couches"]},
+            {"key": "etatSupportApresDepose", "label": "État du support après dépose", "type": "dropdown", "choices": ["Bon", "Nécessite ratissage", "Nécessite enduit fin"]},
+            {"key": "typeRaccord", "label": "Type de raccord nécessaire selon motif", "type": "dropdown", "choices": ["Sans raccord", "Raccord droit", "Raccord sauté"]},
+            {"key": "nbPrisesADecouper", "label": "Présence prises/interrupteurs à découper", "type": "number"}
+          ]
+        },
+        "sols": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface au sol", "type": "number", "unit": "m²"},
+            {"key": "natureSupport", "label": "Nature du support existant", "type": "dropdown", "choices": ["Chape béton", "Ancien carrelage", "Plancher bois", "Ancien revêtement souple"]},
+            {"key": "hygrometrie", "label": "Taux d'hygrométrie du support (3% chape/1,5% sol chauffant/0,5% anhydrite)", "type": "number", "unit": "%"},
+            {"key": "planeite", "label": "Planéité du support", "type": "dropdown", "choices": ["Conforme", "Nécessite ragréage"]},
+            {"key": "plancherChauffant", "label": "Présence plancher chauffant", "type": "boolean"},
+            {"key": "deposePlinthes", "label": "Dépose de plinthes existantes nécessaire", "type": "boolean"},
+            {"key": "sensPose", "label": "Sens de pose souhaité", "type": "dropdown", "choices": ["Parallèle à la lumière", "Dans le sens du couloir", "Autre"]}
+          ]
+        },
+        "revetements_speciaux": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface au sol", "type": "number", "unit": "m²"},
+            {"key": "natureSupport", "label": "Nature du support", "type": "dropdown", "choices": ["Béton brut", "Carrelage existant", "Chape"]},
+            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Sain - propre", "Fissuré", "Taché huile/graisse"]},
+            {"key": "preparationMecanique", "label": "Préparation mécanique nécessaire", "type": "dropdown", "choices": ["Ponçage", "Grenaillage", "Aucune"]},
+            {"key": "remonteesHumidite", "label": "Présence de remontées d'humidité", "type": "boolean"},
+            {"key": "usageLocal", "label": "Usage du local", "type": "dropdown", "choices": ["Garage", "Atelier", "Extérieur"]}
+          ]
+        }
+      },
       "options": {
         "couleurs_peinture": [
           "Blanc",
@@ -1549,6 +1997,64 @@
             "surface_m2": {},
             "epaisseur_cm": {}
           }
+        }
+      },
+      "metre_fields": {
+        "carrelage_sols": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface au sol", "type": "number", "unit": "m²"},
+            {"key": "natureSupport", "label": "Nature du support existant", "type": "dropdown", "choices": ["Chape", "Ancien carrelage", "Béton brut", "Plancher bois"]},
+            {"key": "planeite", "label": "Planéité mesurée à la règle de 2m", "type": "dropdown", "choices": ["Conforme ≤2mm", "Non conforme - ragréage nécessaire"]},
+            {"key": "typePose", "label": "Type de pose souhaité", "type": "dropdown", "choices": ["Droite", "Diagonale (+10-15%)", "Décalée/chevron (+10%)"]},
+            {"key": "portesARaboter", "label": "Présence de portes à raboter après surépaisseur", "type": "boolean"},
+            {"key": "deposeAncien", "label": "Dépose ancien revêtement nécessaire", "type": "boolean"},
+            {"key": "plancherChauffant", "label": "Présence de plancher chauffant", "type": "boolean"}
+          ]
+        },
+        "carrelage_murs": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface murale à carreler (longueur x hauteur + 10%)", "type": "number", "unit": "m²"},
+            {"key": "hauteurPose", "label": "Hauteur de pose visée", "type": "dropdown", "choices": ["Zone douche 2m (DTU 52.2)", "Faïence 1,80m", "Mur complet"]},
+            {"key": "formatCarreaux", "label": "Format des carreaux prévu", "type": "dropdown", "choices": ["<500cm²", "≥500cm² - double encollage requis"]},
+            {"key": "etancheiteSpec", "label": "Étanchéité SPEC existante ou à créer", "type": "dropdown", "choices": ["Existante bon état", "À créer zone douche", "Non nécessaire hors zone humide"]},
+            {"key": "natureSupportMural", "label": "Nature du support mural", "type": "dropdown", "choices": ["Placo", "Carreau de plâtre", "Béton", "Ancien carrelage à déposer"]},
+            {"key": "nbAngles", "label": "Angles/retours de niche à intégrer", "type": "number"}
+          ]
+        },
+        "mosaique": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface à traiter", "type": "number", "unit": "m²"},
+            {"key": "zoneApplication", "label": "Zone d'application", "type": "dropdown", "choices": ["Sol douche italienne", "Niche murale", "Frise", "Mur complet"]},
+            {"key": "penteReceveur", "label": "Pente existante du receveur", "type": "number", "unit": "%"},
+            {"key": "retoursMuraux", "label": "Retours muraux et intérieur de niche à inclure", "type": "boolean"},
+            {"key": "supportEtanche", "label": "Support déjà étanché", "type": "dropdown", "choices": ["Oui", "Non - à prévoir avant pose"]}
+          ]
+        },
+        "pierre_naturelle": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface à traiter", "type": "number", "unit": "m²"},
+            {"key": "emplacement", "label": "Emplacement", "type": "dropdown", "choices": ["Intérieur", "Extérieur - pente évacuation 2% requise"]},
+            {"key": "methodePose", "label": "Méthode de pose envisagée", "type": "dropdown", "choices": ["Sur plots", "Scellée-mortier", "Collée"]},
+            {"key": "planeite", "label": "État et planéité du support", "type": "dropdown", "choices": ["Conforme", "À ragréer"]},
+            {"key": "traitementHydrofuge", "label": "Traitement hydrofuge à prévoir", "type": "dropdown", "choices": ["Oui", "Non", "Déjà traité"]},
+            {"key": "delaiSechage", "label": "Délai de séchage disponible avant remise en service", "type": "number", "unit": "jours"}
+          ]
+        },
+        "chapes": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface à traiter", "type": "number", "unit": "m²"},
+            {"key": "epaisseur", "label": "Épaisseur nécessaire selon destination", "type": "dropdown", "choices": ["3cm", "4cm", "5cm", "6cm", "≥7cm"]},
+            {"key": "plancherChauffant", "label": "Présence plancher chauffant", "type": "dropdown", "choices": ["Oui basse température", "Non"]},
+            {"key": "natureIsolant", "label": "Nature de l'isolant/support sous chape", "type": "dropdown", "choices": ["Dalle béton", "Isolant posé", "Ancien revêtement à déposer"]},
+            {"key": "typeArmature", "label": "Type d'armature prévu", "type": "dropdown", "choices": ["Sable-ciment", "Treillis soudé", "Fibres"]},
+            {"key": "bandePeripherique", "label": "Bande périphérique déjà posée", "type": "boolean"},
+            {"key": "testHygrometrie", "label": "Test d'hygrométrie nécessaire avant pose finale", "type": "boolean"}
+          ]
         }
       },
       "options": {
@@ -1853,6 +2359,69 @@
           }
         }
       },
+      "metre_fields": {
+        "cuisine_complete": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensionsPiece", "label": "Dimensions de la pièce (plusieurs points)", "type": "text"},
+            {"key": "positionArrivees", "label": "Position exacte des arrivées eau/évacuation existantes", "type": "text"},
+            {"key": "positionPrises", "label": "Position des prises électriques et du tableau/ligne dédiée", "type": "text"},
+            {"key": "conduitVentilation", "label": "Position conduit de ventilation/VMC ou sortie hotte", "type": "dropdown", "choices": ["Existant en façade", "À créer", "Recyclage uniquement"]},
+            {"key": "mursDeplacables", "label": "Présence de murs non porteurs déplaçables", "type": "boolean"},
+            {"key": "aplombMurs", "label": "Aplomb des murs / défauts de planéité relevés", "type": "dropdown", "choices": ["RAS", "Faux aplomb à compenser"]},
+            {"key": "sensOuverture", "label": "Sens d'ouverture des portes et fenêtres impactant l'implantation", "type": "text"},
+            {"key": "accesLivraison", "label": "Accès pour livraison des caissons", "type": "dropdown", "choices": ["Facile", "Escalier étroit", "Ascenseur nécessaire"]}
+          ]
+        },
+        "plans_de_travail": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurTroncons", "label": "Longueur exacte le long des meubles posés (par tronçon)", "type": "text"},
+            {"key": "debordFacade", "label": "Débord en façade souhaité", "type": "number", "unit": "mm"},
+            {"key": "refEvier", "label": "Référence exacte évier et mitigeur pour découpe", "type": "text"},
+            {"key": "refPlaque", "label": "Référence exacte plaque de cuisson pour découpe", "type": "text"},
+            {"key": "espaceLateral", "label": "Espace latéral disponible autour de la plaque", "type": "number", "unit": "mm"},
+            {"key": "angleJonction", "label": "Présence d'angle nécessitant jonction", "type": "dropdown", "choices": ["Aucun", "Onglet", "Éclisse"]},
+            {"key": "finitionChant", "label": "Type de finition de chant souhaité", "type": "dropdown", "choices": ["Chanfrein", "Droit", "Arrondi", "Biseauté"]}
+          ]
+        },
+        "credences": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensions", "label": "Longueur et hauteur à couvrir", "type": "text"},
+            {"key": "hauteurSousHotte", "label": "Hauteur crédence sous hotte", "type": "number", "unit": "mm"},
+            {"key": "prisesADecouper", "label": "Position et nombre de prises électriques à découper", "type": "text"},
+            {"key": "dimensionsHotte", "label": "Dimensions exactes de la hotte pour découpe fond de hotte", "type": "text"},
+            {"key": "natureMur", "label": "Nature du mur support", "type": "dropdown", "choices": ["Carrelage existant", "Placo", "Béton brut"]},
+            {"key": "epaisseur", "label": "Épaisseur crédence souhaitée", "type": "dropdown", "choices": ["4mm", "6mm", "8mm", "11mm"]}
+          ]
+        },
+        "electromenager": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensionsNiche", "label": "Dimensions de la niche disponible par appareil", "type": "text"},
+            {"key": "degagementLateral", "label": "Espace de dégagement latéral/arrière laissé", "type": "number", "unit": "mm"},
+            {"key": "arriveeEau", "label": "Arrivée eau froide disponible à proximité", "type": "boolean"},
+            {"key": "evacuationEau", "label": "Évacuation eau disponible à proximité", "type": "boolean"},
+            {"key": "priseDediee", "label": "Prise électrique dédiée disponible par appareil", "type": "boolean"},
+            {"key": "alimentationGaz", "label": "Alimentation gaz existante si plaque gaz", "type": "dropdown", "choices": ["Existante", "À créer", "Non applicable"]},
+            {"key": "typeEvacuationHotte", "label": "Type d'évacuation hotte", "type": "dropdown", "choices": ["Extraction vers l'extérieur", "Recyclage - filtre à charbon"]},
+            {"key": "debitHotte", "label": "Débit hotte nécessaire estimé", "type": "number", "unit": "m³/h"}
+          ]
+        },
+        "rangements": {
+          "render": "list",
+          "fields": [
+            {"key": "hauteur4Angles", "label": "Hauteur relevée aux 4 angles de l'espace (écart max 10mm)", "type": "text"},
+            {"key": "largeur2Points", "label": "Largeur relevée en 2 points (garder la plus petite)", "type": "number", "unit": "mm"},
+            {"key": "profondeurDisponible", "label": "Profondeur disponible", "type": "number", "unit": "mm"},
+            {"key": "presencePrises", "label": "Présence de prises, interrupteurs ou bouche VMC dans l'emprise", "type": "boolean"},
+            {"key": "mansarde", "label": "Présence de mansarde/pente de toit ou niche", "type": "boolean"},
+            {"key": "natureMurs", "label": "Nature des murs/cloisons", "type": "dropdown", "choices": ["Placo", "Maçonné", "Doublage isolant"]},
+            {"key": "releveLaser", "label": "Nécessité d'un relevé laser complémentaire", "type": "boolean"}
+          ]
+        }
+      },
       "options": {
         "couleurs_generales": [
           "Blanc",
@@ -2137,6 +2706,81 @@
           }
         }
       },
+      "metre_fields": {
+        "receveurs": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensions", "label": "Dimensions receveur à poser (largeur x longueur)", "type": "number", "unit": "cm"},
+            {"key": "hauteurSousCarrelage", "label": "Hauteur sous carrelage disponible pour receveur extra-plat", "type": "number", "unit": "mm"},
+            {"key": "emplacementEvacuation", "label": "Emplacement évacuation existante", "type": "dropdown", "choices": ["Angle", "Centrée", "Murale"]},
+            {"key": "diametreEcoulement", "label": "Diamètre écoulement existant", "type": "dropdown", "choices": ["40 mm", "50 mm"]},
+            {"key": "penteExistante", "label": "Pente existante au sol constatée", "type": "boolean"},
+            {"key": "natureSupport", "label": "Nature du support", "type": "dropdown", "choices": ["Dalle béton", "Plancher bois", "Chape", "Ancien receveur"]},
+            {"key": "deposeAncien", "label": "Dépose ancien receveur nécessaire", "type": "boolean"},
+            {"key": "accesContraignant", "label": "Accès chantier contraignant", "type": "dropdown", "choices": ["RDC", "Étage avec ascenseur", "Étage sans ascenseur"]}
+          ]
+        },
+        "etancheite": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceMurs", "label": "Surface murs à traiter", "type": "number", "unit": "m²"},
+            {"key": "surfaceSol", "label": "Surface sol à traiter", "type": "number", "unit": "m²"},
+            {"key": "natureSupport", "label": "Nature du support", "type": "dropdown", "choices": ["Placo hydro", "Carreau de plâtre", "Béton", "BA13"]},
+            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Sain", "Fissuré", "Traces d'humidité"]},
+            {"key": "nbAngles", "label": "Nombre d'angles à traiter", "type": "number"},
+            {"key": "nbTraversees", "label": "Nombre de traversées à renforcer (bonde, robinetterie)", "type": "number"},
+            {"key": "ancienRevetement", "label": "Ancien revêtement à déposer avant étanchéité", "type": "boolean"}
+          ]
+        },
+        "parois_douche": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensionsOuverture", "label": "Dimensions ouverture (largeur x hauteur)", "type": "number", "unit": "mm"},
+            {"key": "typeSolSupport", "label": "Type de sol support", "type": "dropdown", "choices": ["Receveur", "Carrelage posé au sol"]},
+            {"key": "aplombMurs", "label": "Aplomb des murs", "type": "dropdown", "choices": ["Bon", "À compenser"]},
+            {"key": "sensOuverture", "label": "Sens d'ouverture souhaité", "type": "dropdown", "choices": ["Gauche", "Droite", "Centrale"]},
+            {"key": "rebordMuret", "label": "Présence rebord/muret d'appui", "type": "boolean"}
+          ]
+        },
+        "meubles": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensionsEmplacement", "label": "Dimensions emplacement disponible (L x H x P)", "type": "text"},
+            {"key": "hauteurArrivees", "label": "Hauteur arrivée d'eau / évacuation par rapport au sol fini", "type": "number", "unit": "cm"},
+            {"key": "natureMur", "label": "Nature du mur de fixation", "type": "dropdown", "choices": ["Placo", "Béton", "Carreau de plâtre"]},
+            {"key": "priseProximite", "label": "Présence prise électrique ou VMC à proximité", "type": "boolean"},
+            {"key": "degagementLibre", "label": "Espace de dégagement libre devant le meuble", "type": "number", "unit": "cm"}
+          ]
+        },
+        "vasques_robinetterie": {
+          "render": "list",
+          "fields": [
+            {"key": "nbArrivees", "label": "Nombre d'arrivées d'eau existantes", "type": "dropdown", "choices": ["1", "2"]},
+            {"key": "ecartementArrivees", "label": "Écartement entre arrivées d'eau", "type": "number", "unit": "mm"},
+            {"key": "hauteurArrivee", "label": "Hauteur arrivée d'eau par rapport au sol fini", "type": "number", "unit": "cm"},
+            {"key": "typeEvacuation", "label": "Type d'évacuation existante", "type": "dropdown", "choices": ["Bonde centrale", "Bonde décalée"]},
+            {"key": "pressionSuffisante", "label": "Pression réseau suffisante si mitigeur thermostatique", "type": "boolean"}
+          ]
+        },
+        "wc_sdb": {
+          "render": "list",
+          "fields": [
+            {"key": "typeEvacuation", "label": "Type d'évacuation existante", "type": "dropdown", "choices": ["Horizontale", "Verticale"]},
+            {"key": "entraxe", "label": "Entraxe de fixation au sol/mur", "type": "number", "unit": "mm"},
+            {"key": "batiSupportExistant", "label": "Présence bâti-support existant", "type": "boolean"},
+            {"key": "diametreDepart", "label": "Diamètre départ évacuation", "type": "number", "unit": "mm"}
+          ]
+        },
+        "equipements_pmr": {
+          "render": "list",
+          "fields": [
+            {"key": "hauteurInstallation", "label": "Hauteur d'installation souhaitée (barre d'appui/siège)", "type": "number", "unit": "cm"},
+            {"key": "natureMurAncrage", "label": "Nature du mur porteur pour ancrage", "type": "dropdown", "choices": ["Porteur", "Cloison légère"]},
+            {"key": "renfortCloison", "label": "Présence de renfort dans la cloison", "type": "boolean"},
+            {"key": "configurationUsage", "label": "Configuration d'usage", "type": "dropdown", "choices": ["Debout avec aide", "Fauteuil roulant", "Transfert assis"]}
+          ]
+        }
+      },
       "options": {
         "marques": [
           "Jacob Delafon",
@@ -2389,6 +3033,64 @@
             "longueur_ml": {},
             "hauteur_mm": {}
           }
+        }
+      },
+      "metre_fields": {
+        "resine_sol": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface réelle à traiter", "type": "number", "unit": "m²"},
+            {"key": "natureSupport", "label": "Nature du support existant", "type": "dropdown", "choices": ["Béton", "Chape", "Ancien carrelage"]},
+            {"key": "etatSupport", "label": "État du support (fissures, joints de dilatation)", "type": "boolean"},
+            {"key": "detailEtat", "label": "Détail de l'état du support", "type": "text"},
+            {"key": "remonteesHumidite", "label": "Présence de remontées d'humidité", "type": "boolean"},
+            {"key": "penteExistante", "label": "Pente existante mesurée", "type": "number", "unit": "%"},
+            {"key": "exposition", "label": "Exposition", "type": "dropdown", "choices": ["Plein soleil", "Ombre", "Mixte"]},
+            {"key": "accesChantier", "label": "Accès chantier pour matériel/véhicule", "type": "boolean"}
+          ]
+        },
+        "beton_cire": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface réelle", "type": "number", "unit": "m²"},
+            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Sain", "Fissuré", "À ragréer"]},
+            {"key": "jointsDilatation", "label": "Nombre et position des joints de dilatation existants", "type": "text"},
+            {"key": "penteExistante", "label": "Pente existante", "type": "number", "unit": "%"},
+            {"key": "expositionIntemperies", "label": "Exposition aux intempéries", "type": "dropdown", "choices": ["Couvert", "Découvert"]}
+          ]
+        },
+        "dallage_exterieur": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface réelle à daller", "type": "number", "unit": "m²"},
+            {"key": "natureSol", "label": "Nature du sol en place", "type": "dropdown", "choices": ["Terre", "Ancien dallage", "Béton existant"]},
+            {"key": "penteTerrain", "label": "Pente actuelle du terrain", "type": "number", "unit": "%"},
+            {"key": "natureSousSol", "label": "Nature du sous-sol", "type": "dropdown", "choices": ["Argileux", "Sableux", "Rocheux"]},
+            {"key": "reseauEnterre", "label": "Présence réseau enterré à proximité", "type": "boolean"},
+            {"key": "accesEngin", "label": "Accès engin de chantier (mini-pelle) possible", "type": "boolean"},
+            {"key": "niveauRaccord", "label": "Niveau de raccord au seuil bâtiment", "type": "number", "unit": "cm"}
+          ]
+        },
+        "terrasses_bois": {
+          "render": "list",
+          "fields": [
+            {"key": "surfaceReelle", "label": "Surface réelle", "type": "number", "unit": "m²"},
+            {"key": "typeSupport", "label": "Type de support", "type": "dropdown", "choices": ["Plots réglables possibles", "Dalle béton", "Terre nue"]},
+            {"key": "hauteurLambourdes", "label": "Hauteur disponible sous seuil pour lambourdes", "type": "number", "unit": "mm"},
+            {"key": "penteSupport", "label": "Pente du support existant", "type": "number", "unit": "%"},
+            {"key": "ventilationPossible", "label": "Ventilation sous terrasse possible", "type": "boolean"},
+            {"key": "zoneHumide", "label": "Zone humide/ombragée à proximité", "type": "dropdown", "choices": ["Oui exposée", "Non"]}
+          ]
+        },
+        "amenagements_exterieurs": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurReelle", "label": "Longueur réelle", "type": "number", "unit": "ml"},
+            {"key": "hauteurReprise", "label": "Hauteur de reprise/dénivelé", "type": "number", "unit": "mm"},
+            {"key": "natureSupport", "label": "Nature du support existant", "type": "dropdown", "choices": ["Terre", "Béton", "Ancien dallage"]},
+            {"key": "reseauxEnterres", "label": "Présence de réseaux enterrés", "type": "boolean"},
+            {"key": "typeRaccord", "label": "Type de raccord attendu avec l'existant", "type": "dropdown", "choices": ["Affleurant", "Surélevé", "Encastré"]}
+          ]
         }
       },
       "options": {
@@ -2681,6 +3383,70 @@
           }
         }
       },
+      "metre_fields": {
+        "remplacement_vitrage": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurFeuillure", "label": "Largeur feuillure (mesurée en 3 points, retenir la plus petite)", "type": "number", "unit": "mm"},
+            {"key": "hauteurFeuillure", "label": "Hauteur feuillure (mesurée en 3 points, retenir la plus petite)", "type": "number", "unit": "mm"},
+            {"key": "profondeurFeuillure", "label": "Profondeur de feuillure (détermine l'épaisseur possible)", "type": "number", "unit": "mm"},
+            {"key": "epaisseurActuelle", "label": "Épaisseur vitrage actuel constatée", "type": "number", "unit": "mm"},
+            {"key": "typeMaintien", "label": "Type de maintien existant", "type": "dropdown", "choices": ["Parcloses", "Mastic traditionnel", "Silicone"]},
+            {"key": "etatChassis", "label": "État du châssis", "type": "dropdown", "choices": ["Bon", "À reprendre", "À remplacer"]},
+            {"key": "necessiteNacelle", "label": "Nécessité nacelle/échafaudage pour accès", "type": "boolean"}
+          ]
+        },
+        "miroirs": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensions", "label": "Largeur x hauteur", "type": "number", "unit": "mm"},
+            {"key": "natureSupport", "label": "Nature du support de fixation", "type": "dropdown", "choices": ["Placo", "Carrelage", "Béton"]},
+            {"key": "methodePose", "label": "Méthode de pose souhaitée", "type": "dropdown", "choices": ["Collé", "Clips", "Rails"]},
+            {"key": "electriciteProximite", "label": "Présence électricité à proximité pour miroir LED", "type": "boolean"},
+            {"key": "renfortMural", "label": "Nécessité de renfort mural selon poids estimé", "type": "boolean"}
+          ]
+        },
+        "verrieres": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensions", "label": "Largeur x hauteur", "type": "number", "unit": "mm"},
+            {"key": "nbTraverses", "label": "Nombre de traverses/montants souhaité", "type": "number"},
+            {"key": "natureSupport", "label": "Nature du support de fixation", "type": "dropdown", "choices": ["Dalle", "Mur", "Plafond"]},
+            {"key": "aplombSupport", "label": "Aplomb du support", "type": "dropdown", "choices": ["Bon", "À compenser"]},
+            {"key": "porteIntegree", "label": "Présence d'une porte intégrée et sens d'ouverture", "type": "dropdown", "choices": ["Aucune", "Battante gauche", "Battante droite", "Coulissante"]}
+          ]
+        },
+        "vitrages_speciaux": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensions", "label": "Largeur x hauteur", "type": "number", "unit": "mm"},
+            {"key": "epaisseurNecessaire", "label": "Épaisseur nécessaire selon usage", "type": "number", "unit": "mm"},
+            {"key": "emplacementPose", "label": "Emplacement de pose", "type": "dropdown", "choices": ["Garde-corps", "Cloison", "Façade"]},
+            {"key": "contrainteAntiEffraction", "label": "Contrainte réglementaire anti-effraction", "type": "dropdown", "choices": ["Aucune", "P2A", "P5A"]},
+            {"key": "finitionBord", "label": "Finition du bord", "type": "dropdown", "choices": ["Poli apparent", "Rodé", "Encastré"]}
+          ]
+        },
+        "douche_vitree": {
+          "render": "list",
+          "fields": [
+            {"key": "dimensionsOuverture", "label": "Dimensions ouverture (largeur x hauteur)", "type": "number", "unit": "mm"},
+            {"key": "typeSolSupport", "label": "Type de sol support", "type": "dropdown", "choices": ["Receveur", "Carrelage"]},
+            {"key": "aplombMurs", "label": "Aplomb des murs", "type": "dropdown", "choices": ["Bon", "À compenser"]},
+            {"key": "sensOuverture", "label": "Sens d'ouverture souhaité", "type": "dropdown", "choices": ["Gauche", "Droite"]}
+          ]
+        },
+        "garde_corps": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurLineaire", "label": "Longueur du linéaire", "type": "number", "unit": "ml"},
+            {"key": "hauteurReglementaire", "label": "Hauteur réglementaire requise", "type": "dropdown", "choices": ["1000 mm", "1100 mm"]},
+            {"key": "typeFixation", "label": "Type de fixation adapté au support", "type": "dropdown", "choices": ["Française (sol)", "Anglaise (latérale)", "Encastrée"]},
+            {"key": "natureSupport", "label": "Nature du support", "type": "dropdown", "choices": ["Dalle béton", "Structure bois", "Structure acier"]},
+            {"key": "deposeExistant", "label": "Garde-corps existant à déposer", "type": "boolean"},
+            {"key": "zoneEnfants", "label": "Zone fréquentée par des enfants (partie pleine 45cm requise)", "type": "boolean"}
+          ]
+        }
+      },
       "options": {
         "verre_couleurs": ["Clair", "Extra-clair", "Bronze", "Gris", "Dépoli"],
         "traitements": ["Anticalcaire", "Hydrofuge", "Anti-rayure"],
@@ -2943,6 +3709,70 @@
             "longueur_ml": {},
             "hauteur_mm": {}
           }
+        }
+      },
+      "metre_fields": {
+        "portails": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurPassage", "label": "Largeur totale du passage", "type": "number", "unit": "mm"},
+            {"key": "hauteurPortail", "label": "Hauteur du portail", "type": "number", "unit": "mm"},
+            {"key": "natureSolPassage", "label": "Nature du sol au niveau du passage", "type": "dropdown", "choices": ["Bitume", "Gravier", "Terre", "Béton"]},
+            {"key": "denivelePassage", "label": "Dénivelé/pente du passage", "type": "number", "unit": "%"},
+            {"key": "naturePiliers", "label": "Nature des piliers", "type": "dropdown", "choices": ["Maçonnés existants", "À créer", "À renforcer"]},
+            {"key": "zoneRepli", "label": "Zone de repli disponible pour coulissant", "type": "number", "unit": "ml"},
+            {"key": "sensOuverture", "label": "Sens d'ouverture souhaité", "type": "dropdown", "choices": ["Vers l'intérieur", "Vers l'extérieur"]}
+          ]
+        },
+        "motorisations": {
+          "render": "list",
+          "fields": [
+            {"key": "alimentationDisponible", "label": "Alimentation électrique disponible à proximité", "type": "boolean"},
+            {"key": "typeAlimentation", "label": "Type d'alimentation prévu", "type": "dropdown", "choices": ["230V existant", "24V", "Tranchée à prévoir", "Solaire"]},
+            {"key": "fourreauExistant", "label": "Présence d'un fourreau enterré existant", "type": "boolean"},
+            {"key": "distanceCoffret", "label": "Distance portail / coffret électrique", "type": "number", "unit": "ml"},
+            {"key": "poidsEstime", "label": "Poids estimé du portail", "type": "number", "unit": "kg"},
+            {"key": "frequenceUtilisation", "label": "Fréquence d'utilisation prévue", "type": "dropdown", "choices": ["Usage particulier", "Usage intensif"]}
+          ]
+        },
+        "portillons": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurPassage", "label": "Largeur de passage", "type": "number", "unit": "mm"},
+            {"key": "hauteur", "label": "Hauteur", "type": "number", "unit": "mm"},
+            {"key": "alimentationDisponible", "label": "Alimentation électrique disponible pour gâche/motorisation", "type": "boolean"},
+            {"key": "natureSupport", "label": "Nature du support de fixation", "type": "dropdown", "choices": ["Mur", "Pilier maçonné", "Poteau métallique"]}
+          ]
+        },
+        "portes_garage": {
+          "render": "list",
+          "fields": [
+            {"key": "largeurEntreTableaux", "label": "Largeur entre tableaux", "type": "number", "unit": "mm"},
+            {"key": "hauteurSousLinteau", "label": "Hauteur sous linteau", "type": "number", "unit": "mm"},
+            {"key": "tirantAir", "label": "Tirant d'air / hauteur de plafond intérieur disponible", "type": "number", "unit": "mm"},
+            {"key": "alimentationDisponible", "label": "Alimentation électrique disponible dans le garage", "type": "boolean"},
+            {"key": "typePorteExistante", "label": "Type de porte existante à déposer", "type": "dropdown", "choices": ["Basculante", "Sectionnelle", "Enroulable"]},
+            {"key": "portillonIntegre", "label": "Portillon intégré souhaité", "type": "boolean"}
+          ]
+        },
+        "accessoires": {
+          "render": "list",
+          "fields": [
+            {"key": "nbTelecommandes", "label": "Nombre de télécommandes nécessaires", "type": "number"},
+            {"key": "emplacementDigicode", "label": "Emplacement souhaité pour digicode/visiophone", "type": "dropdown", "choices": ["Sur pilier", "Sur mur", "Sur portail"]},
+            {"key": "reseauDisponible", "label": "Réseau wifi/4G disponible sur site pour visiophone connecté", "type": "boolean"},
+            {"key": "distanceCablagePhotocellules", "label": "Distance de câblage entre piliers pour photocellules", "type": "number", "unit": "ml"}
+          ]
+        },
+        "clotures": {
+          "render": "list",
+          "fields": [
+            {"key": "longueurTotale", "label": "Longueur totale", "type": "number", "unit": "ml"},
+            {"key": "hauteurSouhaitee", "label": "Hauteur souhaitée", "type": "number", "unit": "mm"},
+            {"key": "denivele", "label": "Dénivelé du terrain", "type": "number", "unit": "cm"},
+            {"key": "clotureExistante", "label": "Clôture/poteaux existants à conserver ou déposer", "type": "dropdown", "choices": ["À conserver", "À déposer", "Aucun existant"]},
+            {"key": "natureSolScellement", "label": "Nature du sol pour scellement des poteaux", "type": "dropdown", "choices": ["Terre", "Béton", "Rocheux"]}
+          ]
         }
       },
       "options": {

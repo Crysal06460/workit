@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'chantier_chat_screen.dart';
 
 class AdminDashboardTab extends StatefulWidget {
   const AdminDashboardTab({super.key, required this.workspaceId});
@@ -40,7 +41,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
     return AppColors.grey300;
   }
 
-  void _openDetail(BuildContext context, Map<String, dynamic> data) {
+  void _openDetail(BuildContext context, String devisId, Map<String, dynamic> data) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -65,10 +66,15 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
             final d = poseDate.toDate();
             poseDateStr = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
           }
+          // 'metreurNote' est le champ actif (bouton "Demander des informations"
+          // du métreur) ; 'infoRequest' est un ancien nom conservé en fallback.
+          final metreurNote = data['metreurNote']?.toString() ?? '';
           final infoRequest = data['infoRequest'];
-          final infoMsg = infoRequest is Map
-              ? (infoRequest['message'] ?? infoRequest['content'] ?? '').toString()
-              : '';
+          final infoMsg = metreurNote.isNotEmpty
+              ? metreurNote
+              : (infoRequest is Map
+                  ? (infoRequest['message'] ?? infoRequest['content'] ?? '').toString()
+                  : '');
           final rapportProbleme = data['rapportProbleme'];
           final soucis = rapportProbleme is Map
               ? (rapportProbleme['soucis'] ?? '').toString()
@@ -180,6 +186,12 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                             ),
                           ),
                           const SizedBox(width: 12),
+                          ChatEntryButton(
+                            devisId: devisId,
+                            clientLabel: client,
+                            color: AppColors.roleAdmin,
+                          ),
+                          const SizedBox(width: 4),
                           _StatusChip(status: status, color: _statusColor(status)),
                         ],
                       ),
@@ -476,7 +488,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: InkWell(
-                          onTap: () => _openDetail(context, data),
+                          onTap: () => _openDetail(context, recent[i].id, data),
                           borderRadius: BorderRadius.circular(14),
                           child: Container(
                             decoration: BoxDecoration(

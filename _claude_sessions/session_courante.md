@@ -1,6 +1,13 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-06-11
+**Dernière mise à jour :** 2026-07-29
+
+## ✅ Terminé (client uniquement, rien à déployer) : multi-métier — devis par élément + métré générique
+Voir `_claude_sessions/plan_metier_generique.md`. Résumé : le dictionnaire (déjà riche de 12 métiers) est maintenant exploité en entier — un devis peut mélanger plusieurs corps de métier (un dropdown "Métier" par élément), l'onboarding propose les 12 métiers, et l'écran de métré du métreur s'adapte automatiquement à chaque élément (schéma visuel pour les ouvertures menuiserie, formulaire générique dynamique pour les 70 autres catégories — plomberie, électricité, peinture, carrelage, etc.). 451 champs de métré transcrits depuis des fiches professionnelles/DTU français. `flutter analyze` et `flutter build web` OK. **Reste à tester manuellement en conditions réelles.**
+
+## ✅ Terminé et déployé : notifications complètes + agenda live + messagerie par chantier
+Voir `_claude_sessions/plan_notifications_messagerie.md` pour le détail.
+Résumé : les 8 étapes de code (persistance rôle, notifs manquantes, deep-link FCM, agenda temps réel, règles+écran+CF de messagerie interne par chantier) + le fix du bug `infoRequest`/`metreurNote` sont **codées, vérifiées et déployées en production** (`workit-1daa1`) — Cloud Functions et règles Firestore déployées avec succès le 2026-07-29. CLI Firebase installé sur ce PC (sans droits admin). Reste : tests manuels en conditions réelles + étape 0.5 optionnelle (push web).
 
 ## Ce qui a été fait cette session
 
@@ -196,3 +203,32 @@ Poseur termine → rapport OK/problème → status 'Terminé'/'À clôturer' + n
 ## Reste à faire
 - Stripe / abonnements
 - APNs iOS (manuel)
+
+---
+
+## 📍 Session 2026-07-29 — Reprise sur PC de travail (Windows, sans droits admin)
+
+### Contexte
+Antoine reprend le projet depuis un **PC professionnel Windows** (pas de droits admin), via **Claude Code** (assistant différent de la session Mac de juin). Objectif : avancer sur WorkIt pendant les creux de planning au travail. Travail limité au dossier `C:\Users\antoine.QUINTANE\Desktop\Local Quintane\Git\WorkIt`.
+
+### Analyse du dépôt effectuée
+- Branche `main` à jour, propre, 11 commits (historique juin 2025 → fév 2026)
+- **3 branches distantes non fusionnées** : `team-work/equipe-1-analyse`, `team-work/equipe-2-design`, `team-work/equipe-3-code`
+  - `equipe-3-code` contient du travail non présent sur `main` : intégration **Stripe** (7 Cloud Functions callable + `stripe_service.dart`), pagination Firestore (limite 50), persistance offline Firestore, corrections onboarding. **Jamais mergé.** → à trancher avec Antoine.
+
+### Environnement de dev installé sur ce poste (aucun droit admin requis)
+- **Flutter 3.44.8 (stable)** cloné via git (`git clone --depth 1 -b stable`) dans `C:\src\flutter`
+- Ajouté au **PATH utilisateur** (persistant, pas besoin d'admin)
+- `flutter config --enable-web` activé
+- **Cible Windows Desktop désactivée** (`--no-enable-windows-desktop`) : nécessite le "Mode développeur" Windows (clé registre HKLM) → impossible sans droits admin sur ce PC. En la désactivant, `flutter pub get` ne tente plus de créer les symlinks de plugins et passe sans erreur.
+- **Android SDK / Visual Studio (C++) non installés** — choix volontaire "léger" (pas de droits admin, pas besoin d'émulateur mobile pour l'instant)
+- **Cibles fonctionnelles : Chrome et Edge (web)** — `flutter run -d chrome` testé avec succès, l'app se lance et tourne en hot-reload
+
+### ⚠️ Limites connues sur ce poste
+- Pas de test Android natif (émulateur) ni iOS
+- Pas de test Face ID / notifications push mobiles réelles
+- Pas de build Windows Desktop natif (bloqué par absence de droits admin)
+- → Tout le développement logique métier / UI / Cloud Functions reste possible et testable via le web (Chrome)
+
+### Prochaines étapes
+En attente des étapes/tâches à donner par Antoine pour la suite du développement.

@@ -10,11 +10,73 @@ import 'screens/entry_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/auth_navigation_service.dart';
 
+/// Clé de navigation globale : permet de naviguer depuis les callbacks FCM,
+/// qui s'exécutent en dehors de l'arbre de widgets.
+final navigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await FirebaseMessaging.instance.requestPermission();
+
+  // Notification reçue app au premier plan : pas de notif système par défaut,
+  // on affiche donc un bandeau in-app, tapable comme une vraie notif.
+  FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+  // Notification tapée depuis l'arrière-plan (app pas fermée).
+  FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationTap);
+
   runApp(const WorkItApp());
+
+  // Notification tapée alors que l'app était fermée (cold start).
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    // Laisser le premier frame se construire avant de naviguer.
+    await Future.delayed(Duration.zero);
+    _handleNotificationTap(initialMessage);
+  }
+}
+
+void _handleForegroundMessage(RemoteMessage message) {
+  final context = navigatorKey.currentContext;
+  final notification = message.notification;
+  if (context == null || notification == null) return;
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 5),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(notification.title ?? '', style: const TextStyle(fontWeight: FontWeight.w700)),
+          if (notification.body != null) Text(notification.body!),
+        ],
+      ),
+      action: SnackBarAction(
+        label: 'Ouvrir',
+        onPressed: () => _handleNotificationTap(message),
+      ),
+    ),
+  );
+}
+
+Future<void> _handleNotificationTap(RemoteMessage message) async {
+  final context = navigatorKey.currentContext;
+  if (context == null) return;
+
+  final prefs = await SharedPreferences.getInstance();
+  final role = prefs.getString('workit_user_role');
+  if (role == null) return;
+
+  final home = AuthNavigationService().homeForRole(role);
+  if (home == null || !context.mounted) return;
+
+  navigatorKey.currentState?.pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => home),
+    (route) => false,
+  );
 }
 
 class WorkItApp extends StatelessWidget {
@@ -23,6 +85,7 @@ class WorkItApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'WorkIt',
       theme: AppTheme.light,
       home: const _StartupRouter(),

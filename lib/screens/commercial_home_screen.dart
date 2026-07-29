@@ -14,6 +14,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_home_screen.dart';
+import 'agenda_screen.dart';
+import 'chantier_chat_screen.dart';
 import 'entry_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
@@ -477,8 +479,30 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
             children: [
               _NavItem(icon: Icons.home_rounded, activeIcon: Icons.home_rounded, label: 'Accueil', active: _bottomNavIndex == 0, onTap: () => setState(() => _bottomNavIndex = 0)),
               _NavItem(icon: Icons.description_outlined, activeIcon: Icons.description_rounded, label: 'Devis', active: _bottomNavIndex == 1, onTap: () => setState(() => _bottomNavIndex = 1)),
-              _NavItem(icon: Icons.calendar_month_outlined, activeIcon: Icons.calendar_month_rounded, label: 'Agenda', active: _bottomNavIndex == 2, onTap: () => setState(() => _bottomNavIndex = 2)),
-              _NavItem(icon: Icons.settings_outlined, activeIcon: Icons.settings_rounded, label: 'Réglages', active: _bottomNavIndex == 3, onTap: () => setState(() => _bottomNavIndex = 3)),
+              _NavItem(
+                icon: Icons.calendar_month_outlined,
+                activeIcon: Icons.calendar_month_rounded,
+                label: 'Agenda',
+                active: _bottomNavIndex == 2,
+                onTap: () {
+                  setState(() => _bottomNavIndex = 2);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AgendaScreen()),
+                  );
+                },
+              ),
+              _NavItem(
+                icon: Icons.settings_outlined,
+                activeIcon: Icons.settings_rounded,
+                label: 'Réglages',
+                active: _bottomNavIndex == 3,
+                onTap: () {
+                  setState(() => _bottomNavIndex = 3);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -537,157 +561,6 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
     }
   }
 
-  Future<void> _showCalendar() async {
-    if (_workspaceId == null) return;
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-
-    final now = DateTime.now();
-    final snap = await _firestore
-        .collection('workspaces')
-        .doc(_workspaceId)
-        .collection('devis')
-        .where('userId', isEqualTo: uid)
-        .get();
-
-    final List<Map<String, dynamic>> events = [];
-
-    for (final doc in snap.docs) {
-      final d = doc.data();
-      final client = d['client']?.toString() ?? d['clientName']?.toString() ?? 'Client';
-      final meetingTs = d['meetingAt'];
-      final poseTs = d['poseDate'];
-
-      if (meetingTs is Timestamp) {
-        final dt = meetingTs.toDate();
-        if (dt.isAfter(now.subtract(const Duration(days: 1)))) {
-          events.add({'date': dt, 'label': 'RDV Métré — $client', 'type': 'rdv'});
-        }
-      }
-      if (poseTs is Timestamp) {
-        final dt = poseTs.toDate();
-        if (dt.isAfter(now.subtract(const Duration(days: 1)))) {
-          events.add({'date': dt, 'label': 'Pose — $client', 'type': 'pose'});
-        }
-      }
-    }
-
-    events.sort((a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime));
-
-    if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: AppColors.grey200,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const Text(
-              'Agenda',
-              style: TextStyle(
-                color: AppColors.grey900,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (events.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(
-                  child: Text(
-                    'Aucun rendez-vous ou pose à venir',
-                    style: TextStyle(color: AppColors.grey400),
-                  ),
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.45,
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: events.length,
-                  separatorBuilder: (_, __) =>
-                      const Divider(color: AppColors.grey100, height: 1),
-                  itemBuilder: (_, i) {
-                    final ev = events[i];
-                    final dt = ev['date'] as DateTime;
-                    final isRdv = ev['type'] == 'rdv';
-                    final dayStr = _frDay(dt.weekday);
-                    final dateStr =
-                        '$dayStr ${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}  ${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 4,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: isRdv
-                                  ? _commercialAccent
-                                  : AppColors.primary,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  ev['label'] as String,
-                                  style: const TextStyle(
-                                    color: AppColors.grey900,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  dateStr,
-                                  style: const TextStyle(
-                                    color: AppColors.grey500,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _frDay(int weekday) {
-    const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-    return days[(weekday - 1).clamp(0, 6)];
-  }
 }
 
 class _SearchBar extends StatelessWidget {
@@ -1179,7 +1052,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   }
 
   void _ensureDefaultCategoryForProducts() {
-    final categories = _categoryChoices();
+    final categories = _categoryChoices(tradeKey);
     if (categories.isEmpty) return;
     final defaultCategory = categories.first.key;
     final defaultCouleur = _defaultCouleurForTrade();
@@ -1187,12 +1060,13 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     final updated = <_ProductFormData>[];
 
     if (products.isEmpty) {
-      updated.add(_ProductFormData(categoryKey: defaultCategory, couleur: defaultCouleur));
+      updated.add(_ProductFormData(metierKey: tradeKey, categoryKey: defaultCategory, couleur: defaultCouleur));
       changed = true;
     } else {
       for (final product in products) {
-        if (product.categoryKey == null || product.couleur == null) {
+        if (product.metierKey == null || product.categoryKey == null || product.couleur == null) {
           updated.add(product.copyWith(
+            metierKey: product.metierKey ?? tradeKey,
             categoryKey: product.categoryKey ?? defaultCategory,
             couleur: product.couleur ?? defaultCouleur,
           ));
@@ -1211,9 +1085,9 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   }
 
   _ProductFormData _newProductWithDefaultCategory() {
-    final categories = _categoryChoices();
+    final categories = _categoryChoices(tradeKey);
     final defaultCategory = categories.isNotEmpty ? categories.first.key : null;
-    return _ProductFormData(categoryKey: defaultCategory, couleur: _defaultCouleurForTrade());
+    return _ProductFormData(metierKey: tradeKey, categoryKey: defaultCategory, couleur: _defaultCouleurForTrade());
   }
 
   _QuoteDraft _buildDraft() {
@@ -1254,8 +1128,20 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     super.dispose();
   }
 
-  Map<String, dynamic>? _currentTradeNode() {
-    final key = tradeKey;
+  /// Liste des métiers disponibles (dictionnaire déjà chargé en mémoire).
+  List<_Choice> _allMetiers() {
+    final metiers = dictionary?['metiers'];
+    if (metiers is Map) {
+      return metiers.entries
+          .map((e) => _Choice(e.key.toString(), (e.value is Map ? e.value['label']?.toString() : null) ?? e.key.toString()))
+          .toList();
+    }
+    return const [];
+  }
+
+  /// Nœud du métier donné (ou du métier principal du workspace si non précisé).
+  Map<String, dynamic>? _tradeNode(String? metierKey) {
+    final key = metierKey ?? tradeKey;
     if (key == null) return null;
     final metiers = dictionary?['metiers'];
     if (metiers is Map && metiers[key] is Map<String, dynamic>) {
@@ -1264,8 +1150,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return null;
   }
 
-  List<_Choice> _categoryChoices() {
-    final trade = _currentTradeNode();
+  List<_Choice> _categoryChoices(String? metierKey) {
+    final trade = _tradeNode(metierKey);
     final cats = trade?['categories'];
     if (cats is Map<String, dynamic>) {
       return cats.entries
@@ -1275,9 +1161,9 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return const [];
   }
 
-  List<String> _sousCategories(String? categoryKey) {
+  List<String> _sousCategories(String? metierKey, String? categoryKey) {
     if (categoryKey == null) return const [];
-    final trade = _currentTradeNode();
+    final trade = _tradeNode(metierKey);
     final cat = trade?['categories']?[categoryKey];
     if (cat is Map && cat['sous_categories'] is List) {
       return (cat['sous_categories'] as List).map((e) => e.toString()).toList();
@@ -1285,9 +1171,9 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return const [];
   }
 
-  List<_Choice> _typeChoices(String? categoryKey) {
+  List<_Choice> _typeChoices(String? metierKey, String? categoryKey) {
     if (categoryKey == null) return const [];
-    final trade = _currentTradeNode();
+    final trade = _tradeNode(metierKey);
     final cat = trade?['categories']?[categoryKey];
     if (cat is Map && cat['types'] is Map) {
       return (cat['types'] as Map<String, dynamic>)
@@ -1298,9 +1184,9 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return const [];
   }
 
-  List<String> _variantForType(String? categoryKey, String? typeKey) {
+  List<String> _variantForType(String? metierKey, String? categoryKey, String? typeKey) {
     if (categoryKey == null || typeKey == null) return const [];
-    final trade = _currentTradeNode();
+    final trade = _tradeNode(metierKey);
     final type = trade?['categories']?[categoryKey]?['types']?[typeKey];
     if (type is Map && type['variantes'] is List) {
       return (type['variantes'] as List).map((e) => e.toString()).toList();
@@ -1308,17 +1194,17 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     return const [];
   }
 
-  String _categoryLabelFromKey(String? categoryKey) {
+  String _categoryLabelFromKey(String? metierKey, String? categoryKey) {
     if (categoryKey == null) return '';
-    final trade = _currentTradeNode();
+    final trade = _tradeNode(metierKey);
     final cat = trade?['categories']?[categoryKey];
     if (cat is Map && cat['label'] != null) return cat['label'].toString();
     return categoryKey;
   }
 
-  String _typeLabelFromKey(String? categoryKey, String? typeKey) {
+  String _typeLabelFromKey(String? metierKey, String? categoryKey, String? typeKey) {
     if (categoryKey == null || typeKey == null) return typeKey ?? '';
-    final trade = _currentTradeNode();
+    final trade = _tradeNode(metierKey);
     final typeData = trade?['categories']?[categoryKey]?['types']?[typeKey];
     if (typeData is Map) return typeData['label']?.toString() ?? typeKey;
     return typeKey;
@@ -1340,11 +1226,11 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
 
     for (var i = 0; i < draft.products.length; i++) {
       final p = draft.products[i];
-      final catLabel = _categoryLabelFromKey(p.categoryKey);
+      final catLabel = _categoryLabelFromKey(p.metierKey, p.categoryKey);
       final buffer = StringBuffer();
       buffer.write(catLabel);
       if (p.sousCategorie?.isNotEmpty == true) buffer.write(' • ${p.sousCategorie}');
-      if (p.typeProduit?.isNotEmpty == true) buffer.write(' • ${_typeLabelFromKey(p.categoryKey, p.typeProduit)}');
+      if (p.typeProduit?.isNotEmpty == true) buffer.write(' • ${_typeLabelFromKey(p.metierKey, p.categoryKey, p.typeProduit)}');
       if (p.variante?.isNotEmpty == true) buffer.write(' • ${p.variante}');
       if (p.couleur?.isNotEmpty == true) buffer.write(' • Couleur: ${p.couleur}');
       final dimParts = <String>[];
@@ -1777,15 +1663,17 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
 
   Widget _productCard(int index) {
     final product = products[index];
-    final categories = _categoryChoices();
-    final sousCategories = _sousCategories(product.categoryKey);
-    final types = _typeChoices(product.categoryKey);
-    final variants = _variantForType(product.categoryKey, product.typeProduit);
+    final metiers = _allMetiers();
+    final effectiveMetierKey = product.metierKey ?? tradeKey;
+    final categories = _categoryChoices(effectiveMetierKey);
+    final sousCategories = _sousCategories(effectiveMetierKey, product.categoryKey);
+    final types = _typeChoices(effectiveMetierKey, product.categoryKey);
+    final variants = _variantForType(effectiveMetierKey, product.categoryKey, product.typeProduit);
     const couleurs = ['RAL Aluminium', 'Couleur PVC', 'Essence de Bois'];
     final colorDetailLabel = _colorDetailLabel(product.couleur);
-    final bool showDecorOptions = tradeKey == 'menuiserie_aluminium';
-    final bool showDimensions = tradeKey == 'menuiserie_aluminium';
-    final bool showVariant = tradeKey == 'menuiserie_aluminium';
+    final bool showDecorOptions = effectiveMetierKey == 'menuiserie_aluminium';
+    final bool showDimensions = effectiveMetierKey == 'menuiserie_aluminium';
+    final bool showVariant = effectiveMetierKey == 'menuiserie_aluminium';
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -1810,6 +1698,21 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                   icon: const Icon(Icons.delete_outline, color: AppColors.grey400),
                 ),
             ],
+          ),
+          _DropdownField(
+            label: 'Métier',
+            value: effectiveMetierKey,
+            required: true,
+            items: metiers,
+            onChanged: (v) => setState(() {
+              products[index] = products[index].copyWith(
+                metierKey: v,
+                categoryKey: null,
+                sousCategorie: null,
+                typeProduit: null,
+                variante: null,
+              );
+            }),
           ),
           _DropdownField(
             label: 'Catégorie',
@@ -1926,9 +1829,12 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   }
 
   Widget _productForm() {
-    if (_currentTradeNode() == null) {
+    if (loadingDictionary) {
+      return const Center(child: CircularProgressIndicator(color: _commercialAccent));
+    }
+    if (_allMetiers().isEmpty) {
       return const Text(
-        'Aucun corps de métier sélectionné. Définissez-le lors de l’onboarding pour charger les choix produits.',
+        'Aucun métier disponible dans le dictionnaire produits.',
         style: TextStyle(color: AppColors.grey500),
       );
     }
@@ -2146,12 +2052,16 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // L'étape de choix du métreur n'a de sens que s'il y a un vrai choix à
+    // faire (plusieurs métreurs) — avec 0 ou 1 métreur, l'attribution se
+    // fait déjà automatiquement en silence, pas besoin de l'afficher.
+    final showMetreurStep = !loadingMetreurs && _metreurs.length > 1;
     final steps = [
       _clientForm(),
       _chantierForm(),
       _productForm(),
       _dateForm(),
-      _metreurStep(),
+      if (showMetreurStep) _metreurStep(),
       _commentsForm(),
       _uploadStep(),
     ]
@@ -2292,7 +2202,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         String? categoryLabel;
         final firstProduct = newItem.draft?.products.isNotEmpty == true ? newItem.draft!.products.first : null;
         if (firstProduct != null) {
-          categoryLabel = _categoryLabelFromKey(firstProduct.categoryKey);
+          categoryLabel = _categoryLabelFromKey(firstProduct.metierKey, firstProduct.categoryKey);
         }
 
         final summary = newItem.draft != null ? _buildSummaryFromDraft(newItem.draft!) : <Map<String, dynamic>>[];
@@ -2702,6 +2612,7 @@ class _IntField extends StatelessWidget {
 
 class _ProductFormData {
   const _ProductFormData({
+    this.metierKey,
     this.categoryKey,
     this.sousCategorie,
     this.typeProduit,
@@ -2714,6 +2625,10 @@ class _ProductFormData {
     this.unite = 'mm',
   });
 
+  /// Métier choisi pour CET élément du devis (ex: 'menuiserie_aluminium',
+  /// 'plomberie_sanitaire') — un devis peut mélanger plusieurs métiers,
+  /// un par élément.
+  final String? metierKey;
   final String? categoryKey;
   final String? sousCategorie;
   final String? typeProduit;
@@ -2726,6 +2641,7 @@ class _ProductFormData {
   final String unite;
 
   _ProductFormData copyWith({
+    String? metierKey,
     String? categoryKey,
     String? sousCategorie,
     String? typeProduit,
@@ -2738,6 +2654,7 @@ class _ProductFormData {
     String? unite,
   }) {
     return _ProductFormData(
+      metierKey: metierKey ?? this.metierKey,
       categoryKey: categoryKey ?? this.categoryKey,
       sousCategorie: sousCategorie ?? this.sousCategorie,
       typeProduit: typeProduit ?? this.typeProduit,
@@ -2753,6 +2670,7 @@ class _ProductFormData {
 
   Map<String, dynamic> toMap() {
     return {
+      'metierKey': metierKey,
       'categoryKey': categoryKey,
       'sousCategorie': sousCategorie,
       'typeProduit': typeProduit,
@@ -2768,6 +2686,7 @@ class _ProductFormData {
 
   factory _ProductFormData.fromMap(Map<String, dynamic> map) {
     return _ProductFormData(
+      metierKey: map['metierKey']?.toString(),
       categoryKey: map['categoryKey']?.toString(),
       sousCategorie: map['sousCategorie']?.toString(),
       typeProduit: map['typeProduit']?.toString(),
@@ -3376,16 +3295,34 @@ class _ChantierDetailSheet extends StatelessWidget {
             ),
           ),
 
-          Text(
-            item.client,
-            style: const TextStyle(
-              color: AppColors.grey900,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.client,
+                      style: const TextStyle(
+                        color: AppColors.grey900,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (item.clientFirstName?.isNotEmpty == true)
+                      Text(item.clientFirstName!, style: const TextStyle(color: AppColors.grey500)),
+                  ],
+                ),
+              ),
+              if (item.id != null)
+                ChatEntryButton(
+                  devisId: item.id!,
+                  clientLabel: item.client,
+                  color: _commercialAccent,
+                ),
+            ],
           ),
-          if (item.clientFirstName?.isNotEmpty == true)
-            Text(item.clientFirstName!, style: const TextStyle(color: AppColors.grey500)),
           const SizedBox(height: 4),
           Text(item.address, style: const TextStyle(color: AppColors.grey500)),
           const SizedBox(height: 12),

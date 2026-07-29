@@ -91,13 +91,14 @@ class AuthNavigationService {
       userData['lastName']?.toString() ?? workspaceData['creatorLastName']?.toString(),
       isAdmin,
       tradeKey,
+      effectiveRole,
     );
 
     // 7. Sauvegarder le token FCM
     await _saveFcmToken(uid, workspaceId);
 
     // 8. Naviguer vers le bon écran
-    final home = _homeForRole(effectiveRole);
+    final home = homeForRole(effectiveRole);
     if (home == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -138,6 +139,7 @@ class AuthNavigationService {
     String? lastName,
     bool isAdmin,
     String? tradeKey,
+    String roleKey,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('workit_workspace_id', workspaceId);
@@ -145,12 +147,15 @@ class AuthNavigationService {
     if (firstName != null) await prefs.setString('workit_user_first_name', firstName);
     if (lastName != null) await prefs.setString('workit_user_last_name', lastName);
     await prefs.setBool('workit_is_admin', isAdmin);
+    await prefs.setString('workit_user_role', roleKey);
     if (tradeKey != null && tradeKey.isNotEmpty) {
       await prefs.setString('workit_trade_key', tradeKey);
     }
   }
 
-  Widget? _homeForRole(String roleKey) {
+  /// Retourne l'écran d'accueil correspondant à un rôle (`workit_user_role`).
+  /// Utilisé aussi pour router depuis une notification (voir `main.dart`).
+  Widget? homeForRole(String roleKey) {
     switch (roleKey) {
       case 'commercial':
         return const CommercialHomeScreen();
