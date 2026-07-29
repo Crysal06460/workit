@@ -1,6 +1,13 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-07-29
+**Dernière mise à jour :** 2026-07-29 (fin de journée — reprise prévue demain)
+
+## 📍 Pour la prochaine session : reprendre ici
+- Tout est commité et poussé sur `origin/main` (`22d6202`) — `git status` propre, rien en attente.
+- **Reste à faire en priorité demain** : test manuel dans Chrome du multi-métier (créer un devis avec un élément menuiserie + un élément plomberie, vérifier les 2 fiches de métré côté métreur + le PDF). Voir `plan_metier_generique.md`, étape 6.
+- Aussi en attente : test manuel de la messagerie/agenda live/notifs (`plan_notifications_messagerie.md`, "Reste à faire"). Étape 0.5 optionnelle (service worker web + VAPID) non faite.
+- Compte de test dispo pour Chrome : login "Yann" (commercial) déjà utilisé aujourd'hui, autofill Chrome.
+- Pour lancer l'app en test : `flutter run -d web-server --web-port=8765` (mode `-d chrome` a fait planter l'onglet une fois aujourd'hui, `web-server` + navigation manuelle est plus stable) puis naviguer sur http://localhost:8765.
 
 ## ✅ Terminé (client uniquement, rien à déployer) : multi-métier — devis par élément + métré générique
 Voir `_claude_sessions/plan_metier_generique.md`. Résumé : le dictionnaire (déjà riche de 12 métiers) est maintenant exploité en entier — un devis peut mélanger plusieurs corps de métier (un dropdown "Métier" par élément), l'onboarding propose les 12 métiers, et l'écran de métré du métreur s'adapte automatiquement à chaque élément (schéma visuel pour les ouvertures menuiserie, formulaire générique dynamique pour les 70 autres catégories — plomberie, électricité, peinture, carrelage, etc.). 451 champs de métré transcrits depuis des fiches professionnelles/DTU français. `flutter analyze` et `flutter build web` OK. **Reste à tester manuellement en conditions réelles.**
