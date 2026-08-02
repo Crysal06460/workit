@@ -1,6 +1,9 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-07-29
+**Dernière mise à jour :** 2026-08-02
+
+## ✅ Session 2026-08-02 — Tests bout en bout + 6 bugs critiques corrigés (workflow métreur→poseur débloqué)
+Voir section détaillée tout en bas du fichier (« 📍 Session 2026-08-02 »). Résumé : le multi-métier/métré générique du 29/07 a été testé manuellement pour la première fois — 6 bugs trouvés et corrigés, dont **2 bloquants qui empêchaient tout chantier réel d'aller au-delà du métré** (workflow métreur cassé après la refonte de juillet, poseur ne voyait jamais aucun chantier). Le cycle complet devis→métreur→pose→poseur→clôture est maintenant validé de bout en bout manuellement. `flutter analyze` OK (0 erreur). **Commit fait, prêt à déployer si besoin.**
 
 ## ✅ Terminé (client uniquement, rien à déployer) : multi-métier — devis par élément + métré générique
 Voir `_claude_sessions/plan_metier_generique.md`. Résumé : le dictionnaire (déjà riche de 12 métiers) est maintenant exploité en entier — un devis peut mélanger plusieurs corps de métier (un dropdown "Métier" par élément), l'onboarding propose les 12 métiers, et l'écran de métré du métreur s'adapte automatiquement à chaque élément (schéma visuel pour les ouvertures menuiserie, formulaire générique dynamique pour les 70 autres catégories — plomberie, électricité, peinture, carrelage, etc.). 451 champs de métré transcrits depuis des fiches professionnelles/DTU français. `flutter analyze` et `flutter build web` OK. **Reste à tester manuellement en conditions réelles.**
@@ -232,3 +235,68 @@ Antoine reprend le projet depuis un **PC professionnel Windows** (pas de droits 
 
 ### Prochaines étapes
 En attente des étapes/tâches à donner par Antoine pour la suite du développement.
+
+---
+
+## 📍 Session 2026-08-02 — Tests manuels bout en bout + 6 bugs corrigés (Mac, Claude Code + extension Chrome)
+
+### Contexte
+Christophe a demandé de reprendre les tests de scénarios (création compte, ajout membre, devis, métré...) en pensant que c'était déjà fait avant l'expiration de son abonnement précédent. **Vérification faite : ça n'avait jamais été réellement exécuté** — seule l'infrastructure de test existait (`scripts/setup_test_accounts.js`, `scripts/test_flow.js`, `scripts/reset_devis.js`, créés le 17/06). Le `HANDOVER_COMPLET.md` du 30/06 notait déjà explicitement *"Flow poseur non encore testé bout en bout"*. Cette session a donc fait ces tests pour de vrai, pour la première fois.
+
+### Méthode
+1. `node scripts/setup_test_accounts.js` — recrée/rafraîchit les 3 comptes tests (commercial/métreur/poseur `@workit-test.fr`, mdp `Workit2026!`) dans le workspace **"Ambiance Alu"** (id `1Tz93YBgwnrd08ORABaZ`).
+2. `node scripts/test_flow.js` — simulation Firestore directe du cycle complet (sans passer par l'UI) → a confirmé que les règles Firestore et la structure de données tiennent la route.
+3. **App lancée en mode `flutter run -d web-server --web-port=8765 --web-hostname=localhost`** (PAS `-d chrome` — cette commande ouvre sa propre fenêtre Chrome isolée, invisible à l'extension Claude for Chrome utilisée pour piloter le navigateur ; le mode `web-server` sert juste l'app sur `http://localhost:8765`, à ouvrir ensuite depuis l'extension).
+4. Tests manuels réels via l'extension Claude for Chrome : connexion successive aux 3 rôles, création d'un devis multi-métier, parcours métreur complet (accepter → RDV → métré → commander → planifier pose), parcours poseur (réception → clôture).
+
+### 🐛 6 bugs trouvés et corrigés
+
+| # | Bug | Fichier | Symptôme réel observé |
+|---|-----|---------|------------------------|
+| 1 | `data.draft!.toMap()` sans garde — crash total (écran rouge Flutter) | `metreur_home_screen.dart:1763` (`_openMeasurementForm`) | Clic sur "Démarrer le métré" sur un devis sans `draft` (ex: carte démo "Dupont Jean") → app plantée |
+| 2 | Dropdowns "Type de chantier"/"Type d'habitation"/"Accessibilité" en `Colors.white70`/`Colors.white` sur fond clair — résidu de l'ancien thème sombre jamais migré | `lib/screens/widgets/dynamic_dropdown_field.dart` | Texte totalement invisible à l'étape "Chantier" du formulaire "Ajouter un devis" |
+| 3 | `_ProductFormData.copyWith(categoryKey: null, ...)` n'appliquait jamais le `null` (pattern `param ?? this.param` classique) | `commercial_home_screen.dart` (`_ProductFormData.copyWith`, ~2643) | Changer le Métier d'un élément (ex: Menuiserie→Plomberie) affichait bien la bonne catégorie à l'écran, mais **la vraie donnée enregistrée en Firestore gardait l'ancienne catégorie** (`categoryKey: "menuiseries_exterieures"` pour un élément Plomberie) — silencieux, seulement visible en inspectant Firestore |
+| 4 | **Aucun bouton dans l'UI pour confirmer une commande ou programmer une pose** — `_MeasureRequestSummary` n'avait que 2 états (`Acceptée` → métré ; tout le reste → "Accepter la demande", qui RÉÉCRIT `status: 'Acceptée'`, régressant le workflow) | `metreur_home_screen.dart` | Un devis "À commander" ou "À planifier" affichait toujours le bouton "Accepter la demande" au lieu d'un vrai CTA — impossible de faire avancer un chantier réel jusqu'à la pose via l'app. `_markPoseAProgrammer()` existait déjà mais n'était appelée nulle part (code mort) |
+| 5 | `_ChantierData.fromMap` lisait `map['metreurStatus']` (champ qui n'existe plus depuis la correction de juin) au lieu de `map['status']` | `poseurs_home_screen.dart:1840` | **Le poseur ne voyait jamais aucun chantier assigné** ("Aucun chantier assigné"), même avec `poseurIds` correct — la query Firestore fonctionnait, mais le statut lu était toujours `null` donc filtré silencieusement |
+| 6 | `_valider()` et `_signaler()` (rapport fin/problème poseur) écrivaient `'metreurStatus': ...` au lieu de `'status': ...` | `poseurs_home_screen.dart:1107,1400` | Même une fois le bug #5 corrigé, la clôture par le poseur serait restée invisible côté commercial/admin (qui lisent `status`) — le chantier serait resté bloqué "En pose" pour toujours |
+
+**Bugs #4, #5, #6 = bloquants** : avant cette session, un vrai utilisateur pouvait créer un devis et faire le métré, mais **ne pouvait pas faire progresser un chantier jusqu'au poseur**, et même en forçant via Firestore, **le poseur ne voyait rien**. Le module poseur était cassé pour tout le monde depuis la correction `status`/`metreurStatus` de juin (jamais répercutée dans `poseurs_home_screen.dart`), et le workflow métreur post-métré a été perdu pendant la refonte visuelle de juillet (cf. l'avertissement que Christophe avait lui-même laissé dans le handover : *"certaines fonctionnalités ont été sacrifiées visuellement pendant la refonte et doivent être rebranchées"*).
+
+### 🔧 Reconstruit (pas juste corrigé)
+- `_confirmOrder()` et `_schedulePose()` dans `metreur_home_screen.dart` — deux nouvelles méthodes + les boutons correspondants dans `_MeasureRequestSummary`, avec un vrai `switch` sur `data.status` (Acceptée → métré / À commander → "Confirmer la commande" / À planifier → "Programmer la pose" / En pose → affichage lecture seule / défaut → "Accepter la demande").
+- `_schedulePose()` : sélecteur date+heure (réutilise le pattern de `_scheduleMeeting`) + bottom sheet de sélection des poseurs (requête `users` filtrée `workspaceId` + `role == 'poseur'`) → écrit `status: 'En pose'`, `poseDate`, `poseurIds`, `poseurNames`.
+
+### ✅ Validé manuellement de bout en bout (avec captures d'écran, pas juste du code lu)
+- Connexion des 3 comptes test (commercial/métreur/poseur)
+- Création devis multi-métier réel : élément 1 Plomberie/WC & Sanitaires (dropdown Métier change bien Catégorie/Sous-catégorie/Type avec les bonnes valeurs du dictionnaire)
+- Métreur : accepter → prendre RDV (date/heure) → **métré générique dynamique spécifique WC** (type sortie évacuation, diamètre, position eau froide, etc. — confirme que le métré multi-métier du 29/07 fonctionne réellement) → confirmer commande → programmer pose (poseur sélectionné dans la vraie liste équipe)
+- Poseur : réception dans "À faire" avec bonnes infos (client, adresse, catégorie, heure) → rapport de fin (règlement + date) → bascule en "Historique" avec statut "Terminé"
+- Vérifié en base à chaque étape (`node -e "..."` avec `firebase-admin`) que `status` (jamais `metreurStatus`) est le champ écrit partout, cohérent de bout en bout
+
+### ⚠️ Existant mais volontairement non touché (décision Christophe)
+**Données de démo en dur mélangées en permanence aux vraies données** — `_kDemoDevis` (`commercial_home_screen.dart` ~3674) et `_kDemoNewRequests`/`_kDemoAccepted`/`_kDemoToOrder`/`_kDemoPlan`/`_kDemoToClose` (`metreur_home_screen.dart` ~2410-2429) sont fusionnées **inconditionnellement** avec le flux Firestore à chaque affichage (pas juste en fallback si vide). Concrètement : tout commercial et tout métreur, dans n'importe quel workspace réel, voit en permanence 6 faux clients ("Dupont Jean", "Rousseau Claire", "Martin Sophie", "Laurent Céline", "Bernard Marc", "Petit Thomas"/"Moreau Julie") mélangés aux vrais, et les compteurs de stats les comptent aussi. Les actions dessus (accepter, planifier) ne touchent que l'état local React — rien n'est persisté, d'où la confusion initiale de cette session (un "Accepter" semblait fonctionner puis "disparaissait" au reload). **À traiter dans une session future si Christophe veut du vrai contenu en prod.**
+
+### 🧪 Environnement de test — à réutiliser telle quelle la prochaine fois
+- **Comptes** : `commercial@workit-test.fr` / `metreur@workit-test.fr` / `poseur@workit-test.fr` — mdp `Workit2026!` (recréables via `node scripts/setup_test_accounts.js` depuis `/Users/macbook/workit/scripts`)
+- **Workspace de test** : "Ambiance Alu" (id Firestore `1Tz93YBgwnrd08ORABaZ`)
+- **Devis créés cette session** (Firestore, workspace ci-dessus) :
+  - `9893` — "Claude Testeur", menuiserie, resté à `'Nouvelle demande'` (créé avant le fix du bug #3, catégorie potentiellement incohérente — à ignorer/nettoyer)
+  - `4688` — "Claude TesteurV2", Plomberie/WC & Sanitaires — **cycle complet testé, `status: 'Terminé'`**, sert de preuve que tout fonctionne
+  - `808uqCaU10U7MSQIiIRw` — "Marie Dupont", créé via `test_flow.js`, `status: 'Terminé'`
+- **Lancer l'app pour tests browser-automation** : `cd /Users/macbook/workit && flutter run -d web-server --web-port=8765 --web-hostname=localhost`, puis naviguer vers `http://localhost:8765` depuis l'extension Claude for Chrome (PAS `-d chrome`, qui isole sa propre fenêtre non pilotable).
+- **`scripts/serviceAccountKey.json`** présent et fonctionnel (gitignored, ne pas committer) — permet scripts Node.js d'admin direct sur Firestore/Auth.
+
+### Reste non testé / non fait
+- Notifications FCM (jamais vérifié qu'elles se déclenchent réellement pendant cette session — le code existe, déployé depuis le 29/07, mais pas observé en direct)
+- Messagerie interne par chantier (code déployé le 29/07, jamais ouverte manuellement)
+- Écrans Admin (dashboard, équipe, entreprise) — pas retestés cette session
+- Rapport "problème" côté poseur (`_signaler()`, bug #6 corrigé dans le code mais le bouton "Problème rencontré" n'a pas été cliqué pour vérifier visuellement)
+- Stripe / abonnements — toujours pas implémenté
+- APNs iOS — toujours manuel (Christophe)
+- Nettoyage des données démo en dur (voir ci-dessus)
+
+### Prochaines étapes suggérées
+1. Tester notifications FCM + messagerie en conditions réelles (2 comptes ouverts en parallèle)
+2. Décider du sort des données démo (`_kDemoDevis` etc.)
+3. Repasser sur Admin (jamais retesté depuis la refonte de juillet — probablement les mêmes types de régressions que métreur/poseur)
+4. `git push` si Christophe veut sauvegarder sur le remote (dernier push état inconnu à vérifier avec `git status`/`git log origin/main..HEAD`)

@@ -1104,7 +1104,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
           .doc(widget.devisId)
           .set(
             {
-              'metreurStatus': 'Terminé',
+              'status': 'Terminé',
               'rapportFin': {
                 'date': _dateFin.toIso8601String(),
                 'reglementEffectue': _reglementEffectue,
@@ -1397,7 +1397,7 @@ class _RapportProblemeState extends State<_RapportProbleme> {
           .doc(widget.devisId)
           .set(
             {
-              'metreurStatus': 'À clôturer',
+              'status': 'À clôturer',
               'rapportProbleme': {
                 'soucis': _soucisCtrl.text.trim(),
                 'manque': _manqueCtrl.text.trim(),
@@ -1837,7 +1837,7 @@ class _ChantierData {
 
     return _ChantierData(
       id: id,
-      metreurStatus: map['metreurStatus']?.toString(),
+      metreurStatus: (map['status'] ?? map['metreurStatus'])?.toString(),
       client: map['client']?.toString(),
       address: map['address']?.toString(),
       phone: map['phone']?.toString(),

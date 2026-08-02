@@ -2610,6 +2610,8 @@ class _IntField extends StatelessWidget {
   }
 }
 
+const Object _unset = Object();
+
 class _ProductFormData {
   const _ProductFormData({
     this.metierKey,
@@ -2640,31 +2642,35 @@ class _ProductFormData {
   final int? quantite;
   final String unite;
 
+  // Sentinel qui distingue "paramètre non fourni" (garder l'ancienne valeur)
+  // de "null fourni explicitement" (réinitialiser le champ) — un simple `??`
+  // ne peut pas faire cette distinction et ignorait silencieusement les
+  // resets explicites (ex: categoryKey: null lors d'un changement de métier).
   _ProductFormData copyWith({
-    String? metierKey,
-    String? categoryKey,
-    String? sousCategorie,
-    String? typeProduit,
-    String? variante,
-    String? couleur,
-    String? couleurDetail,
-    int? largeur,
-    int? hauteur,
-    int? quantite,
-    String? unite,
+    Object? metierKey = _unset,
+    Object? categoryKey = _unset,
+    Object? sousCategorie = _unset,
+    Object? typeProduit = _unset,
+    Object? variante = _unset,
+    Object? couleur = _unset,
+    Object? couleurDetail = _unset,
+    Object? largeur = _unset,
+    Object? hauteur = _unset,
+    Object? quantite = _unset,
+    Object? unite = _unset,
   }) {
     return _ProductFormData(
-      metierKey: metierKey ?? this.metierKey,
-      categoryKey: categoryKey ?? this.categoryKey,
-      sousCategorie: sousCategorie ?? this.sousCategorie,
-      typeProduit: typeProduit ?? this.typeProduit,
-      variante: variante ?? this.variante,
-      couleur: couleur ?? this.couleur,
-      couleurDetail: couleurDetail ?? this.couleurDetail,
-      largeur: largeur ?? this.largeur,
-      hauteur: hauteur ?? this.hauteur,
-      quantite: quantite ?? this.quantite,
-      unite: unite ?? this.unite,
+      metierKey: identical(metierKey, _unset) ? this.metierKey : metierKey as String?,
+      categoryKey: identical(categoryKey, _unset) ? this.categoryKey : categoryKey as String?,
+      sousCategorie: identical(sousCategorie, _unset) ? this.sousCategorie : sousCategorie as String?,
+      typeProduit: identical(typeProduit, _unset) ? this.typeProduit : typeProduit as String?,
+      variante: identical(variante, _unset) ? this.variante : variante as String?,
+      couleur: identical(couleur, _unset) ? this.couleur : couleur as String?,
+      couleurDetail: identical(couleurDetail, _unset) ? this.couleurDetail : couleurDetail as String?,
+      largeur: identical(largeur, _unset) ? this.largeur : largeur as int?,
+      hauteur: identical(hauteur, _unset) ? this.hauteur : hauteur as int?,
+      quantite: identical(quantite, _unset) ? this.quantite : quantite as int?,
+      unite: identical(unite, _unset) ? this.unite : (unite as String?) ?? this.unite,
     );
   }
 
