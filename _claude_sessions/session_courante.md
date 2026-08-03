@@ -1,6 +1,46 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-03 (soir)
+**Dernière mise à jour :** 2026-08-03 (soir, suite)
+
+## ✅ Session 2026-08-03 (soir, suite) — Phase 0 attaquée : faille critique de prise de contrôle de compte corrigée
+
+Christophe a dit d'attaquer la Phase 0 de la roadmap (`roadmap_plateforme_multimetier.md`). Audit complet (règles
+Firestore + 8 Cloud Functions + mécanisme du mot de passe temporaire) : a révélé une **vulnérabilité critique
+active en production**, bien au-delà de ce qu'anticipait la roadmap — `createInvitation`/`consumeInvitation`
+permettaient à tout utilisateur authentifié de réinitialiser le mot de passe de **n'importe quel autre compte**
+(y compris un admin) et de lui attribuer le rôle/workspace de son choix, sans aucune vérification de rôle ni de
+propriété du compte ciblé. L'écran client (`invite_activation_screen.dart`) avait déjà été supprimé ce matin comme
+code mort, mais les fonctions serveur tournaient toujours. **Décision actée : suppression complète** de ces 4
+fonctions plutôt que réécriture (aucun usage client actif).
+
+Corrigé et **déployé en production** (`workit-1daa1`) :
+- `functions/index.js` : suppression de `createInvitation`, `sendInvitationEmail`, `getInvitationByToken`,
+  `consumeInvitation` (undeploy explicite via `firebase functions:delete`) + vérification `request.auth` ajoutée
+  sur `analyzeDevis`.
+- `firestore.rules` : `users/{userId}` — `create` restreint au seul cas légitime (auto-inscription admin lors de la
+  création de son propre workspace) ; `update` (self) — impossible de changer soi-même `role`/`workspaceId`/
+  `companyId`/`canManageTeam`/`manageableRoles`/`isAdmin`, ni de sortir de `status=='disabled'` (comparaison
+  avant/après plutôt que blocage de champ, donc **aucun changement de code Flutter nécessaire** —
+  `sign_in_screen.dart`/`admin_team_tab.dart` continuent de fonctionner à l'identique) ; `list` — restreint au même
+  workspace (avant : n'importe qui pouvait lister tous les users de tous les workspaces). `provisioned_accounts` —
+  lecture/mise à jour restreintes au même workspace (avant : mots de passe temporaires en clair lisibles par tout
+  utilisateur, toutes entreprises confondues), création/suppression refusées aux clients.
+
+**Testé manuellement dans Chrome** (workspace "Ambiance Alu") : connexion persistante OK, Planner (requêtes `list`
+sur `users`) OK, création d'équipe OK, et surtout **onboarding complet neuf** (création workspace + compte admin) —
+le test le plus critique de la nouvelle règle `create` — réussi de bout en bout. `flutter analyze` : 0 erreur, 136
+issues (inchangé, aucun fichier Dart modifié). **Committé (`7d299ea`), pas encore poussé.**
+
+⚠️ Compte de test créé pendant la vérification (`secutest.phase0.0803@workit-test.fr`) non nettoyé — même limite
+que précédemment (pas de `serviceAccountKey.json` sur ce PC Windows).
+
+### Reste à faire — Phase 0 (session suivante)
+Reporté volontairement (chantiers à part entière) : remplacement du mot de passe temporaire par un lien
+d'activation Firebase (le stockage en clair reste pour l'instant, mais n'est plus lisible cross-workspace), App
+Check, logs d'audit. Voir `roadmap_plateforme_multimetier.md` pour le détail complet de la Phase 0 et des phases
+suivantes (1 à 7).
+
+---
 
 ## 📍 Session 2026-08-03 (soir) — Résumé PDF + roadmap plateforme multi-métier définie
 

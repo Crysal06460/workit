@@ -13,20 +13,32 @@ l'étage sur lequel la suivante s'appuie — ne pas paralléliser sans relire le
 
 ## Phase 0 — Sécurité et comptes (fondation, avant tout le reste)
 
+**Statut (2026-08-03 soir)** : **partiellement faite**. Un audit complet a révélé une vulnérabilité critique active
+(prise de contrôle de compte via `createInvitation`/`consumeInvitation`) — corrigée et déployée en production, avec
+en prime le durcissement des règles `users`/`provisioned_accounts` contre l'auto-élévation de privilèges et la
+lecture cross-workspace. Détail complet dans `session_courante.md` (session du 03/08 soir, suite) et le commit
+`7d299ea`. **Reste à faire** (reporté à une session suivante, chantiers à part entière) : remplacement du mot de
+passe temporaire par un lien d'activation, App Check, logs d'audit — voir liste ci-dessous, les points déjà faits
+sont barrés en pratique par le commit ci-dessus mais gardés ici pour mémoire du périmètre complet visé.
+
 **Pourquoi en premier** : risques de sécurité réels et indépendants du reste (isolation cross-workspace, mot de
 passe temporaire affiché en clair) ; construire des fonctionnalités avancées sur une base non auditée ferait courir
 ces mêmes risques à chaque nouvelle brique.
 
-- Audit complet `firestore.rules` + Cloud Functions : un poseur ne voit que ses chantiers assignés, un métreur ne
+- ✅ Audit complet `firestore.rules` + Cloud Functions : un poseur ne voit que ses chantiers assignés, un métreur ne
   modifie que les dossiers autorisés, un commercial n'a aucun droit admin/abonnement, un admin reste cantonné à son
-  workspace — aucune lecture cross-workspace possible.
-- Validation serveur systématique des rôles/permissions (ne jamais faire confiance à une donnée envoyée par le
-  client).
-- Suppression du mot de passe temporaire affiché en clair à l'admin (`admin_team_tab.dart`) → remplacer par un lien
-  d'activation à usage unique.
-- App Check (anti-abus des API Firebase).
-- Point d'ancrage pour quotas sur traitements coûteux/IA (même si non utilisé aujourd'hui, prévoir l'emplacement).
-- Logs d'audit des actions sensibles (création de compte, changement de rôle, suppression).
+  workspace — aucune lecture cross-workspace possible sur `users`/`provisioned_accounts` (fait). Reste à étendre le
+  même niveau de rigueur aux autres collections au fil des phases suivantes si de nouveaux angles apparaissent.
+- ✅ Validation serveur systématique des rôles/permissions sur les points les plus critiques (`users` create/update,
+  `analyzeDevis`). Les 4 fonctions d'invitation par lien, vulnérables et non utilisées, ont été supprimées plutôt
+  que corrigées.
+- ⬜ Suppression du mot de passe temporaire affiché en clair à l'admin (`admin_team_tab.dart`) → remplacer par un
+  lien d'activation à usage unique. **Pas encore fait** (la lecture cross-workspace de ces mots de passe est déjà
+  bloquée, mais ils restent stockés en clair dans le workspace de l'admin).
+- ⬜ App Check (anti-abus des API Firebase). **Pas encore fait.**
+- ⬜ Point d'ancrage pour quotas sur traitements coûteux/IA (même si non utilisé aujourd'hui, prévoir
+  l'emplacement). **Pas encore fait.**
+- ⬜ Logs d'audit des actions sensibles (création de compte, changement de rôle, suppression). **Pas encore fait.**
 
 **Taille relative :** M
 
