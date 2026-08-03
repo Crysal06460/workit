@@ -523,6 +523,8 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
           onAccept: () => _acceptRequest(context, data),
           onAskInfo: () => _askForInfo(context, data),
           onSchedule: () => _scheduleMeeting(data),
+          onConfirmOrder: () => _confirmOrder(context, data),
+          onSchedulePose: () => _schedulePose(context, data),
           onRefresh: _loadRequests,
         ),
       ),
@@ -729,6 +731,181 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         'metreurUpdatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (_) {}
+  }
+
+  void _confirmOrder(BuildContext context, _MeasureCardData data) {
+    Navigator.of(context).pop();
+    Future.microtask(() async {
+      await _markPoseAProgrammer(data);
+      if (mounted) {
+        ScaffoldMessenger.of(this.context).showSnackBar(
+          const SnackBar(
+            content: Text('Commande confirmée — passage en planification de pose.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> _schedulePose(BuildContext context, _MeasureCardData data) async {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    if (_workspaceId == null) return;
+
+    var poseurs = <Map<String, String>>[];
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .where('workspaceId', isEqualTo: _workspaceId)
+          .get();
+      poseurs = snap.docs
+          .where((d) => d.data()['role'] == 'poseur' && d.data()['status'] != 'disabled')
+          .map((d) => {
+                'id': d.id,
+                'name': '${d.data()['firstName'] ?? ''} ${d.data()['lastName'] ?? ''}'.trim(),
+              })
+          .toList();
+    } catch (_) {}
+
+    if (!mounted) return;
+    final date = await showDatePicker(
+      context: this.context,
+      initialDate: DateTime.now().add(const Duration(days: 7)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date == null) return;
+    if (!mounted) return;
+    final time = await showTimePicker(
+      context: this.context,
+      initialTime: const TimeOfDay(hour: 8, minute: 0),
+    );
+    if (time == null) return;
+    final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+
+    final selectedIds = <String>{};
+
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: this.context,
+      backgroundColor: _metreurCard,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          16, 12, 16,
+          MediaQuery.of(this.context).viewInsets.bottom + 24,
+        ),
+        child: StatefulBuilder(
+          builder: (ctx, setSt) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.grey200,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const Row(
+                  children: [
+                    Icon(Icons.groups_outlined, color: AppColors.grey500),
+                    SizedBox(width: 8),
+                    Text(
+                      'Programmer la pose',
+                      style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Pose le ${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
+                  'à ${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(color: AppColors.grey500),
+                ),
+                const SizedBox(height: 12),
+                if (poseurs.isEmpty)
+                  const Text(
+                    'Aucun poseur dans l\'équipe — ajoutez-en depuis Admin > Équipe.',
+                    style: TextStyle(color: AppColors.grey500),
+                  )
+                else
+                  ...poseurs.map((p) => CheckboxListTile(
+                        value: selectedIds.contains(p['id']),
+                        onChanged: (v) => setSt(() {
+                          if (v == true) {
+                            selectedIds.add(p['id']!);
+                          } else {
+                            selectedIds.remove(p['id']!);
+                          }
+                        }),
+                        title: Text(
+                          p['name']!.isEmpty ? p['id']! : p['name']!,
+                          style: const TextStyle(color: AppColors.grey900),
+                        ),
+                        activeColor: _metreurAccent,
+                        contentPadding: EdgeInsets.zero,
+                      )),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _PrimaryAction(
+                    label: 'Confirmer la pose',
+                    icon: Icons.check,
+                    onPressed: () async {
+                      final poseurIds = selectedIds.toList();
+                      final poseurNames = poseurs
+                          .where((p) => selectedIds.contains(p['id']))
+                          .map((p) => p['name']!.isEmpty ? p['id']! : p['name']!)
+                          .join(', ');
+                      Navigator.of(ctx).pop();
+                      try {
+                        await _firestore
+                            .collection('workspaces')
+                            .doc(_workspaceId)
+                            .collection('devis')
+                            .doc(data.id)
+                            .set({
+                          'status': 'En pose',
+                          'poseDate': Timestamp.fromDate(dt),
+                          'poseurIds': poseurIds,
+                          'poseurNames': poseurNames,
+                          'metreurUpdatedAt': FieldValue.serverTimestamp(),
+                          'updated': 'Pose programmée',
+                        }, SetOptions(merge: true));
+                      } catch (_) {}
+                      if (mounted) {
+                        setState(() {
+                          _toPlan = _toPlan
+                              .map((e) => e.id == data.id
+                                  ? e.copyWith(status: 'En pose', updated: 'Pose programmée')
+                                  : e)
+                              .toList();
+                        });
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Pose programmée — poseur(s) notifié(s).'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Future<void> _persistRequestToCloud(_MeasureCardData data) async {
@@ -1730,6 +1907,8 @@ class _MeasureRequestSummary extends StatefulWidget {
     required this.onAccept,
     required this.onAskInfo,
     required this.onSchedule,
+    required this.onConfirmOrder,
+    required this.onSchedulePose,
     this.onRefresh,
     this.workspaceId,
   });
@@ -1738,6 +1917,8 @@ class _MeasureRequestSummary extends StatefulWidget {
   final VoidCallback onAccept;
   final VoidCallback onAskInfo;
   final Future<DateTime?> Function() onSchedule;
+  final VoidCallback onConfirmOrder;
+  final VoidCallback onSchedulePose;
   final VoidCallback? onRefresh;
   final String? workspaceId;
 
@@ -1760,7 +1941,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
     final updatedProducts = await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => MeasurementFormScreen(
-          draftData: data.draft!.toMap(),
+          draftData: (data.draft ?? const _QuoteDraft()).toMap(),
           initialIndex: initialIndex,
         ),
       ),
@@ -2139,60 +2320,109 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  if (data.status != 'Acceptée')
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _metreurAccent,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        onPressed: widget.onAccept,
-                        child: const Text('Accepter la demande'),
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _metreurAccent, // Green for action
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 4,
-                          shadowColor: _metreurAccent.withOpacity(0.4),
-                        ),
-                        onPressed: () => _openMeasurementForm(0),
-                        child: Builder(
-                          builder: (context) {
-                            // Check if any product has measurements
-                            final hasMeasurements = data.draft?.products.any((p) => 
-                              (p.largeurReelle?.isNotEmpty == true) || 
-                              (p.hauteurReelle?.isNotEmpty == true) || 
-                              (p.note?.isNotEmpty == true) || 
-                              (p.cjHaut?.isNotEmpty == true)) ?? false;
+                  Builder(builder: (context) {
+                    switch (data.status) {
+                      case 'Acceptée':
+                        return Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _metreurAccent, // Green for action
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              elevation: 4,
+                              shadowColor: _metreurAccent.withOpacity(0.4),
+                            ),
+                            onPressed: () => _openMeasurementForm(0),
+                            child: Builder(
+                              builder: (context) {
+                                // Check if any product has measurements
+                                final hasMeasurements = data.draft?.products.any((p) =>
+                                    (p.largeurReelle?.isNotEmpty == true) ||
+                                    (p.hauteurReelle?.isNotEmpty == true) ||
+                                    (p.note?.isNotEmpty == true) ||
+                                    (p.cjHaut?.isNotEmpty == true)) ?? false;
 
-                            return Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(hasMeasurements ? Icons.edit : Icons.play_arrow_rounded, color: Colors.black),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text(
-                                    hasMeasurements ? 'Modifier le métré' : 'Démarrer le métré',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                      ),
-                    )
+                                return Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(hasMeasurements ? Icons.edit : Icons.play_arrow_rounded, color: Colors.black),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        hasMeasurements ? 'Modifier le métré' : 'Démarrer le métré',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        );
+                      case 'À commander':
+                      case 'Commande en cours':
+                        return Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.warning,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              elevation: 0,
+                            ),
+                            onPressed: widget.onConfirmOrder,
+                            child: const Text('Confirmer la commande'),
+                          ),
+                        );
+                      case 'À planifier':
+                        return Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.purple,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              elevation: 0,
+                            ),
+                            onPressed: widget.onSchedulePose,
+                            child: const Text('Programmer la pose'),
+                          ),
+                        );
+                      case 'En pose':
+                        return Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: AppColors.successLight,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'Pose programmée',
+                                style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        );
+                      default:
+                        return Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _metreurAccent,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              elevation: 0,
+                            ),
+                            onPressed: widget.onAccept,
+                            child: const Text('Accepter la demande'),
+                          ),
+                        );
+                    }
+                  }),
                 ],
               ),
             ),

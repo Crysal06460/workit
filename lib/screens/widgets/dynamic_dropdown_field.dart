@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_colors.dart';
+
 class DynamicDropdownField extends StatelessWidget {
   const DynamicDropdownField({
     super.key,
@@ -25,23 +27,23 @@ class DynamicDropdownField extends StatelessWidget {
         children: [
           Text(
             required ? '$label *' : label,
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppColors.grey600),
           ),
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.04),
+              color: AppColors.grey50,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.white12),
+              border: Border.all(color: AppColors.grey200),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: (value?.isNotEmpty ?? false) ? value : (choices.isNotEmpty ? choices.first : null),
                 isExpanded: true,
-                dropdownColor: const Color(0xFF0F1422),
-                style: const TextStyle(color: Colors.white),
-                icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white70),
+                dropdownColor: AppColors.surface,
+                style: const TextStyle(color: AppColors.grey900),
+                icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.grey500),
                 items: choices.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                 onChanged: onChanged,
               ),
