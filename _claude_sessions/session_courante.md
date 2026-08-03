@@ -14,10 +14,18 @@ Vérification demandée par Christophe (pas de mention d'abonnement sur les prem
 ### Préparation du futur blocage abonnement (site web + Stripe pas encore prêts)
 Ajouté `subscriptionStatus: 'pending'` à la création du workspace (`onboarding_screen.dart`) + point d'accroche `_isSubscriptionAllowed()` dans `auth_navigation_service.dart`, **toujours permissif pour l'instant** (personne n'est bloqué). Pas de compte Stripe créé, pas de site web construit — à brancher plus tard.
 
+### Nouveau parcours d'inscription : abonnement sur le site avant configuration (implémenté et testé)
+Christophe a demandé le vrai modèle métier : plus de choix de formule dans l'app, l'abonnement doit se faire sur le site web (fictif pour l'instant, pas de Stripe), l'app crée juste le compte puis débloque la suite après retour du site. Nouveau parcours dans `onboarding_screen.dart` (branche "créer une entreprise") :
+`Entry → Subscribe (nouveau, message + lien externe workit.fr + "Continuer") → Account (email/mdp, compte Firebase créé seul) → Trades → Company → Role → Success (workspace + user doc finalisés ici)`.
+`_createAccount()` scindée en `_createFirebaseAccountOnly()` (Auth seul, persiste prénom/nom/email dans `SharedPreferences` `workit_pending_*`) et `_finalizeWorkspace()` (crée workspace + user doc, relit le `SharedPreferences` pending si les contrôleurs sont vides). Ajouté `OnboardingScreen(resumeAtTrades: true)` + branché dans `AuthNavigationService.navigateUser` : si un compte Firebase existe mais qu'aucun workspace n'est finalisé (app fermée entre Account et la fin du parcours), reprise directe sur Trades au lieu du SnackBar bloquant "Compte introuvable" d'avant.
+**Testé manuellement dans Chrome** (`flutter run -d web-server`) : parcours complet bout en bout + scénario de reprise (compte créé, page rafraîchie avant Trades → reprise correcte, prénom bien conservé, "Bonjour, Resume" au final). `flutter analyze` : 0 erreur, 132 issues (inchangé). **Committé, pas encore poussé.**
+⚠️ 2 comptes de test créés pendant la vérification (`testeur.onboarding.0803@workit-test.fr`, `resume.test.0803@workit-test.fr`) non nettoyés — pas de `serviceAccountKey.json` sur ce PC Windows. À supprimer depuis le Mac si besoin.
+
 ### Reste à faire (prochaine session)
-- Le vrai modèle métier voulu par Christophe (abonnement souscrit sur le site web, pas dans l'app) reste à concevoir/construire une fois le site + Stripe prêts.
-- Reprendre la vérification "carré, opérationnel" du process complet : coordonnées, choix du corps de métier, ajout de membre, droits — le flux vivant actuel (`onboarding_screen.dart` en un seul écran multi-pages) n'a pas encore été audité en détail pour ces points, seul le risque store a été traité aujourd'hui.
+- Reprendre la vérification "carré, opérationnel" du process complet : coordonnées, choix du corps de métier, ajout de membre, droits — le flux vivant actuel n'a pas encore été audité en détail sur ces points précis au-delà du nouveau parcours d'inscription.
 - Tester manuellement l'attestation photo + délégation d'équipe (Windows, jamais testées avant le merge).
+- Nettoyer les 2 comptes de test ci-dessus depuis le Mac.
+- Construire le vrai site web + Stripe, puis brancher `_isSubscriptionAllowed()` (actuellement toujours permissif) sur un vrai contrôle d'abonnement.
 
 ---
 
