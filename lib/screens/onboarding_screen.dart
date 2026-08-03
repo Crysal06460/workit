@@ -125,12 +125,6 @@ class _Slide {
 
 const _kSlides = [
   _Slide(
-    icon: Icons.description_outlined,
-    title: 'Devis pros en quelques clics',
-    subtitle: 'Chiffrage adapté à votre corps de métier,\nmodèles prêts à l\'emploi.',
-    bg: AppColors.primaryLight,
-  ),
-  _Slide(
     icon: Icons.groups_outlined,
     title: 'Coordonnez vos équipes terrain',
     subtitle: 'Commercial, métreur, poseur —\nchacun voit exactement ce qu\'il lui faut.',
