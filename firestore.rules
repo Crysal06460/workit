@@ -35,19 +35,40 @@ service cloud.firestore {
         myWorkspaceId() == resource.data.get('workspaceId', resource.data.get('companyId', '___'))
       );
 
-      // LIST (query) : tout utilisateur authentifié peut lister les users
-      // La sécurité pratique vient du filtre query côté client (companyId/workspaceId)
-      // et du fait que les workspace IDs sont des chaînes aléatoires non devinables
+      // LIST (query) : uniquement les documents du même workspace que
+      // l'appelant, quelle que soit la requête envoyée par le client.
       allow list: if isAuth() && (
-        resource.data.get('workspaceId', resource.data.get('companyId', '')) != ''
+        myWorkspaceId() == resource.data.get('workspaceId', resource.data.get('companyId', '___'))
       );
 
-      // Création : son propre document uniquement (self-registration)
-      allow create: if isAuth() && uid() == userId;
+      // Création : uniquement l'auto-inscription d'un nouvel admin lors de
+      // la création de son propre workspace (onboarding). Le workspace
+      // référencé doit déjà exister avec adminUid == uid() — bloque toute
+      // création directe d'un compte non-admin ou pointant vers un
+      // workspace existant appartenant à quelqu'un d'autre. Les comptes
+      // commercial/métreur/poseur sont provisionnés par la Cloud Function
+      // provisionAccounts (Admin SDK, ne passe pas par ces règles).
+      allow create: if isAuth() && uid() == userId &&
+        request.resource.data.role == 'admin' &&
+        request.resource.data.get('workspaceId', null) != null &&
+        get(/databases/$(database)/documents/workspaces/$(request.resource.data.workspaceId)).data.adminUid == uid();
 
-      // Mise à jour : soi-même ou admin du même workspace
+      // Mise à jour : soi-même — mais sans pouvoir changer role,
+      // workspaceId, companyId, canManageTeam, manageableRoles ou isAdmin
+      // (ces champs ne sont modifiables que par une Cloud Function via
+      // Admin SDK, ou par un admin ci-dessous), et sans pouvoir sortir de
+      // status=='disabled' soi-même — ou admin du même workspace (droits
+      // inchangés, y compris sur ces champs).
       allow update: if isAuth() && (
-        uid() == userId ||
+        (uid() == userId &&
+          request.resource.data.get('role', null) == resource.data.get('role', null) &&
+          request.resource.data.get('workspaceId', null) == resource.data.get('workspaceId', null) &&
+          request.resource.data.get('companyId', null) == resource.data.get('companyId', null) &&
+          request.resource.data.get('canManageTeam', false) == resource.data.get('canManageTeam', false) &&
+          request.resource.data.get('manageableRoles', []) == resource.data.get('manageableRoles', []) &&
+          request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false) &&
+          (resource.data.get('status', '') != 'disabled' || request.resource.data.get('status', '') == 'disabled')
+        ) ||
         (myRole() == 'admin' &&
          myWorkspaceId() == resource.data.get('workspaceId', resource.data.get('companyId', '___')))
       );
@@ -135,7 +156,13 @@ service cloud.firestore {
     }
 
     match /provisioned_accounts/{accountId} {
-      allow read, write: if isAuth();
+      // Lecture/mise à jour réservées aux membres du même workspace (le
+      // document porte déjà workspaceId/companyId). Création et
+      // suppression refusées aux clients : seule provisionAccounts
+      // (Admin SDK, contourne ces règles) crée ces documents.
+      allow read, update: if isAuth() &&
+        myWorkspaceId() == resource.data.get('workspaceId', resource.data.get('companyId', '___'));
+      allow create, delete: if false;
     }
   }
 }

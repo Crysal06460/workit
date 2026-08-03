@@ -18,7 +18,6 @@ const {getAuth} = require("firebase-admin/auth");
 const OpenAI = require("openai");
 const Mailjet = require("node-mailjet");
 const logger = require("firebase-functions/logger");
-const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 
 setGlobalOptions({
@@ -35,6 +34,8 @@ const db = getFirestore();
 exports.analyzeDevis = onCall(
     {region: "europe-west1", secrets: ["OPENAI_API_KEY"]},
     async (request) => {
+      const caller = request.auth && request.auth.uid;
+      if (!caller) throw new Error("Non autorisé");
       const fileUrl = request.data && request.data.fileUrl;
       if (!fileUrl) {
         throw new Error("fileUrl manquant");
@@ -99,51 +100,6 @@ function getOpenAIClient() {
 }
 
 /**
- * Génère un token d'invitation.
- * @return {string}
- */
-function generateToken() {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-/**
- * Crée une invitation (admin uniquement).
- */
-exports.createInvitation = onCall(
-    {region: "europe-west1"},
-    async (request) => {
-      const {email, role, companyId, expiresInDays = 14} =
-      request.data || {};
-      const uid = request.auth && request.auth.uid;
-      if (!uid) throw new Error("Non autorisé");
-      if (!email || !role || !companyId) {
-        throw new Error("email, role, companyId requis");
-      }
-
-      const token = generateToken();
-      const invitationId = token; // simple mapping
-      const now = Timestamp.now();
-      const expiresAt = Timestamp.fromMillis(
-          now.toMillis() + expiresInDays * 24 * 60 * 60 * 1000,
-      );
-
-      await db.collection("invitations").doc(invitationId).set({
-        email: email.toLowerCase(),
-        role,
-        companyId,
-        token,
-        status: "pending",
-        createdAt: now,
-        createdBy: uid,
-        expiresAt,
-      });
-
-      const inviteUrl = `https://workit.app/invite?token=${token}`;
-      return {token, inviteUrl, invitationId};
-    },
-);
-
-/**
  * Helper: Envoie un email via Mailjet ou SMTP.
  */
 async function sendEmail({to, subject, html, text, fromName = "WorkIt"}) {
@@ -202,60 +158,6 @@ async function sendEmail({to, subject, html, text, fromName = "WorkIt"}) {
     }
   }
 }
-
-/**
- * Envoie l'email d'invitation.
- */
-exports.sendInvitationEmail = onCall(
-    {
-      region: "europe-west1",
-      secrets: [
-        "SMTP_HOST",
-        "SMTP_PORT",
-        "SMTP_USER",
-        "SMTP_PASS",
-        "SMTP_FROM",
-        "MAILJET_API_KEY",
-        "MAILJET_API_SECRET",
-        "MAILJET_FROM",
-      ],
-    },
-    async (request) => {
-      const {email, token, companyName = "WorkIt", role = ""} =
-      request.data || {};
-      if (!email || !token) throw new Error("email et token requis");
-      const inviteUrl = `https://workit.app/invite?token=${token}`;
-
-      const html =
-      `<div style="font-family:Arial,sans-serif;color:#0B1426">
-  <p>Bonjour,</p>
-  <p>Vous êtes invité(e) à rejoindre <b>${companyName}</b> en tant que
-  <b>${role || "membre"}</b> sur WorkIt.</p>
-  <p><a href="${inviteUrl}"
-  style="background:#00F795;color:#000;padding:12px 18px;border-radius:10px;
-  text-decoration:none;font-weight:bold;">Rejoindre WorkIt</a></p>
-  <p>Ce lien expire bientôt. Si vous ne reconnaissez pas cette invitation,
-  ignorez ce message.</p>
-</div>`;
-
-      const text =
-      `Bonjour,
-
-Vous êtes invité(e) à rejoindre ${companyName} (${role}).
-Lien: ${inviteUrl}
-`;
-
-      await sendEmail({
-        to: email,
-        subject: `Invitation WorkIt – ${companyName}`,
-        html,
-        text,
-        fromName: "WorkIt",
-      });
-
-      return {sent: true};
-    },
-);
 
 /**
  * Provisionne des comptes avec mot de passe temporaire
@@ -852,101 +754,3 @@ exports.onChantierMessageCreated = onDocumentCreated(
       return null;
     });
 
-/**
- * Récupère une invitation par token (preview).
- */
-exports.getInvitationByToken = onCall(
-    {region: "europe-west1"},
-    async (request) => {
-      const {token} = request.data || {};
-      if (!token) throw new Error("token requis");
-      const snap = await db.collection("invitations").doc(token).get();
-      if (!snap.exists) throw new Error("Invitation introuvable");
-      const data = snap.data();
-      if (data.status === "used") {
-        throw new Error("Invitation déjà utilisée");
-      }
-      if (data.expiresAt && data.expiresAt.toMillis() < Date.now()) {
-        throw new Error("Invitation expirée");
-      }
-      return {...data, id: snap.id};
-    },
-);
-
-/**
- * Consomme une invitation :
- * crée/associe l'utilisateur et marque l'invitation utilisée.
- */
-exports.consumeInvitation = onCall(
-    {region: "europe-west1"},
-    async (request) => {
-      const {token, password, firstName = "", lastName = ""} =
-      request.data || {};
-      if (!token || !password) throw new Error("token et password requis");
-      const ref = db.collection("invitations").doc(token);
-      const snap = await ref.get();
-      if (!snap.exists) throw new Error("Invitation introuvable");
-      const data = snap.data();
-      if (data.status === "used") throw new Error("Invitation déjà utilisée");
-      if (data.expiresAt && data.expiresAt.toMillis() < Date.now()) {
-        throw new Error("Invitation expirée");
-      }
-
-      const email = data.email;
-      const role = data.role;
-      const companyId = data.companyId;
-
-      let userRecord;
-      try {
-        userRecord = await getAuth().getUserByEmail(email);
-      } catch (_) {
-        userRecord = await getAuth().createUser({
-          email,
-          password,
-          displayName: `${firstName} ${lastName}`.trim(),
-        });
-      }
-
-      await getAuth().updateUser(userRecord.uid, {
-        password,
-        displayName:
-        `${firstName} ${lastName}`.trim() || userRecord.displayName,
-      });
-
-      await getAuth().setCustomUserClaims(userRecord.uid, {
-        role,
-        companyId,
-      });
-
-      await db.collection("users").doc(userRecord.uid).set(
-          {
-            email,
-            firstName,
-            lastName,
-            role,
-            companyId,
-            invitationId: token,
-            status: "active",
-            updatedAt: Timestamp.now(),
-          },
-          {merge: true},
-      );
-
-      await ref.set(
-          {
-            status: "used",
-            usedAt: Timestamp.now(),
-            usedBy: userRecord.uid,
-          },
-          {merge: true},
-      );
-
-      return {
-        uid: userRecord.uid,
-        email,
-        role,
-        companyId,
-        invitationId: token,
-      };
-    },
-);
