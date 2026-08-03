@@ -64,6 +64,15 @@ class AuthNavigationService {
     final roleKey = userData['role']?.toString() ?? 'commercial';
     final isAdmin = roleKey == 'admin';
 
+    // 4bis. Point d'accroche pour le futur blocage "abonnement requis"
+    // (site web + Stripe pas encore en place). Toujours permissif pour
+    // l'instant — aucun workspace n'est bloqué tant que ce n'est pas
+    // branché à un vrai contrôle Stripe côté site.
+    final subscriptionStatus = workspaceData['subscriptionStatus']?.toString();
+    if (!_isSubscriptionAllowed(subscriptionStatus)) {
+      return;
+    }
+
     // 5. Changement de mot de passe obligatoire (comptes provisionnés)
     final mustChangePassword = userData['mustChangePassword'] == true;
     String effectiveRole = roleKey;
@@ -115,6 +124,13 @@ class AuthNavigationService {
       );
     }
   }
+
+  /// Toujours `true` pour l'instant : le site web + Stripe n'existent pas
+  /// encore, donc aucun workspace n'est bloqué quel que soit son
+  /// `subscriptionStatus`. À brancher sur un vrai contrôle le jour où
+  /// l'abonnement se fait sur le site (rediriger vers un écran dédié au
+  /// lieu de retourner `false` silencieusement).
+  bool _isSubscriptionAllowed(String? subscriptionStatus) => true;
 
   Future<void> _saveFcmToken(String uid, String workspaceId) async {
     try {

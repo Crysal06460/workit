@@ -268,6 +268,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'companySize': _selectedSize ?? 'solo',
         'trades': _selectedTrades.map((i) => _kTrades[i].key).toList(),
         'adminUid': uid,
+        // 'pending' : pas encore de contrôle actif (site web + Stripe pas
+        // en place) — voir AuthNavigationService._isSubscriptionAllowed.
+        'subscriptionStatus': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
         'members': {
           uid: {
