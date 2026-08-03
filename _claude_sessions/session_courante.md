@@ -1,6 +1,25 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-02
+**Dernière mise à jour :** 2026-08-03
+
+## ✅ Session 2026-08-03 (matin, PC Windows) — Réconciliation Mac/Windows + nettoyage onboarding mort
+
+### Réconciliation du travail Mac (02/08) et Windows (29-30/07, jamais poussé)
+Les deux machines avaient divergé sans se synchroniser : Windows avait du code non commité (fix sécurité critique `provisionAccounts` — aucune vérification de rôle côté serveur, + délégation des droits d'équipe `canManageTeam`/`manageableRoles`), pendant que le Mac corrigeait 6 bugs bloquants sur le même workflow métreur→poseur et avait même **recodé indépendamment le même écran** "confirmer commande/programmer pose" que le Windows avait aussi construit. Résolution manuelle : fix sécurité + délégation d'équipe repris tels quels du Windows (aucun conflit), version Mac gardée pour metreur_home_screen.dart (testée bout en bout), ajouts Windows (attestation photo obligatoire, paiementEffectue, formulaire "chantier pas terminé" simplifié) réappliqués à la main par-dessus le fix Mac de poseurs_home_screen.dart. `flutter analyze` : 0 erreur après fusion. **Poussé sur origin/main.**
+Leçon retenue : committer/pousser en fin de session des deux côtés pour éviter ces réconciliations tardives.
+
+### Audit conformité App Store/Google Play (signup/login/abonnement)
+Vérification demandée par Christophe (pas de mention d'abonnement sur les premiers écrans, sous peine de bannissement). Constat : le flux réellement affiché (`EntryScreen` → `OnboardingScreen`) ne mentionne déjà aucun prix nulle part — conforme. Mais un **second flux d'onboarding complet existait en code mort**, jamais routé depuis `main.dart` (`welcome_screen` → `trial_activation` → `journey_selection` → `account_setup` → `create_workspace` → `select_metier` → `plan_selection` → `final_save`), contenant les écrans à risque (choix de formule avant compte fonctionnel, `trial_expired_screen.dart` avec "Activez votre abonnement / Abonnement annuel/mensuel"). Vérifié que ce flux écrivait un schéma Firestore workspace incompatible avec celui du flux vivant et n'était dépendu par aucun écran live. **Supprimé** (15 fichiers : `welcome_screen.dart`, `trial_activation_screen.dart`, `trial_expired_screen.dart`, `journey_selection_screen.dart`, `account_setup_screen.dart`, `create_workspace_screen.dart`, `select_metier_screen.dart`, `plan_selection_screen.dart`, `final_save_screen.dart`, `admin_summary_screen.dart`, `invite_team_screen.dart`, `invite_activation_screen.dart`, `join_workspace_screen.dart`, `trial_service.dart`, `workspace_repository.dart`), en gardant dans `onboarding_models.dart` uniquement les helpers réellement utilisés par le code vivant (`onboardingRoles`, `roleDisplayName`, `roleDisplayNamePlural`). `flutter analyze` : 132 issues (208 avant), 0 erreur.
+
+### Préparation du futur blocage abonnement (site web + Stripe pas encore prêts)
+Ajouté `subscriptionStatus: 'pending'` à la création du workspace (`onboarding_screen.dart`) + point d'accroche `_isSubscriptionAllowed()` dans `auth_navigation_service.dart`, **toujours permissif pour l'instant** (personne n'est bloqué). Pas de compte Stripe créé, pas de site web construit — à brancher plus tard.
+
+### Reste à faire (prochaine session)
+- Le vrai modèle métier voulu par Christophe (abonnement souscrit sur le site web, pas dans l'app) reste à concevoir/construire une fois le site + Stripe prêts.
+- Reprendre la vérification "carré, opérationnel" du process complet : coordonnées, choix du corps de métier, ajout de membre, droits — le flux vivant actuel (`onboarding_screen.dart` en un seul écran multi-pages) n'a pas encore été audité en détail pour ces points, seul le risque store a été traité aujourd'hui.
+- Tester manuellement l'attestation photo + délégation d'équipe (Windows, jamais testées avant le merge).
+
+---
 
 ## ✅ Session 2026-08-02 — Tests bout en bout + 6 bugs critiques corrigés (workflow métreur→poseur débloqué)
 Voir section détaillée tout en bas du fichier (« 📍 Session 2026-08-02 »). Résumé : le multi-métier/métré générique du 29/07 a été testé manuellement pour la première fois — 6 bugs trouvés et corrigés, dont **2 bloquants qui empêchaient tout chantier réel d'aller au-delà du métré** (workflow métreur cassé après la refonte de juillet, poseur ne voyait jamais aucun chantier). Le cycle complet devis→métreur→pose→poseur→clôture est maintenant validé de bout en bout manuellement. `flutter analyze` OK (0 erreur). **Commit fait, prêt à déployer si besoin.**
