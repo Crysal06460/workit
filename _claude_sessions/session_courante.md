@@ -1,6 +1,46 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-03 (soir, suite)
+**Dernière mise à jour :** 2026-08-03 (soir, fin) — **Phase 0 terminée côté code**
+
+## ✅ Session 2026-08-03 (soir, fin) — Phase 0 finalisée : lien d'activation, App Check, quota IA, logs d'audit
+
+Christophe a demandé de terminer toute la Phase 0 pour ne pas y revenir. Les 4 points restants (voir
+`roadmap_plateforme_multimetier.md`) sont maintenant faits et **déployés en production** (`workit-1daa1`,
+commit `5bf4ae3`) :
+
+1. **Mot de passe temporaire → lien d'activation** : `provisionAccounts` ne génère/stocke/renvoie plus aucun mot de
+   passe — un vrai lien Firebase (`generatePasswordResetLink`) est généré et affiché à l'admin à la place. Testé en
+   direct : le lien produit a bien la structure `workit-1daa1.firebaseapp.com/__/auth/action?mode=resetPassword...`
+   et charge une vraie page Firebase fonctionnelle. `_showTempPassword` et l'affichage du mot de passe en liste
+   d'attente ont été supprimés (plus rien à afficher).
+2. **App Check** : package ajouté, activé en mode `.debug` (Android/iOS) + reCAPTCHA v3 (web) dans un try/catch —
+   **rien n'est bloqué** pour l'instant (aucune Cloud Function n'impose `enforceAppCheck`). Confirmé que l'app
+   démarre normalement avec cette activation.
+   ⚠️ **Reste à faire par Christophe lui-même** (étapes externes, consoles web, hors de portée pour moi) avant de
+   pouvoir activer le blocage réel :
+   1. Firebase Console → App Check → enregistrer l'app Web avec une vraie clé reCAPTCHA v3 (Google Cloud Console →
+      reCAPTCHA → créer une clé pour le domaine).
+   2. Google Play Console → activer Play Integrity API pour l'app Android.
+   3. Apple Developer Portal → activer DeviceCheck/App Attest pour l'app iOS.
+   4. Une fois ces clés en main, remplacer les providers `.debug` dans `main.dart` et ajouter
+      `enforceAppCheck: true` aux Cloud Functions — je peux faire cette dernière étape en 5 minutes le jour venu.
+3. **Quota IA** : `analyzeDevis` limité à 100 analyses/mois/workspace (compteur dans
+   `workspaces/{id}/usage/aiAnalysis`, plafond facilement ajustable plus tard).
+4. **Logs d'audit** : nouvelle sous-collection immuable `workspaces/{id}/auditLogs`, alimentée à la création de
+   compte (`provisionAccounts`), à la désactivation d'un membre et au changement de ses droits de délégation.
+   Testé en direct : les 3 actions fonctionnent toujours normalement (pas d'erreur de permission introduite).
+
+`flutter analyze` : 0 erreur, 135 issues. `npm run lint` (functions) : 0 erreur. **Committé et poussé.**
+
+**→ Phase 0 de la roadmap terminée côté code.** Seules les 3 étapes de console listées ci-dessus (App Check)
+restent à faire par Christophe quand il le souhaite — tout le reste (sécurité critique, isolation workspace,
+mot de passe/lien d'activation, quota IA, logs d'audit) est en place et vérifié.
+
+### Prochaine étape
+Reprendre la roadmap à la **Phase 1 — Moteur de workflow générique + historique immuable** (voir
+`roadmap_plateforme_multimetier.md`) lors d'une prochaine session.
+
+---
 
 ## ✅ Session 2026-08-03 (soir, suite) — Phase 0 attaquée : faille critique de prise de contrôle de compte corrigée
 
