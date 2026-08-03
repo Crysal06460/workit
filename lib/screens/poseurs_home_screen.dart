@@ -744,7 +744,7 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                         icon: const Icon(Icons.warning_amber_outlined,
                             size: 18),
                         label: const Text(
-                          'Problème rencontré',
+                          'Chantier pas terminé',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -1059,7 +1059,9 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
   DateTime _dateFin = DateTime.now();
   bool _reglementEffectue = false;
   final List<File> _photos = [];
+  File? _attestation;
   bool _loading = false;
+  bool _showAttestationError = false;
 
   Future<void> _pickPhotos() async {
     final picker = ImagePicker();
@@ -1071,30 +1073,50 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
     }
   }
 
+  Future<void> _pickAttestation() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+    if (picked != null && mounted) {
+      setState(() {
+        _attestation = File(picked.path);
+        _showAttestationError = false;
+      });
+    }
+  }
+
+  Future<String?> _uploadFile(File file, String folder) async {
+    try {
+      final ref = FirebaseStorage.instanceFor(bucket: _storageBucket)
+          .ref()
+          .child(
+              '$folder/${widget.workspaceId}/${widget.devisId}/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}');
+      await ref.putFile(file);
+      return await ref.getDownloadURL();
+    } catch (e) {
+      debugPrint('Upload file error: $e');
+      return null;
+    }
+  }
+
   Future<List<String>> _uploadPhotos() async {
     final urls = <String>[];
     for (final file in _photos) {
-      try {
-        final ref = FirebaseStorage.instanceFor(bucket: _storageBucket)
-            .ref()
-            .child(
-                'chantier_photos/${widget.workspaceId}/${widget.devisId}/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}');
-        await ref.putFile(file);
-        final url = await ref.getDownloadURL();
-        urls.add(url);
-      } catch (e) {
-        // Silently continue if one photo fails
-        debugPrint('Upload photo error: $e');
-      }
+      final url = await _uploadFile(file, 'chantier_photos');
+      if (url != null) urls.add(url);
     }
     return urls;
   }
 
   Future<void> _valider() async {
     if (_loading) return;
+    if (_attestation == null) {
+      setState(() => _showAttestationError = true);
+      return;
+    }
     setState(() => _loading = true);
 
     final photoUrls = await _uploadPhotos();
+    final attestationUrl = await _uploadFile(_attestation!, 'attestations_fin_travaux');
 
     try {
       await FirebaseFirestore.instance
@@ -1107,9 +1129,11 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
               'status': 'Terminé',
               'rapportFin': {
                 'date': _dateFin.toIso8601String(),
-                'reglementEffectue': _reglementEffectue,
                 'photoUrls': photoUrls,
+                'attestationUrl': attestationUrl,
               },
+              'paiementEffectue': _reglementEffectue,
+              'paiementSetAt': FieldValue.serverTimestamp(),
               'clotureAt': FieldValue.serverTimestamp(),
             },
             SetOptions(merge: true),
@@ -1219,6 +1243,69 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
 
             const SizedBox(height: 16),
 
+            // Attestation de fin de travaux signée (obligatoire)
+            const Text(
+              'Attestation de fin de travaux signée',
+              style: TextStyle(color: AppColors.grey500, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            if (_attestation != null)
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      _attestation!,
+                      width: double.infinity,
+                      height: 140,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _attestation = null),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close,
+                            color: AppColors.grey900, size: 18),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _poseurAccent,
+                  side: BorderSide(
+                    color: _showAttestationError
+                        ? Colors.redAccent
+                        : _poseurAccent,
+                  ),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: _pickAttestation,
+                icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                label: const Text('Photographier l\'attestation signée'),
+              ),
+            if (_showAttestationError)
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text(
+                  'L\'attestation signée est obligatoire pour clôturer.',
+                  style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
             // Toggle règlement
             Container(
               decoration: BoxDecoration(
@@ -1232,12 +1319,12 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                     setState(() => _reglementEffectue = v),
                 activeColor: _poseurAccent,
                 title: const Text(
-                  'Règlement effectué sur place',
+                  'Chantier payé par le client',
                   style: TextStyle(
                       color: AppColors.grey900, fontSize: 14),
                 ),
                 subtitle: Text(
-                  _reglementEffectue ? 'Oui' : 'Non',
+                  _reglementEffectue ? 'Payé' : 'Pas payé',
                   style: TextStyle(
                     color: _reglementEffectue
                         ? _poseurAccent
@@ -1372,21 +1459,26 @@ class _RapportProbleme extends StatefulWidget {
 }
 
 class _RapportProblemeState extends State<_RapportProbleme> {
-  final _soucisCtrl = TextEditingController();
-  final _manqueCtrl = TextEditingController();
-  final _erreurCtrl = TextEditingController();
+  final _raisonCtrl = TextEditingController();
+  bool _reglementEffectue = false;
   bool _loading = false;
 
   @override
+  void initState() {
+    super.initState();
+    _raisonCtrl.addListener(() => setState(() {}));
+  }
+
+  @override
   void dispose() {
-    _soucisCtrl.dispose();
-    _manqueCtrl.dispose();
-    _erreurCtrl.dispose();
+    _raisonCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _signaler() async {
     if (_loading) return;
+    final raison = _raisonCtrl.text.trim();
+    if (raison.isEmpty) return;
     setState(() => _loading = true);
 
     try {
@@ -1399,11 +1491,11 @@ class _RapportProblemeState extends State<_RapportProbleme> {
             {
               'status': 'À clôturer',
               'rapportProbleme': {
-                'soucis': _soucisCtrl.text.trim(),
-                'manque': _manqueCtrl.text.trim(),
-                'erreur': _erreurCtrl.text.trim(),
+                'raison': raison,
                 'signaledAt': FieldValue.serverTimestamp(),
               },
+              'paiementEffectue': _reglementEffectue,
+              'paiementSetAt': FieldValue.serverTimestamp(),
             },
             SetOptions(merge: true),
           );
@@ -1450,7 +1542,7 @@ class _RapportProblemeState extends State<_RapportProbleme> {
                     color: Colors.orangeAccent, size: 22),
                 SizedBox(width: 8),
                 Text(
-                  'Signaler un problème',
+                  'Chantier pas terminé',
                   style: TextStyle(
                     color: AppColors.grey900,
                     fontWeight: FontWeight.w800,
@@ -1462,23 +1554,37 @@ class _RapportProblemeState extends State<_RapportProbleme> {
             const SizedBox(height: 20),
 
             _ProblemeField(
-              controller: _soucisCtrl,
-              label: 'Soucis rencontrés',
-              hint: 'Décrivez les problèmes rencontrés...',
-            ),
-            const SizedBox(height: 12),
-            _ProblemeField(
-              controller: _manqueCtrl,
-              label: 'Éléments manquants',
+              controller: _raisonCtrl,
+              label: 'Raison',
               hint:
-                  'Ex : quincaillerie manquante, pièce non livrée...',
+                  'Pourquoi le chantier n\'est pas terminé ? (manque de matériel, problème sur place, dimensions non conformes...)',
             ),
-            const SizedBox(height: 12),
-            _ProblemeField(
-              controller: _erreurCtrl,
-              label: 'Erreurs / Écarts',
-              hint:
-                  'Ex : dimensions non conformes, erreur de mesure...',
+            const SizedBox(height: 16),
+
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.grey50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.grey100),
+              ),
+              child: SwitchListTile(
+                value: _reglementEffectue,
+                onChanged: (v) => setState(() => _reglementEffectue = v),
+                activeColor: Colors.orangeAccent,
+                title: const Text(
+                  'Chantier payé par le client',
+                  style: TextStyle(color: AppColors.grey900, fontSize: 14),
+                ),
+                subtitle: Text(
+                  _reglementEffectue ? 'Payé' : 'Pas payé',
+                  style: TextStyle(
+                    color: _reglementEffectue
+                        ? Colors.orangeAccent
+                        : Colors.white54,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -1494,7 +1600,9 @@ class _RapportProblemeState extends State<_RapportProbleme> {
                       borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
-                onPressed: _loading ? null : _signaler,
+                onPressed: (_loading || _raisonCtrl.text.trim().isEmpty)
+                    ? null
+                    : _signaler,
                 icon: _loading
                     ? const SizedBox(
                         width: 18,
@@ -1506,7 +1614,7 @@ class _RapportProblemeState extends State<_RapportProbleme> {
                       )
                     : const Icon(Icons.send_outlined, size: 18),
                 label: const Text(
-                  'Signaler le problème',
+                  'Confirmer — chantier pas terminé',
                   style: TextStyle(
                       fontWeight: FontWeight.w800, fontSize: 16),
                 ),

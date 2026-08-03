@@ -6,9 +6,18 @@ import 'package:flutter/services.dart';
 import '../models/onboarding_models.dart';
 
 class AdminTeamTab extends StatefulWidget {
-  const AdminTeamTab({super.key, required this.workspaceId});
+  const AdminTeamTab({
+    super.key,
+    required this.workspaceId,
+    this.restrictToRoles,
+  });
 
   final String workspaceId;
+
+  /// Si non-null, restreint l'écran à un sous-ensemble de rôles : c'est le
+  /// cas d'un membre délégué (canManageTeam=true) qui ne gère qu'une partie
+  /// de l'équipe. Null = vrai admin, accès complet + peut accorder des droits.
+  final List<String>? restrictToRoles;
 
   @override
   State<AdminTeamTab> createState() => _AdminTeamTabState();
@@ -17,25 +26,42 @@ class AdminTeamTab extends StatefulWidget {
 class _AdminTeamTabState extends State<AdminTeamTab> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Color _roleColor(String role) {
-    switch (role) {
-      case 'commercial':
-        return AppColors.primary;
-      case 'metreur':
-        return AppColors.warning;
-      case 'poseur':
-        return AppColors.purple;
-      default:
-        return AppColors.grey300;
-    }
-  }
+  bool get _isFullAdmin => widget.restrictToRoles == null;
+
+  Color _roleColor(String role) => _teamRoleColor(role);
 
   void _addMember() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
-      builder: (_) => _AddMemberSheet(workspaceId: widget.workspaceId),
+      builder: (_) => _AddMemberSheet(
+        workspaceId: widget.workspaceId,
+        allowedRoles: widget.restrictToRoles,
+        canGrantPermissions: _isFullAdmin,
+      ),
+    );
+  }
+
+  void _editPermissions(
+    String uid,
+    String displayName,
+    bool enabled,
+    Set<String> roles,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _EditPermissionsSheet(
+        uid: uid,
+        displayName: displayName,
+        initialEnabled: enabled,
+        initialRoles: roles,
+      ),
     );
   }
 
@@ -222,7 +248,14 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
 
               final docs = snapshot.data!.docs.where((d) {
                 final data = d.data() as Map<String, dynamic>;
-                return data['status'] != 'disabled' && data['role'] != 'admin';
+                if (data['status'] == 'disabled' || data['role'] == 'admin') {
+                  return false;
+                }
+                if (widget.restrictToRoles != null &&
+                    !widget.restrictToRoles!.contains(data['role'])) {
+                  return false;
+                }
+                return true;
               }).toList();
 
               if (docs.isEmpty) {
@@ -263,6 +296,11 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                   final roleColor = _roleColor(role);
                   final tempPassword = data['tempPassword']?.toString();
                   final isProvisioned = data['status'] == 'provisioned';
+                  final canManageTeam = data['canManageTeam'] == true;
+                  final manageableRoles = Set<String>.from(
+                    (data['manageableRoles'] as List<dynamic>? ?? [])
+                        .map((e) => e.toString()),
+                  );
 
                   return Container(
                     decoration: BoxDecoration(
@@ -321,9 +359,44 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                                   ),
                                 ),
                               ),
+                              if (canManageTeam) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.shield_outlined,
+                                        size: 12, color: AppColors.grey400),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        manageableRoles.isEmpty
+                                            ? 'Peut ajouter des membres'
+                                            : 'Peut ajouter : ${manageableRoles.map(roleDisplayNamePlural).join(', ')}',
+                                        style: const TextStyle(
+                                            color: AppColors.grey400,
+                                            fontSize: 11),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
+                        if (_isFullAdmin)
+                          IconButton(
+                            icon: Icon(
+                              canManageTeam
+                                  ? Icons.shield
+                                  : Icons.shield_outlined,
+                              color: canManageTeam
+                                  ? AppColors.primary
+                                  : AppColors.grey300,
+                            ),
+                            tooltip: 'Droits de gestion d\'équipe',
+                            onPressed: () => _editPermissions(
+                                uid, displayName, canManageTeam, manageableRoles),
+                          ),
                         if (isProvisioned && tempPassword != null)
                           IconButton(
                             icon: const Icon(Icons.key_outlined, color: AppColors.primary),
@@ -349,9 +422,22 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
 }
 
 class _AddMemberSheet extends StatefulWidget {
-  const _AddMemberSheet({required this.workspaceId});
+  const _AddMemberSheet({
+    required this.workspaceId,
+    this.allowedRoles,
+    this.canGrantPermissions = false,
+  });
 
   final String workspaceId;
+
+  /// Rôles proposables. Null = tous (vrai admin) ; sinon restreint aux
+  /// rôles délégués au membre qui ajoute (ex : un métreur "chef
+  /// d'orchestre" ne peut ajouter que commerciaux + poseurs).
+  final List<String>? allowedRoles;
+
+  /// Seul un vrai admin peut, en créant le compte, lui accorder à son tour
+  /// le droit d'ajouter des membres.
+  final bool canGrantPermissions;
 
   @override
   State<_AddMemberSheet> createState() => _AddMemberSheetState();
@@ -362,7 +448,10 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
-  String _selectedRole = 'commercial';
+  late String _selectedRole =
+      widget.allowedRoles?.isNotEmpty == true ? widget.allowedRoles!.first : 'commercial';
+  bool _canManageTeam = false;
+  Set<String> _manageableRoles = {};
   bool _isLoading = false;
 
   @override
@@ -389,6 +478,9 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
             'lastName': _lastNameController.text.trim(),
             'role': _selectedRole,
             'companyId': widget.workspaceId,
+            if (widget.canGrantPermissions) 'canManageTeam': _canManageTeam,
+            if (widget.canGrantPermissions)
+              'manageableRoles': _manageableRoles.toList(),
           }
         ],
       });
@@ -628,7 +720,22 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                 _RoleSelector(
                   selected: _selectedRole,
                   onChanged: (role) => setState(() => _selectedRole = role),
+                  roles: widget.allowedRoles ?? onboardingRoles,
                 ),
+                if (widget.canGrantPermissions) ...[
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Droits de gestion d\'équipe',
+                    style: TextStyle(color: AppColors.grey600, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 10),
+                  _PermissionsFields(
+                    enabled: _canManageTeam,
+                    selectedRoles: _manageableRoles,
+                    onEnabledChanged: (v) => setState(() => _canManageTeam = v),
+                    onRolesChanged: (r) => setState(() => _manageableRoles = r),
+                  ),
+                ],
                 const SizedBox(height: 28),
                 SizedBox(
                   width: double.infinity,
@@ -639,7 +746,9 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    onPressed: _isLoading ? null : _provision,
+                    onPressed: (_isLoading || (_canManageTeam && _manageableRoles.isEmpty))
+                        ? null
+                        : _provision,
                     child: _isLoading
                         ? const SizedBox(
                             width: 22,
@@ -710,21 +819,27 @@ class _DarkField extends StatelessWidget {
 }
 
 class _RoleSelector extends StatelessWidget {
-  const _RoleSelector({required this.selected, required this.onChanged});
+  const _RoleSelector({
+    required this.selected,
+    required this.onChanged,
+    this.roles = onboardingRoles,
+  });
 
   final String selected;
   final ValueChanged<String> onChanged;
+  final List<String> roles;
 
   @override
   Widget build(BuildContext context) {
-    final roles = [
+    final allRoles = [
       (key: 'commercial', label: 'Commercial', icon: Icons.handshake_outlined),
       (key: 'metreur', label: 'Métreur', icon: Icons.architecture_outlined),
       (key: 'poseur', label: 'Poseur / Pose', icon: Icons.home_repair_service_outlined),
     ];
+    final visibleRoles = allRoles.where((r) => roles.contains(r.key)).toList();
 
     return Row(
-      children: roles.map((r) {
+      children: visibleRoles.map((r) {
         final isSelected = selected == r.key;
         Color color;
         switch (r.key) {
@@ -774,6 +889,269 @@ class _RoleSelector extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Droits de gestion d'équipe — délégation type "chef d'orchestre"
+// ════════════════════════════════════════════════════════════════════════════
+
+Color _teamRoleColor(String role) {
+  switch (role) {
+    case 'commercial':
+      return AppColors.primary;
+    case 'metreur':
+      return AppColors.warning;
+    case 'poseur':
+      return AppColors.purple;
+    default:
+      return AppColors.grey300;
+  }
+}
+
+class _PermissionsFields extends StatelessWidget {
+  const _PermissionsFields({
+    required this.enabled,
+    required this.selectedRoles,
+    required this.onEnabledChanged,
+    required this.onRolesChanged,
+  });
+
+  final bool enabled;
+  final Set<String> selectedRoles;
+  final ValueChanged<bool> onEnabledChanged;
+  final ValueChanged<Set<String>> onRolesChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final allSelected = onboardingRoles.every(selectedRoles.contains);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.grey50,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.grey100),
+          ),
+          child: SwitchListTile(
+            value: enabled,
+            onChanged: onEnabledChanged,
+            activeColor: AppColors.primary,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            title: const Text(
+              'Peut ajouter des membres à l\'équipe',
+              style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            subtitle: const Text(
+              'Ex : le métreur référent recrute lui-même poseurs et commerciaux, sans passer par vous.',
+              style: TextStyle(color: AppColors.grey400, fontSize: 12),
+            ),
+          ),
+        ),
+        if (enabled) ...[
+          const SizedBox(height: 14),
+          const Text(
+            'Rôles qu\'il peut ajouter',
+            style: TextStyle(color: AppColors.grey600, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _RoleChip(
+                label: 'Tous les rôles',
+                selected: allSelected,
+                color: AppColors.grey500,
+                onTap: () => onRolesChanged(
+                  allSelected ? {} : onboardingRoles.toSet(),
+                ),
+              ),
+              for (final r in onboardingRoles)
+                _RoleChip(
+                  label: roleDisplayNamePlural(r),
+                  selected: selectedRoles.contains(r),
+                  color: _teamRoleColor(r),
+                  onTap: () {
+                    final next = Set<String>.from(selectedRoles);
+                    if (next.contains(r)) {
+                      next.remove(r);
+                    } else {
+                      next.add(r);
+                    }
+                    onRolesChanged(next);
+                  },
+                ),
+            ],
+          ),
+          if (selectedRoles.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Sélectionnez au moins un rôle.',
+                style: TextStyle(color: Colors.redAccent, fontSize: 12),
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RoleChip extends StatelessWidget {
+  const _RoleChip({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? color.withOpacity(0.18) : AppColors.grey50,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? color.withOpacity(0.7) : AppColors.grey100,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected) ...[
+              Icon(Icons.check, size: 14, color: color),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? color : AppColors.grey400,
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EditPermissionsSheet extends StatefulWidget {
+  const _EditPermissionsSheet({
+    required this.uid,
+    required this.displayName,
+    required this.initialEnabled,
+    required this.initialRoles,
+  });
+
+  final String uid;
+  final String displayName;
+  final bool initialEnabled;
+  final Set<String> initialRoles;
+
+  @override
+  State<_EditPermissionsSheet> createState() => _EditPermissionsSheetState();
+}
+
+class _EditPermissionsSheetState extends State<_EditPermissionsSheet> {
+  late bool _enabled = widget.initialEnabled;
+  late Set<String> _roles = Set<String>.from(widget.initialRoles);
+  bool _saving = false;
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
+        'canManageTeam': _enabled,
+        'manageableRoles': _enabled ? _roles.toList() : [],
+      });
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Droits mis à jour.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e')),
+        );
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.grey200,
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          Text(
+            'Droits de ${widget.displayName}',
+            style: const TextStyle(
+              color: AppColors.grey900,
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _PermissionsFields(
+            enabled: _enabled,
+            selectedRoles: _roles,
+            onEnabledChanged: (v) => setState(() => _enabled = v),
+            onRolesChanged: (r) => setState(() => _roles = r),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: (_saving || (_enabled && _roles.isEmpty)) ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      width: 20, height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Enregistrer', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -283,6 +283,26 @@ exports.provisionAccounts = onCall(
         throw new Error("accounts requis");
       }
 
+      // ── Autorisation : admin (tous droits) ou membre délégué
+      // (canManageTeam=true) restreint aux rôles listés dans
+      // manageableRoles. Un délégué ne peut jamais créer d'admin, ni
+      // provisionner en dehors de son propre workspace.
+      const callerDoc = await db.collection("users").doc(caller).get();
+      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      const callerData = callerDoc.data();
+      const callerIsAdmin = callerData.role === "admin";
+      const callerCanManageTeam = callerData.canManageTeam === true;
+      const callerManageableRoles = Array.isArray(callerData.manageableRoles) ?
+        callerData.manageableRoles : [];
+      const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
+
+      if (!callerIsAdmin && !callerCanManageTeam) {
+        throw new Error(
+            "Non autorisé : vous n'avez pas les droits pour ajouter des " +
+            "membres à l'équipe.",
+        );
+      }
+
       const results = [];
       const successes = [];
       const errors = [];
@@ -290,9 +310,9 @@ exports.provisionAccounts = onCall(
       // Récupérer le nom de l'entreprise si possible pour l'email
       let companyName = "WorkIt";
       try {
-        if (accounts[0].companyId) {
+        if (callerWorkspaceId) {
           const snap = await db.collection("workspaces")
-              .doc(accounts[0].companyId).get();
+              .doc(callerWorkspaceId).get();
           if (snap.exists) {
             companyName = snap.data().companyName || "WorkIt";
           }
@@ -304,8 +324,23 @@ exports.provisionAccounts = onCall(
       for (const acc of accounts) {
         const email = (acc.email || "").toString().trim().toLowerCase();
         const role = (acc.role || "").toString();
-        const companyId = (acc.companyId || "").toString();
+        // Le companyId ne vient jamais du client : toujours celui du
+        // workspace de l'appelant, pour empêcher toute injection
+        // cross-workspace.
+        const companyId = callerWorkspaceId;
         if (!email || !role || !companyId) continue;
+
+        if (role === "admin" && !callerIsAdmin) {
+          errors.push({email, error: "Non autorisé à créer un admin"});
+          continue;
+        }
+        if (!callerIsAdmin && !callerManageableRoles.includes(role)) {
+          errors.push({
+            email,
+            error: `Non autorisé à ajouter un compte "${role}"`,
+          });
+          continue;
+        }
 
         const tempPassword = generateTempPassword();
         let userRecord;
@@ -341,6 +376,21 @@ exports.provisionAccounts = onCall(
           updatedAt: Timestamp.now(),
           createdBy: caller,
         };
+
+        // Droits de gestion d'équipe ("chef d'orchestre") : seul un vrai
+        // admin peut les accorder au compte créé — un délégué ne peut pas
+        // propager ses propres droits à quelqu'un d'autre.
+        if (callerIsAdmin && acc.canManageTeam === true) {
+          const requested = Array.isArray(acc.manageableRoles) ?
+            acc.manageableRoles : [];
+          userDoc.canManageTeam = true;
+          userDoc.manageableRoles = requested.filter(
+              (r) => ["commercial", "metreur", "poseur"].includes(r),
+          );
+        } else {
+          userDoc.canManageTeam = false;
+          userDoc.manageableRoles = [];
+        }
 
         await db.collection("users").doc(userRecord.uid).set(
             userDoc,
@@ -542,6 +592,28 @@ exports.onDevisStatusChange = onDocumentWritten(
           );
         }
 
+        // ── Statut de paiement ('paiementEffectue') — indépendant du
+        // statut, renseigné par le poseur en fin de chantier ──
+        const paiementBefore = before ?
+          (before.paiementEffectue !== undefined ?
+            before.paiementEffectue : null) : null;
+        const paiementAfter = after.paiementEffectue !== undefined ?
+          after.paiementEffectue : null;
+        if (paiementAfter !== null && paiementAfter !== paiementBefore) {
+          const commercialTokens = userId ? await getTokenByUid(userId) : [];
+          const metreurTokens = after.metreurId ?
+            await getTokenByUid(after.metreurId) : [];
+          const tokens = [...commercialTokens, ...metreurTokens];
+          await sendNotification(
+              tokens,
+              paiementAfter ? "💰 Chantier payé" : "💰 Chantier non payé",
+              paiementAfter ?
+                `Chantier ${client} payé par le client` :
+                `Chantier ${client} pas payé par le client`,
+              {...baseData, type: "paiement"},
+          );
+        }
+
         // 'status' est le champ actif ; 'metreurStatus' est l'ancien nom
         const statusBefore = before ?
           (before.status || before.metreurStatus || null) : null;
@@ -554,21 +626,29 @@ exports.onDevisStatusChange = onDocumentWritten(
         // after.metreurStatus = 'Nouvelle demande'
         if (before === null && statusAfter === "Nouvelle demande") {
           // Si un métreur précis a été choisi par le commercial, ne notifier
-          // que lui (+ admins) — les autres métreurs ne le verront pas dans
-          // leur liste de toute façon. Sinon ("Peu importe"), notifier toute
-          // l'équipe de métreurs.
+          // que lui — les autres métreurs ne le verront pas dans leur liste
+          // de toute façon. Sinon ("Peu importe"), notifier toute l'équipe
+          // de métreurs. L'admin reçoit un message dédié (l'un des 2 seuls
+          // événements qui l'intéressent : nouveau chantier + fin de pose).
           const assignedMetreurId = after.metreurId || after.assignedMetreurId;
           const metreurTokens = assignedMetreurId ?
             await getTokenByUid(assignedMetreurId) :
             await getTokensByRole(workspaceId, "metreur");
           const adminTokens = await getTokensByRole(workspaceId, "admin");
-          const tokens = [...metreurTokens, ...adminTokens];
-          await sendNotification(
-              tokens,
-              "🔔 Nouveau métré à réaliser",
-              `Un nouveau métré est à réaliser pour le chantier ${client}`,
-              {...baseData, type: "status"},
-          );
+          await Promise.all([
+            sendNotification(
+                metreurTokens,
+                "🔔 Nouveau métré à réaliser",
+                `Un nouveau métré est à réaliser pour le chantier ${client}`,
+                {...baseData, type: "status"},
+            ),
+            sendNotification(
+                adminTokens,
+                "🔔 Nouveau chantier",
+                `Nouveau chantier ajouté : ${client}`,
+                {...baseData, type: "status"},
+            ),
+          ]);
           return null;
         }
 
@@ -601,12 +681,12 @@ exports.onDevisStatusChange = onDocumentWritten(
         }
 
         // ── Status → 'À commander' ──
+        // Ne concerne pas l'admin (qui ne veut que "nouveau chantier" +
+        // "fin de pose").
         if (statusAfter === "À commander") {
           const commercialTokens = userId ? await getTokenByUid(userId) : [];
-          const adminTokens = await getTokensByRole(workspaceId, "admin");
-          const tokens = [...commercialTokens, ...adminTokens];
           await sendNotification(
-              tokens,
+              commercialTokens,
               "✅ Métré terminé",
               `Le métré de ${client} est terminé. ` +
               `La commande peut être passée.`,
@@ -641,10 +721,9 @@ exports.onDevisStatusChange = onDocumentWritten(
           const poseurTokenArrays = await Promise.all(poseurTokenPromises);
           const poseurTokens = poseurTokenArrays.flat();
 
-          // Tokens commercial + admin
+          // Commercial uniquement — l'admin ne veut pas de notif à cette
+          // étape (seulement nouveau chantier + fin de pose).
           const commercialTokens = userId ? await getTokenByUid(userId) : [];
-          const adminTokens = await getTokensByRole(workspaceId, "admin");
-          const managerTokens = [...commercialTokens, ...adminTokens];
 
           await Promise.all([
             sendNotification(
@@ -654,7 +733,7 @@ exports.onDevisStatusChange = onDocumentWritten(
                 {...baseData, type: "status"},
             ),
             sendNotification(
-                managerTokens,
+                commercialTokens,
                 "📋 Pose programmée",
                 `${client} le ${poseDateStr} par ${poseurNames}`,
                 {...baseData, type: "status"},
@@ -666,26 +745,38 @@ exports.onDevisStatusChange = onDocumentWritten(
         // ── Status → 'Terminé' ──
         if (statusAfter === "Terminé") {
           const commercialTokens = userId ? await getTokenByUid(userId) : [];
+          const metreurTokens = after.metreurId ?
+            await getTokenByUid(after.metreurId) : [];
           const adminTokens = await getTokensByRole(workspaceId, "admin");
-          const tokens = [...commercialTokens, ...adminTokens];
+          const tokens = [
+            ...commercialTokens, ...metreurTokens, ...adminTokens,
+          ];
           await sendNotification(
               tokens,
               "🎉 Chantier terminé",
-              `Le chantier ${client} a été clôturé avec succès`,
+              `Chantier ${client} terminé`,
               {...baseData, type: "status"},
           );
           return null;
         }
 
-        // ── Status → 'À clôturer' ──
+        // ── Status → 'À clôturer' (chantier pas terminé) ──
         if (statusAfter === "À clôturer") {
           const commercialTokens = userId ? await getTokenByUid(userId) : [];
+          const metreurTokens = after.metreurId ?
+            await getTokenByUid(after.metreurId) : [];
           const adminTokens = await getTokensByRole(workspaceId, "admin");
-          const tokens = [...commercialTokens, ...adminTokens];
+          const tokens = [
+            ...commercialTokens, ...metreurTokens, ...adminTokens,
+          ];
+          const raison = (after.rapportProbleme &&
+            after.rapportProbleme.raison) || null;
           await sendNotification(
               tokens,
-              "⚠️ Problème chantier",
-              `Un problème a été signalé sur le chantier ${client}`,
+              "⚠️ Chantier pas terminé",
+              raison ?
+                `Chantier ${client} pas terminé car ${raison}` :
+                `Chantier ${client} pas terminé`,
               {...baseData, type: "status"},
           );
           return null;
