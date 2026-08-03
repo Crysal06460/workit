@@ -108,6 +108,24 @@ service cloud.firestore {
         );
         allow delete: if false;
       }
+
+      // ── Sous-collection planningTeams/ (Planner) ────────────────────────
+
+      match /planningTeams/{teamId} {
+        allow read, write: if isAuth() && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+          myWorkspaceId() == workspaceId
+        );
+      }
+
+      // ── Sous-collection unavailabilities/ (Planner) ─────────────────────
+
+      match /unavailabilities/{unavailabilityId} {
+        allow read, write: if isAuth() && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+          myWorkspaceId() == workspaceId
+        );
+      }
     }
 
     // ─── Collections utilitaires ─────────────────────────────────────────────

@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'chantier_chat_screen.dart';
 import 'measurement_form_screen.dart';
+import 'planner_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
 import '../core/theme/app_colors.dart';
@@ -412,6 +413,22 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
     );
   }
 
+  void _openPlanner() {
+    if (_workspaceId == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.surface,
+          elevation: 0,
+          title: const Text('Planner', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
+          iconTheme: const IconThemeData(color: AppColors.grey600),
+        ),
+        body: PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleMetteur),
+      ),
+    ));
+  }
+
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
@@ -432,7 +449,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
             children: [
               _MetNavItem(icon: Icons.home_rounded, label: 'Accueil', active: _bottomNavIndex == 0, onTap: () => setState(() => _bottomNavIndex = 0)),
               _MetNavItem(icon: Icons.straighten_rounded, label: 'Chantiers', active: _bottomNavIndex == 1, onTap: () => setState(() => _bottomNavIndex = 1)),
-              _MetNavItem(icon: Icons.calendar_month_outlined, label: 'Agenda', active: _bottomNavIndex == 2, onTap: () => setState(() => _bottomNavIndex = 2)),
+              _MetNavItem(icon: Icons.calendar_month_outlined, label: 'Agenda', active: false, onTap: _openPlanner),
               _MetNavItem(icon: Icons.settings_outlined, label: 'Réglages', active: _bottomNavIndex == 3, onTap: () => setState(() => _bottomNavIndex = 3)),
             ],
           ),
