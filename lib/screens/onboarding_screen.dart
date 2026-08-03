@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/theme/app_colors.dart';
 import '../services/auth_navigation_service.dart';
@@ -147,20 +148,28 @@ const _kSlides = [
 const int _kPageSplash    = 0;
 const int _kPageSlides    = 1;
 const int _kPageEntry     = 2;
-const int _kPageTrades    = 3;
-const int _kPageCompany   = 4;
-const int _kPageRole      = 5;
-const int _kPageAccount   = 6;
-const int _kPageSuccess   = 7;
-const int _kPageJoin      = 8;
-const int _kPageJoinOk    = 9;
+const int _kPageSubscribe = 3;
+const int _kPageAccount   = 4;
+const int _kPageTrades    = 5;
+const int _kPageCompany   = 6;
+const int _kPageRole      = 7;
+const int _kPageSuccess   = 8;
+const int _kPageJoin      = 9;
+const int _kPageJoinOk    = 10;
 
 // ────────────────────────────────────────────────
 // WIDGET PRINCIPAL
 // ────────────────────────────────────────────────
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, this.resumeAtTrades = false});
+
+  /// `true` quand un compte Firebase existe déjà (créé lors d'une session
+  /// précédente, app fermée avant la fin du parcours) mais qu'aucun
+  /// workspace n'a encore été finalisé — voir
+  /// `AuthNavigationService.navigateUser`. Saute directement à la page
+  /// Trades au lieu de repartir du splash.
+  final bool resumeAtTrades;
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -206,6 +215,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.resumeAtTrades) {
+      _page = _kPageTrades;
+      return;
+    }
     // Avancer automatiquement depuis le splash
     Future.delayed(const Duration(milliseconds: 4500), () {
       if (mounted) _goTo(_kPageSlides);
@@ -249,18 +262,69 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // ── Firebase : créer compte + workspace ──────
 
-  Future<void> _createAccount() async {
+  /// Ne crée que le compte Firebase Auth (pas encore de workspace — voir
+  /// `_finalizeWorkspace`). Persiste prénom/nom/email pour que la
+  /// finalisation puisse les relire même si l'app est fermée entre-temps
+  /// (ex. pour aller s'abonner sur le site) et que les contrôleurs de
+  /// cette page sont vides à la reprise (`resumeAtTrades`).
+  Future<void> _createFirebaseAccountOnly() async {
     if (!_canAccount) return;
     setState(() { _isLoading = true; _errorMessage = null; });
     try {
-      // 1. Firebase Auth
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailCtrl.text.trim(),
         password: _passwordCtrl.text,
       );
-      final uid = cred.user!.uid;
 
-      // 2. Workspace Firestore
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('workit_pending_first_name', _firstNameCtrl.text.trim());
+      await prefs.setString('workit_pending_last_name', _lastNameCtrl.text.trim());
+      await prefs.setString('workit_pending_email', _emailCtrl.text.trim());
+
+      if (!mounted) return;
+      setState(() { _isLoading = false; });
+      _goTo(_kPageTrades);
+    } on FirebaseAuthException catch (e) {
+      String msg = 'Une erreur est survenue.';
+      if (e.code == 'email-already-in-use') msg = 'Cette adresse email est déjà utilisée.';
+      if (e.code == 'weak-password')        msg = 'Mot de passe trop faible (8 car. min).';
+      if (e.code == 'invalid-email')        msg = 'Adresse email invalide.';
+      setState(() { _isLoading = false; _errorMessage = msg; });
+    } catch (e) {
+      setState(() { _isLoading = false; _errorMessage = e.toString(); });
+    }
+  }
+
+  /// Crée le workspace + le document user, en utilisant le compte Firebase
+  /// déjà authentifié (créé par `_createFirebaseAccountOnly`, dans cette
+  /// session ou une session précédente — voir `resumeAtTrades`). Relit
+  /// prénom/nom/email depuis `SharedPreferences` si les contrôleurs de la
+  /// page Account sont vides (cas de la reprise).
+  Future<void> _finalizeWorkspace() async {
+    if (!_canRole) return;
+    setState(() { _isLoading = true; _errorMessage = null; });
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Session expirée — reconnectez-vous.';
+        });
+        return;
+      }
+      final uid = user.uid;
+      final prefs = await SharedPreferences.getInstance();
+      final firstName = _firstNameCtrl.text.trim().isNotEmpty
+          ? _firstNameCtrl.text.trim()
+          : (prefs.getString('workit_pending_first_name') ?? '');
+      final lastName = _lastNameCtrl.text.trim().isNotEmpty
+          ? _lastNameCtrl.text.trim()
+          : (prefs.getString('workit_pending_last_name') ?? '');
+      final email = _emailCtrl.text.trim().isNotEmpty
+          ? _emailCtrl.text.trim()
+          : (prefs.getString('workit_pending_email') ?? user.email ?? '');
+
+      // Workspace Firestore
       final wsRef = FirebaseFirestore.instance.collection('workspaces').doc();
       final workspaceId = wsRef.id;
       await wsRef.set({
@@ -275,19 +339,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'members': {
           uid: {
             'role': _selectedRole,
-            'firstName': _firstNameCtrl.text.trim(),
-            'lastName': _lastNameCtrl.text.trim(),
-            'email': _emailCtrl.text.trim(),
+            'firstName': firstName,
+            'lastName': lastName,
+            'email': email,
           },
         },
       });
 
-      // 3. Document user
+      // Document user
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
-        'firstName': _firstNameCtrl.text.trim(),
-        'lastName':  _lastNameCtrl.text.trim(),
-        'email':     _emailCtrl.text.trim(),
+        'firstName': firstName,
+        'lastName':  lastName,
+        'email':     email,
         'role':      _selectedRole,
         'companyId': workspaceId,
         'workspaceId': workspaceId,
@@ -295,18 +359,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 4. SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('workit_onboarding_done', true);
+      await prefs.remove('workit_pending_first_name');
+      await prefs.remove('workit_pending_last_name');
+      await prefs.remove('workit_pending_email');
 
+      if (!mounted) return;
       setState(() { _isLoading = false; });
       _goTo(_kPageSuccess);
-    } on FirebaseAuthException catch (e) {
-      String msg = 'Une erreur est survenue.';
-      if (e.code == 'email-already-in-use') msg = 'Cette adresse email est déjà utilisée.';
-      if (e.code == 'weak-password')        msg = 'Mot de passe trop faible (8 car. min).';
-      if (e.code == 'invalid-email')        msg = 'Adresse email invalide.';
-      setState(() { _isLoading = false; _errorMessage = msg; });
     } catch (e) {
       setState(() { _isLoading = false; _errorMessage = e.toString(); });
     }
@@ -348,10 +408,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       case _kPageSplash:   return _buildSplash();
       case _kPageSlides:   return _buildSlides();
       case _kPageEntry:    return _buildEntry();
+      case _kPageSubscribe: return _buildSubscribe();
+      case _kPageAccount:  return _buildAccount();
       case _kPageTrades:   return _buildTrades();
       case _kPageCompany:  return _buildCompany();
       case _kPageRole:     return _buildRole();
-      case _kPageAccount:  return _buildAccount();
       case _kPageSuccess:  return _buildSuccess();
       case _kPageJoin:     return _buildJoin();
       case _kPageJoinOk:   return _buildJoinSuccess();
@@ -565,7 +626,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     iconColor: AppColors.primary,
                     title: 'Créer mon espace entreprise',
                     subtitle: 'Je configure WorkIt pour mon équipe\net mes chantiers.',
-                    onTap: () => _goTo(_kPageTrades),
+                    onTap: () => _goTo(_kPageSubscribe),
                   ),
                   const SizedBox(height: 12),
                   _EntryCard(
@@ -601,6 +662,73 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   // ═══════════════════════════════════════════════
+  // PAGE — ABONNEMENT (site web)
+  // ═══════════════════════════════════════════════
+  Widget _buildSubscribe() {
+    return Scaffold(
+      key: const ValueKey(_kPageSubscribe),
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _TopBar(onBack: () => _goTo(_kPageEntry), step: 0, totalSteps: 0),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    _ScreenHeading(
+                      title: 'Avant de commencer',
+                      subtitle:
+                          'Votre espace WorkIt se configure en deux temps : choisissez '
+                          'votre formule sur notre site, puis revenez ici pour configurer '
+                          'votre équipe et vos chantiers.',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Column(
+                children: [
+                  _PrimaryButton(
+                    label: 'Ouvrir workit.fr',
+                    onTap: _openSubscribeWebsite,
+                  ),
+                  const SizedBox(height: 10),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => _goTo(_kPageAccount),
+                      child: const Text(
+                        'J\'ai déjà mon abonnement — Continuer',
+                        style: TextStyle(color: AppColors.primary, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSubscribeWebsite() async {
+    final uri = Uri.parse('https://workit.fr');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir workit.fr')),
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════
   // PAGE 3 — CORPS DE MÉTIER
   // ═══════════════════════════════════════════════
   Widget _buildTrades() {
@@ -610,7 +738,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _TopBar(onBack: () => _goTo(_kPageEntry), step: 0, totalSteps: 4),
+            _TopBar(onBack: () => _goTo(_kPageAccount), step: 1, totalSteps: 4),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
@@ -749,7 +877,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _TopBar(onBack: () => _goTo(_kPageTrades), step: 1, totalSteps: 4),
+            _TopBar(onBack: () => _goTo(_kPageTrades), step: 2, totalSteps: 4),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -871,7 +999,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _TopBar(onBack: () => _goTo(_kPageCompany), step: 2, totalSteps: 4),
+            _TopBar(onBack: () => _goTo(_kPageCompany), step: 3, totalSteps: 4),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -963,16 +1091,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       );
                     }),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.dangerLight,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.danger,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-              child: _PrimaryButton(
-                label: 'Continuer',
-                onTap: _canRole ? () => _goTo(_kPageAccount) : null,
-              ),
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primary,
+                      ),
+                    )
+                  : _PrimaryButton(
+                      label: 'Continuer',
+                      onTap: _canRole ? _finalizeWorkspace : null,
+                    ),
             ),
           ],
         ),
@@ -991,7 +1142,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _TopBar(onBack: () => _goTo(_kPageRole), step: 3, totalSteps: 4),
+            _TopBar(onBack: () => _goTo(_kPageSubscribe), step: 0, totalSteps: 4),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -1000,7 +1151,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   children: [
                     const _ScreenHeading(
                       title: 'Créer mon compte 🔐',
-                      subtitle: 'Dernière étape — vous y êtes presque.',
+                      subtitle: 'Il ne reste que quelques informations à renseigner.',
                     ),
                     Row(
                       children: [
@@ -1136,8 +1287,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     )
                   : _PrimaryButton(
-                      label: 'Créer mon espace WorkIt',
-                      onTap: _canAccount ? _createAccount : null,
+                      label: 'Créer mon compte',
+                      onTap: _canAccount ? _createFirebaseAccountOnly : null,
                     ),
             ),
           ],

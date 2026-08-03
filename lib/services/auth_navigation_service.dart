@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../screens/admin_home_screen.dart';
 import '../screens/commercial_home_screen.dart';
 import '../screens/metreur_home_screen.dart';
+import '../screens/onboarding_screen.dart';
 import '../screens/poseurs_home_screen.dart';
 import '../screens/sign_in_screen.dart';
 
@@ -28,9 +29,14 @@ class AuthNavigationService {
     final userData = userDoc.data();
 
     if (userData == null) {
+      // Compte Firebase Auth créé (onboarding_screen.dart, page Account)
+      // mais workspace jamais finalisé — l'utilisateur a probablement
+      // fermé l'app pour aller s'abonner sur le site. On reprend
+      // l'onboarding à la page Trades plutôt que de le bloquer ici.
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Compte introuvable. Contactez votre administrateur.')),
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const OnboardingScreen(resumeAtTrades: true)),
+          (route) => false,
         );
       }
       return;
