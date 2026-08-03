@@ -1,6 +1,51 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-03 (après-midi)
+**Dernière mise à jour :** 2026-08-03 (soir)
+
+## 📍 Session 2026-08-03 (soir) — Résumé PDF + roadmap plateforme multi-métier définie
+
+### Résumé complet des fonctionnalités (PDF)
+Christophe a demandé un PDF récapitulatif de toutes les fonctionnalités WorkIt à ce jour. Généré via un fichier
+HTML stylé + conversion `msedge.exe --headless --print-to-pdf` (pas de dépendance ajoutée au projet — outil déjà
+présent sur Windows). Livré à
+`C:\Users\antoine.QUINTANE\Desktop\Local Quintane\WorkIt_Resume_Fonctionnalites.pdf` (9 pages, hors du dépôt git,
+donc **pas synchronisé automatiquement entre Mac et Windows** — à régénérer si besoin sur l'autre poste, la méthode
+est reproductible depuis n'importe quel Chrome/Edge installé).
+
+### Roadmap "plateforme multi-métier professionnelle" — définie, pas encore commencée
+Christophe a fourni un brief complet (rôle Lead Dev Flutter/Architecte Firebase/Product Engineer B2B) pour faire
+évoluer WorkIt d'une app menuiserie-centrée vers une plateforme couvrant simultanément les 12 métiers déjà présents
+dans le dictionnaire, avec un principe directeur clair : tout piloté par de la configuration versionnée (workflow,
+formulaires, documents), pas par des conditions codées en dur dispersées.
+
+**Roadmap détaillée sauvegardée dans `_claude_sessions/roadmap_plateforme_multimetier.md`** (committée,
+`30c62e5`). Résumé des 8 phases, strictement séquentielles sauf 4/5 parallélisables :
+
+0. **Sécurité et comptes** — audit règles Firestore/Cloud Functions (isolation stricte par workspace), suppression
+   du mot de passe temporaire affiché en clair, App Check, logs d'audit. *À faire en premier, indépendant du reste.*
+1. **Moteur de workflow générique + historique immuable** — remplace la logique de statut dispersée
+   (`metreur_home_screen.dart`, `DevisService`) par un moteur configurable + sous-collection `statusHistory`
+   immuable + transitions via Cloud Function serveur uniquement. *Socle dont tout le reste dépend.*
+2. **Dictionnaire métier étendu + moteur de documents** — complète les 12 métiers (règles de validation,
+   checklists, causes de non-conformité, indicateurs), versionne le dictionnaire, généralise le PDF unique actuel
+   en plusieurs modèles versionnés (fiche métré, bon de préparation, rapport d'autocontrôle, PV de réception, SAV...).
+3. **Chantiers multi-lots** — un chantier peut contenir plusieurs lots métier (responsable/équipe/dates/statut
+   propres chacun) + dépendances entre lots (ex: carrelage après validation étanchéité).
+4. **Planner v2** — écran de saisie des congés/indisponibilités (modèle de données déjà prêt depuis la session du
+   03/08 après-midi), affichage des dépendances entre lots, conflits de ressources, historique des replanifications.
+5. **Expérience terrain** — module de temps passé (départ/arrivée/pause/fin), causes de non-conformité structurées
+   (remplace le champ "raison" libre actuel), circuit de validation poseur → responsable → clôture/SAV.
+6. **Tableau de bord dirigeant** — KPIs (délais moyens entre transitions, surcharge, temps estimé vs réel, taux de
+   SAV/paiement/non-conformité) via agrégats pré-calculés (Cloud Functions), pas des lectures Firestore coûteuses.
+7. **Validation des 12 métiers & lancement** — matrice de maturité par métier, tests terrain avec 1 pro référent +
+   3-5 dossiers réels par métier, gate de lancement (aucun contournement papier/Excel/WhatsApp).
+
+### Prochaine étape
+Christophe attaque la **Phase 0 (sécurité)** en premier lors d'une prochaine session — sur ce PC Windows ou sur le
+Mac selon où il reprend. Lire `roadmap_plateforme_multimetier.md` en début de session pour le détail complet de
+chaque phase avant de commencer.
+
+---
 
 ## ✅ Session 2026-08-03 (après-midi) — Planner de planification (Admin + Métreur)
 
