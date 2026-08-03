@@ -1,6 +1,25 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-03
+**Dernière mise à jour :** 2026-08-03 (après-midi)
+
+## ✅ Session 2026-08-03 (après-midi) — Planner de planification (Admin + Métreur)
+
+Christophe a demandé le chantier prioritaire : un vrai Planner web pro (colonnes équipes, lignes jour/semaine, drag-and-drop, capacité, surcharge), distinct de l'agenda mobile existant. Décisions actées : accès Admin + Métreur, "équipe" = nouveau concept nommé (pas juste un poseur), indisponibilités = modèle de données seulement pour l'instant (pas d'écran de saisie), capacité calculée automatiquement (poseurs actifs et disponibles ce jour-là).
+
+Implémenté dans `lib/screens/planner_screen.dart` (nouveau, ~750 lignes) : backlog Prêt/Bloqué, grille équipes×jours avec drag-and-drop natif Flutter (`Draggable`/`DragTarget`, aucune dépendance ajoutée), mode Semaine en lecture seule, création/édition d'équipe, fiche d'édition des 4 nouveaux champs chantier (durée estimée, poseurs requis, livraison fournisseur, date souhaitée client), détection de surcharge automatique (bannière + case rouge + badge charge/capacité). Réutilise `DevisService.updateStatus` existant pour l'écriture (notifications incluses) et écrit `poseurIds` en parallèle de `teamId` pour ne rien casser côté `poseurs_home_screen.dart`.
+
+Nouvelles sous-collections Firestore `planningTeams`/`unavailabilities` + règles associées **déployées en production** (`workit-1daa1`, confirmé explicitement par Christophe avant déploiement). Nouvel onglet "Planner" dans l'espace admin ; le bouton "Agenda" du métreur (mort jusqu'ici) ouvre maintenant le même Planner.
+
+**Testé manuellement de bout en bout** dans Chrome avec le workspace de test "Ambiance Alu" (compte `metreur@workit-test.fr`) : création d'équipe réelle, backlog avec vrai chantier, drag-and-drop fonctionnel (écriture Firestore confirmée), édition des poseurs requis → surcharge détectée et affichée correctement, bascule Jour/Semaine. `flutter analyze` : 0 erreur, 136 issues (132 avant). **Committé, pas encore poussé.**
+
+⚠️ Reste dans le workspace de test suite aux tests : équipe "Équipe 1" (Guillaume Hervé) et le chantier "Beylet Christophe" planifié le 05/08 avec `poseurCountRequired=2` — à ajuster/nettoyer via le Planner si besoin.
+
+### Reste à faire (prochaine session)
+- Écran de saisie des indisponibilités (le modèle de données est prêt, décidé de le reporter).
+- Repasser sur le vrai modèle d'abonnement (site web + Stripe) une fois ces briques prêtes.
+- Reprendre la vérification "carré, opérationnel" du process complet (coordonnées, corps de métier, ajout de membre, droits) — pas encore auditée en détail au-delà du parcours d'inscription.
+
+---
 
 ## ✅ Session 2026-08-03 (matin, PC Windows) — Réconciliation Mac/Windows + nettoyage onboarding mort
 
