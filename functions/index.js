@@ -28,6 +28,52 @@ setGlobalOptions({
 initializeApp();
 const db = getFirestore();
 
+// Quota mensuel par workspace sur les analyses IA (point d'ancrage —
+// plafond ajustable facilement plus tard, ex. par plan tarifaire).
+const MONTHLY_AI_QUOTA = 100;
+
+/**
+ * Vérifie et incrémente le quota mensuel d'analyses IA d'un workspace.
+ * Lève une erreur si le quota est dépassé.
+ * @param {string} workspaceId
+ */
+async function checkAndIncrementAiQuota(workspaceId) {
+  const usageRef = db.collection("workspaces").doc(workspaceId)
+      .collection("usage").doc("aiAnalysis");
+  const monthKey = new Date().toISOString().slice(0, 7); // ex. "2026-08"
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(usageRef);
+    const data = snap.exists ? snap.data() : {};
+    const currentCount = data.monthKey === monthKey ? (data.count || 0) : 0;
+    if (currentCount >= MONTHLY_AI_QUOTA) {
+      throw new Error(
+          `Quota mensuel d'analyses IA atteint (${MONTHLY_AI_QUOTA}/mois). ` +
+          "Contactez le support pour l'augmenter.",
+      );
+    }
+    tx.set(usageRef, {monthKey, count: currentCount + 1}, {merge: true});
+  });
+}
+
+/**
+ * Écrit une entrée dans le journal d'audit immuable d'un workspace.
+ * @param {string} workspaceId
+ * @param {Object} entry {action, targetUid, targetEmail, performedBy,
+ *   performedByRole, details}
+ */
+async function logAuditEvent(workspaceId, entry) {
+  try {
+    await db.collection("workspaces").doc(workspaceId)
+        .collection("auditLogs").add({
+          ...entry,
+          timestamp: Timestamp.now(),
+        });
+  } catch (e) {
+    logger.error("Erreur écriture audit log", e);
+  }
+}
+
 /**
  * Analyse un devis via OpenAI Vision.
  */
@@ -40,6 +86,13 @@ exports.analyzeDevis = onCall(
       if (!fileUrl) {
         throw new Error("fileUrl manquant");
       }
+
+      const callerDoc = await db.collection("users").doc(caller).get();
+      const callerWorkspaceId = callerDoc.exists ?
+        (callerDoc.data().workspaceId || callerDoc.data().companyId) : null;
+      if (!callerWorkspaceId) throw new Error("Espace de travail introuvable");
+      await checkAndIncrementAiQuota(callerWorkspaceId);
+
       const openai = getOpenAIClient();
 
       const systemPrompt =
@@ -244,17 +297,19 @@ exports.provisionAccounts = onCall(
           continue;
         }
 
-        const tempPassword = generateTempPassword();
         let userRecord;
         try {
           userRecord = await getAuth().getUserByEmail(email);
-          userRecord = await getAuth().updateUser(userRecord.uid, {
-            password: tempPassword,
-          });
+          // Compte existant : son mot de passe actuel n'est pas modifié —
+          // le lien d'activation (généré plus bas) lui permettra d'en
+          // définir un nouveau s'il le souhaite.
         } catch (_) {
+          // Nouveau compte : créé sans mot de passe connu de personne
+          // (valeur jetable, jamais stockée ni renvoyée) — l'activation se
+          // fait exclusivement via le lien de réinitialisation Firebase.
           userRecord = await getAuth().createUser({
             email,
-            password: tempPassword,
+            password: generateTempPassword(),
             displayName: "",
           });
         }
@@ -263,6 +318,8 @@ exports.provisionAccounts = onCall(
           role,
           companyId,
         });
+
+        const activationLink = await getAuth().generatePasswordResetLink(email);
 
         const userDoc = {
           email,
@@ -273,7 +330,6 @@ exports.provisionAccounts = onCall(
           workspaceId: companyId, // requis par les règles Firestore
           tradeKey: acc.tradeKey || null,
           mustChangePassword: true,
-          tempPassword, // On garde trace au cas où, mais l'email part.
           status: "provisioned",
           updatedAt: Timestamp.now(),
           createdBy: caller,
@@ -305,30 +361,36 @@ exports.provisionAccounts = onCall(
           createdAt: Timestamp.now(),
         });
 
-        // ENVOI EMAIL CREDENTIALS
+        await logAuditEvent(companyId, {
+          action: "account_created",
+          targetUid: userRecord.uid,
+          targetEmail: email,
+          performedBy: caller,
+          performedByRole: callerIsAdmin ? "admin" : "delegate",
+          details: {role, canManageTeam: userDoc.canManageTeam},
+        });
+
+        // ENVOI EMAIL — lien d'activation, jamais de mot de passe en clair
         const html = `
 <div style="font-family:Arial,sans-serif;color:#0B1426">
   <h2>Bienvenue chez ${companyName} !</h2>
   <p>Votre compte WorkIt a été créé pour le rôle : <b>${role}</b>.</p>
-  <p>Voici vos identifiants temporaires :</p>
-  <ul>
-    <li><b>Email :</b> ${email}</li>
-    <li><b>Mot de passe :</b> ${tempPassword}</li>
-  </ul>
-  <p>Merci de vous connecter dès que possible et de modifier
-  ce mot de passe.</p>
-  <p><a href="https://workit.app/login"
+  <p>Cliquez sur le lien ci-dessous pour activer votre compte et définir
+  votre mot de passe :</p>
+  <p><a href="${activationLink}"
      style="background:#00F795;color:#000;padding:12px 18px;
      border-radius:10px;text-decoration:none;font-weight:bold;">
-     Accéder à WorkIt
+     Activer mon compte
   </a></p>
+  <p>Une fois votre mot de passe défini, connectez-vous depuis l'app
+  WorkIt avec votre email.</p>
 </div>`;
 
         const text = `Bienvenue chez ${companyName} !\n\n` +
         `Votre compte a été créé (${role}).\n` +
         `Email: ${email}\n` +
-        `Mot de passe: ${tempPassword}\n\n` +
-        `Merci de vous connecter et de changer votre mot de passe.`;
+        `Activez votre compte : ${activationLink}\n\n` +
+        `Une fois votre mot de passe défini, connectez-vous depuis l'app.`;
 
         try {
           await sendEmail({
@@ -349,7 +411,7 @@ exports.provisionAccounts = onCall(
           role,
           companyId,
           tradeKey: acc.tradeKey || null,
-          tempPassword,
+          activationLink,
         });
       }
       return {accounts: results, sent: successes, errors};

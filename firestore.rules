@@ -147,6 +147,25 @@ service cloud.firestore {
           myWorkspaceId() == workspaceId
         );
       }
+
+      // ── Sous-collection usage/ (quotas, ex. analyses IA) ────────────────
+      // Écrite uniquement par les Cloud Functions (Admin SDK, contourne ces
+      // règles) ; lecture seule pour un futur affichage côté Réglages.
+
+      match /usage/{usageId} {
+        allow read: if isAuth() && myWorkspaceId() == workspaceId;
+        allow write: if false;
+      }
+
+      // ── Sous-collection auditLogs/ (journal immuable) ───────────────────
+
+      match /auditLogs/{logId} {
+        allow read, create: if isAuth() && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+          myWorkspaceId() == workspaceId
+        );
+        allow update, delete: if false;
+      }
     }
 
     // ─── Collections utilitaires ─────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -17,6 +18,25 @@ final navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // App Check — providers .debug pour l'instant (fonctionnent sans
+  // configuration externe). Aucune Cloud Function n'impose encore
+  // enforceAppCheck, donc rien n'est bloqué : cette activation sert juste
+  // à préparer/observer, en attendant l'enregistrement des vrais providers
+  // (reCAPTCHA v3 web, Play Integrity Android, DeviceCheck/App Attest iOS)
+  // dans les consoles respectives — voir _claude_sessions/session_courante.md.
+  // Best-effort : ne doit jamais empêcher l'app de démarrer.
+  try {
+    await FirebaseAppCheck.instance.activate(
+      webProvider: ReCaptchaV3Provider('debug'),
+      androidProvider: AndroidProvider.debug,
+      appleProvider: AppleProvider.debug,
+    );
+  } catch (_) {
+    // Ignoré : App Check est une couche de sécurité additive, jamais
+    // bloquante pour le démarrage de l'app.
+  }
+
   await FirebaseMessaging.instance.requestPermission();
 
   // Notification reçue app au premier plan : pas de notif système par défaut,

@@ -1,9 +1,41 @@
 import '../core/theme/app_colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/onboarding_models.dart';
+
+/// Écrit une entrée dans le journal d'audit immuable du workspace.
+/// Best-effort : n'interrompt jamais l'action principale si l'écriture échoue.
+Future<void> writeAuditLog(
+  String workspaceId, {
+  required String action,
+  required String targetUid,
+  String? targetEmail,
+  required String performedByRole,
+  Map<String, dynamic>? details,
+}) async {
+  final me = FirebaseAuth.instance.currentUser;
+  if (me == null) return;
+  try {
+    await FirebaseFirestore.instance
+        .collection('workspaces')
+        .doc(workspaceId)
+        .collection('auditLogs')
+        .add({
+      'action': action,
+      'targetUid': targetUid,
+      if (targetEmail != null) 'targetEmail': targetEmail,
+      'performedBy': me.uid,
+      'performedByRole': performedByRole,
+      'details': details ?? {},
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  } catch (_) {
+    // Ignoré volontairement : un échec de log ne doit jamais bloquer l'action.
+  }
+}
 
 class AdminTeamTab extends StatefulWidget {
   const AdminTeamTab({
@@ -57,6 +89,7 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => _EditPermissionsSheet(
+        workspaceId: widget.workspaceId,
         uid: uid,
         displayName: displayName,
         initialEnabled: enabled,
@@ -99,6 +132,13 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
         {'status': 'disabled'},
         SetOptions(merge: true),
       );
+      await writeAuditLog(
+        widget.workspaceId,
+        action: 'member_disabled',
+        targetUid: uid,
+        performedByRole: _isFullAdmin ? 'admin' : 'delegate',
+        details: {'displayName': displayName},
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Membre retiré de l\'équipe.')),
@@ -113,65 +153,6 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
     }
   }
 
-  void _showTempPassword(BuildContext context, String email, String tempPassword) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Mot de passe provisoire',
-          style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(email, style: const TextStyle(color: AppColors.grey400, fontSize: 13)),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.primary.withOpacity(0.4)),
-              ),
-              child: SelectableText(
-                tempPassword,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Ce mot de passe est provisoire. Le membre devra le changer à la première connexion.',
-              style: TextStyle(color: AppColors.grey300, fontSize: 12),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: 'Email: $email\nMot de passe: $tempPassword'));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Identifiants copiés !')),
-              );
-            },
-            child: const Text('Copier', style: TextStyle(color: AppColors.primary)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Fermer', style: TextStyle(color: AppColors.grey400)),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -294,8 +275,6 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                   final displayName = name.isNotEmpty ? name : email;
                   final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
                   final roleColor = _roleColor(role);
-                  final tempPassword = data['tempPassword']?.toString();
-                  final isProvisioned = data['status'] == 'provisioned';
                   final canManageTeam = data['canManageTeam'] == true;
                   final manageableRoles = Set<String>.from(
                     (data['manageableRoles'] as List<dynamic>? ?? [])
@@ -397,12 +376,6 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                             onPressed: () => _editPermissions(
                                 uid, displayName, canManageTeam, manageableRoles),
                           ),
-                        if (isProvisioned && tempPassword != null)
-                          IconButton(
-                            icon: const Icon(Icons.key_outlined, color: AppColors.primary),
-                            tooltip: 'Voir le mot de passe provisoire',
-                            onPressed: () => _showTempPassword(context, email, tempPassword),
-                          ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, color: AppColors.danger),
                           tooltip: 'Retirer de l\'équipe',
@@ -496,13 +469,13 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
       }
 
       final acc = Map<String, dynamic>.from(accounts.first as Map);
-      final tempPassword = (acc['tempPassword'] ?? '').toString();
+      final activationLink = (acc['activationLink'] ?? '').toString();
       final email = _emailController.text.trim();
 
       Navigator.pop(context);
 
       if (!mounted) return;
-      _showSuccessSheet(email, tempPassword);
+      _showSuccessSheet(email, activationLink);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -513,7 +486,7 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
     }
   }
 
-  void _showSuccessSheet(String email, String tempPassword) {
+  void _showSuccessSheet(String email, String activationLink) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -570,18 +543,17 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Mot de passe temporaire',
+                        'Lien d\'activation',
                         style: TextStyle(color: AppColors.grey400, fontSize: 12),
                       ),
                       const SizedBox(height: 8),
                       SelectableText(
-                        tempPassword,
+                        activationLink,
                         style: const TextStyle(
                           color: AppColors.primary,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
                           fontFamily: 'monospace',
-                          letterSpacing: 2,
                         ),
                       ),
                     ],
@@ -598,13 +570,11 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     icon: const Icon(Icons.copy_outlined, size: 18),
-                    label: const Text('Copier', style: TextStyle(fontWeight: FontWeight.w700)),
+                    label: const Text('Copier le lien', style: TextStyle(fontWeight: FontWeight.w700)),
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(
-                        text: 'Email: $email\nMot de passe: $tempPassword',
-                      ));
+                      Clipboard.setData(ClipboardData(text: activationLink));
                       ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(content: Text('Identifiants copiés dans le presse-papier !')),
+                        const SnackBar(content: Text('Lien copié dans le presse-papier !')),
                       );
                     },
                   ),
@@ -618,7 +588,7 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                     border: Border.all(color: AppColors.amber.withOpacity(0.3)),
                   ),
                   child: const Text(
-                    'Partagez ces identifiants par WhatsApp ou SMS. Le membre devra changer son mot de passe à la première connexion.',
+                    'Partagez ce lien par WhatsApp ou SMS. Il permettra au membre de définir son mot de passe, puis de se connecter normalement depuis l\'app.',
                     style: TextStyle(color: AppColors.amber, fontSize: 13),
                     textAlign: TextAlign.center,
                   ),
@@ -1052,12 +1022,14 @@ class _RoleChip extends StatelessWidget {
 
 class _EditPermissionsSheet extends StatefulWidget {
   const _EditPermissionsSheet({
+    required this.workspaceId,
     required this.uid,
     required this.displayName,
     required this.initialEnabled,
     required this.initialRoles,
   });
 
+  final String workspaceId;
   final String uid;
   final String displayName;
   final bool initialEnabled;
@@ -1080,6 +1052,13 @@ class _EditPermissionsSheetState extends State<_EditPermissionsSheet> {
         'canManageTeam': _enabled,
         'manageableRoles': _enabled ? _roles.toList() : [],
       });
+      await writeAuditLog(
+        widget.workspaceId,
+        action: 'rights_changed',
+        targetUid: widget.uid,
+        performedByRole: 'admin', // cette feuille n'est ouvrable que par un admin
+        details: {'canManageTeam': _enabled, 'manageableRoles': _roles.toList()},
+      );
       if (mounted) {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
