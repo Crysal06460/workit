@@ -37,8 +37,13 @@ restent à faire par Christophe quand il le souhaite — tout le reste (sécurit
 mot de passe/lien d'activation, quota IA, logs d'audit) est en place et vérifié.
 
 ### Prochaine étape
-Reprendre la roadmap à la **Phase 1 — Moteur de workflow générique + historique immuable** (voir
-`roadmap_plateforme_multimetier.md`) lors d'une prochaine session.
+**Christophe attaque la Phase 1 depuis le Mac ce soir.** Lire ce journal + `roadmap_plateforme_multimetier.md` en
+tout début de session là-bas avant de commencer — tout est committé et poussé sur `origin/main` (`51f2458`), rien
+en attente côté Windows, `git pull` suffit pour repartir exactement d'ici.
+
+⚠️ Note mineure : un compte de test `testactivation.lien.0803@workit-test.fr` a été créé puis retiré de l'équipe
+(désactivé) pendant les tests de cette session, dans le même workspace test que ci-dessous — sans conséquence,
+mentionné pour mémoire.
 
 ---
 
