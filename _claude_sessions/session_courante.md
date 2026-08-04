@@ -77,10 +77,24 @@ Phase 1, et probablement un problème seulement visible en test web (l'app mobil
 ⚠️ Chantier de test laissé dans le workspace "Ambiance Alu" : devis "Claude Phase1Test" (statut `À clôturer`,
 équipe "Guillaume Hervé, Lucas Martin", pose le 04/08/2026) — à nettoyer ou réutiliser.
 
+### 🐛 Corrigé dans la foulée : `Image.file` + `putFile` non supportés sur Flutter Web
+Le rapport de fin de chantier poseur (`_RapportFinChantierState` dans `poseurs_home_screen.dart`) utilisait
+`dart:io File` de bout en bout, avec deux appels qui plantent systématiquement sur web : `Image.file()` pour
+prévisualiser la photo (assertion explicite `!kIsWeb` dans le framework Flutter — c'est ce qui avait fait planter
+le test de tout à l'heure) et `Reference.putFile(File)` pour l'upload vers Firebase Storage (`dart:io.File` n'a pas
+d'implémentation web). Remplacé par une petite classe `_PickedPhoto` (bytes + nom), les bytes étant lus
+immédiatement via `XFile.readAsBytes()` (fonctionne pareil sur web et mobile) : `Image.file` → `Image.memory`,
+`ref.putFile` → `ref.putData`. `dart:io` n'est plus importé dans ce fichier.
+
+`flutter analyze` : 0 erreur, 135 issues (inchangé). Revérifié en direct avec `poseur@workit-test.fr` : le clic sur
+"Photographier l'attestation signée" ne fait plus planter l'app (avant le correctif, une tentative similaire
+plantait avec `Image.file is not supported on Flutter Web`). **La sélection de fichier réelle passe par un
+dialogue natif du système, hors de portée de l'automatisation navigateur — l'upload + la prévisualisation avec une
+vraie photo n'ont donc pas pu être testés de bout en bout.** À valider manuellement par Christophe (web ou mobile)
+dès l'occasion. Committé et poussé (`0169890`).
+
 ### Reste à faire (prochaine session)
-- Corriger le bug `Image.file` non supporté sur Flutter Web dans `poseurs_home_screen.dart` (bloque le rapport de
-  fin de chantier "Chantier terminé" en test web — l'app mobile n'est probablement pas affectée, à confirmer).
-- Tester manuellement "Chantier terminé" (`_valider` → `Terminé`) une fois ce bug corrigé, ou directement sur mobile.
+- Valider manuellement "Chantier terminé" avec une vraie photo (upload + prévisualisation), web ou mobile.
 - Passer à la Phase 2 (dictionnaire métier étendu + moteur de documents) une fois la Phase 1 validée en usage réel.
 
 ---
