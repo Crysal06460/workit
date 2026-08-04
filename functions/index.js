@@ -12,13 +12,18 @@ const {onCall} = require("firebase-functions/v2/https");
 const {onDocumentWritten, onDocumentCreated} =
   require("firebase-functions/v2/firestore");
 const {initializeApp} = require("firebase-admin/app");
-const admin = require("firebase-admin");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const OpenAI = require("openai");
 const Mailjet = require("node-mailjet");
 const logger = require("firebase-functions/logger");
 const nodemailer = require("nodemailer");
+const {
+  getTokensByRole,
+  getTokenByUid,
+  sendNotification,
+} = require("./notifyHelpers");
+const {findTransition, notifyTransition} = require("./devisWorkflow");
 
 setGlobalOptions({
   region: "europe-west1",
@@ -436,87 +441,148 @@ function generateTempPassword() {
   return required.join("");
 }
 // ─── FCM Helpers ────────────────────────────────────────────────────────────
+// (getTokensByRole / getTokenByUid / sendNotification / formatFrDateTime sont
+// désormais dans notifyHelpers.js, partagés avec devisWorkflow.js.)
+
+// ─── Cloud Function : transitionDevisStatus ─────────────────────────────────
 
 /**
- * Récupère les tokens FCM des utilisateurs d'un workspace par rôle.
- * @param {string} workspaceId
- * @param {string} role
- * @return {Promise<string[]>}
+ * Point d'entrée unique pour toute transition de statut d'un chantier
+ * (workspaces/{workspaceId}/devis/{devisId}). Vérifie les droits (rôle,
+ * appartenance workspace, assignation poseur si requise) et la liste des
+ * champs additionnels autorisés (devisWorkflow.js), écrit le nouveau statut
+ * et une entrée d'historique immuable de façon atomique (transaction), puis
+ * envoie les notifications de la transition.
  */
-async function getTokensByRole(workspaceId, role) {
-  const snap = await admin.firestore()
-      .collection("users")
-      .where("companyId", "==", workspaceId)
-      .where("role", "==", role)
-      .get();
-  return snap.docs
-      .map((doc) => doc.data().fcmToken)
-      .filter((token) => token && token.length > 0);
-}
+exports.transitionDevisStatus = onCall(
+    {region: "europe-west1"},
+    async (request) => {
+      const callerUid = request.auth && request.auth.uid;
+      if (!callerUid) throw new Error("Non autorisé");
 
-/**
- * Récupère le token FCM d'un utilisateur par son uid.
- * @param {string} uid
- * @return {Promise<string[]>}
- */
-async function getTokenByUid(uid) {
-  const doc = await admin.firestore().collection("users").doc(uid).get();
-  const token = doc.data() && doc.data().fcmToken;
-  return token ? [token] : [];
-}
+      const data = request.data || {};
+      const workspaceId = data.workspaceId;
+      const devisId = data.devisId;
+      const newStatus = data.newStatus;
+      const extraFields =
+        (data.extraFields && typeof data.extraFields === "object") ?
+          data.extraFields : {};
+      const comment = data.comment || null;
+      const origin = data.origin || "app";
 
-/**
- * Envoie une notification FCM à une liste de tokens.
- * @param {string[]} tokens
- * @param {string} title
- * @param {string} body
- * @param {Object<string, string>} [data] Payload additionnel pour le deep-link.
- */
-async function sendNotification(tokens, title, body, data) {
-  if (!tokens || tokens.length === 0) return;
-  const uniqueTokens = [...new Set(tokens.filter(Boolean))];
-  if (uniqueTokens.length === 0) return;
-  try {
-    await admin.messaging().sendEachForMulticast({
-      tokens: uniqueTokens,
-      notification: {title, body},
-      data: data || {},
-      android: {priority: "high"},
-      apns: {payload: {aps: {sound: "default"}}},
+      if (!workspaceId || !devisId || !newStatus) {
+        throw new Error("workspaceId, devisId et newStatus sont requis");
+      }
+
+      const callerDoc = await db.collection("users").doc(callerUid).get();
+      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      const callerData = callerDoc.data();
+      const callerRole = callerData.role;
+      const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
+
+      const workspaceDoc =
+        await db.collection("workspaces").doc(workspaceId).get();
+      if (!workspaceDoc.exists) {
+        throw new Error("Espace de travail introuvable");
+      }
+      const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
+      if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
+        throw new Error(
+            "Non autorisé : ce chantier n'appartient pas à votre espace " +
+            "de travail",
+        );
+      }
+
+      const devisRef = db.collection("workspaces").doc(workspaceId)
+          .collection("devis").doc(devisId);
+
+      let fromStatus = null;
+      let after = null;
+
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(devisRef);
+        if (!snap.exists) throw new Error("Chantier introuvable");
+        const current = snap.data();
+        fromStatus = current.status || current.metreurStatus || null;
+
+        const transition = findTransition(fromStatus, newStatus);
+        if (!transition) {
+          throw new Error(
+              `Transition non autorisée : ${fromStatus || "(aucun statut)"} ` +
+              `→ ${newStatus}`,
+          );
+        }
+        if (!transition.roles.includes(callerRole)) {
+          throw new Error(
+              `Non autorisé : le rôle ${callerRole} ne peut pas effectuer ` +
+              "cette transition",
+          );
+        }
+        if (transition.requirePoseurAssigned) {
+          const poseurIds =
+            Array.isArray(current.poseurIds) ? current.poseurIds : [];
+          if (!poseurIds.includes(callerUid)) {
+            throw new Error(
+                "Non autorisé : vous n'êtes pas assigné à ce chantier",
+            );
+          }
+        }
+        const rejectedKeys = Object.keys(extraFields)
+            .filter((k) => !transition.extraFields.includes(k));
+        if (rejectedKeys.length > 0) {
+          throw new Error(
+              "Champ(s) non autorisé(s) pour cette transition : " +
+              rejectedKeys.join(", "),
+          );
+        }
+
+        const now = Timestamp.now();
+        const updatePayload = {
+          status: newStatus,
+          updatedAt: now,
+          ...extraFields,
+        };
+        if (extraFields.rapportProbleme) {
+          updatePayload.rapportProbleme = {
+            ...extraFields.rapportProbleme,
+            signaledAt: now,
+          };
+        }
+        if (Object.prototype.hasOwnProperty
+            .call(extraFields, "paiementEffectue")) {
+          updatePayload.paiementSetAt = now;
+        }
+        if (newStatus === "Terminé") {
+          updatePayload.clotureAt = now;
+        }
+        if (callerRole === "metreur") {
+          updatePayload.metreurId = callerUid;
+          updatePayload.metreurUpdatedAt = now;
+        }
+
+        tx.update(devisRef, updatePayload);
+        tx.set(devisRef.collection("statusHistory").doc(), {
+          fromStatus,
+          toStatus: newStatus,
+          uid: callerUid,
+          role: callerRole,
+          at: now,
+          comment,
+          origin,
+          extraFields,
+        });
+
+        after = {...current, ...updatePayload};
+      });
+
+      try {
+        await notifyTransition(db, newStatus, after, {workspaceId, devisId});
+      } catch (e) {
+        logger.error("transitionDevisStatus notify error:", e);
+      }
+
+      return {ok: true};
     });
-  } catch (e) {
-    logger.error("FCM error:", e);
-  }
-}
-
-/**
- * Formate une Timestamp Firestore (ou date-like) en chaînes FR.
- * @param {*} ts Timestamp Firestore, Date, ou string.
- * @return {{dateStr: string, timeStr: string, dateTimeStr: string}}
- */
-function formatFrDateTime(ts) {
-  if (!ts) return {dateStr: "", timeStr: "", dateTimeStr: ""};
-  try {
-    const d = ts.toDate ? ts.toDate() : new Date(ts);
-    const dateStr = d.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
-    const timeStr = d.toLocaleTimeString("fr-FR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const dateTimeStr = d.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "long",
-    }) + " à " + timeStr;
-    return {dateStr, timeStr, dateTimeStr};
-  } catch (_) {
-    const s = String(ts);
-    return {dateStr: s, timeStr: "", dateTimeStr: s};
-  }
-}
 
 // ─── Cloud Function : onDevisStatusChange ───────────────────────────────────
 
@@ -616,135 +682,11 @@ exports.onDevisStatusChange = onDocumentWritten(
           return null;
         }
 
-        // ── Status → 'Acceptée' ──
-        if (statusAfter === "Acceptée") {
-          const metreurName = after.assignedMetreurName ||
-            after.metreurName || "le métreur";
-          const tokens = userId ? await getTokenByUid(userId) : [];
-          await sendNotification(
-              tokens,
-              "📅 Métré planifié",
-              `Le chantier de ${client} va être métré par ${metreurName}`,
-              {...baseData, type: "status"},
-          );
-          return null;
-        }
-
-        // ── Status → 'En cours' (RDV de métré programmé) ──
-        if (statusAfter === "En cours") {
-          const tokens = userId ? await getTokenByUid(userId) : [];
-          const {dateStr, timeStr} = formatFrDateTime(after.meetingAt);
-          const when = timeStr ? `le ${dateStr} à ${timeStr}` : `le ${dateStr}`;
-          await sendNotification(
-              tokens,
-              "📅 Rendez-vous de métré confirmé",
-              `Le métré du chantier de ${client} est programmé ${when}`,
-              {...baseData, type: "status"},
-          );
-          return null;
-        }
-
-        // ── Status → 'À commander' ──
-        // Ne concerne pas l'admin (qui ne veut que "nouveau chantier" +
-        // "fin de pose").
-        if (statusAfter === "À commander") {
-          const commercialTokens = userId ? await getTokenByUid(userId) : [];
-          await sendNotification(
-              commercialTokens,
-              "✅ Métré terminé",
-              `Le métré de ${client} est terminé. ` +
-              `La commande peut être passée.`,
-              {...baseData, type: "status"},
-          );
-          return null;
-        }
-
-        // ── Status → 'À planifier' ──
-        if (statusAfter === "À planifier") {
-          const tokens = userId ? await getTokenByUid(userId) : [];
-          await sendNotification(
-              tokens,
-              "📦 Commande passée",
-              `Le chantier ${client} est commandé`,
-              {...baseData, type: "status"},
-          );
-          return null;
-        }
-
-        // ── Status → 'En pose' ──
-        if (statusAfter === "En pose") {
-          const poseurIds =
-            Array.isArray(after.poseurIds) ? after.poseurIds : [];
-          const poseurNames = after.poseurNames || "l'équipe de pose";
-          const poseDate = after.poseDate || after.dateDebut || "";
-          const {dateStr: poseDateStr, dateTimeStr: poseDateTimeStr} =
-            formatFrDateTime(poseDate);
-
-          // Tokens poseurs
-          const poseurTokenPromises = poseurIds.map((id) => getTokenByUid(id));
-          const poseurTokenArrays = await Promise.all(poseurTokenPromises);
-          const poseurTokens = poseurTokenArrays.flat();
-
-          // Commercial uniquement — l'admin ne veut pas de notif à cette
-          // étape (seulement nouveau chantier + fin de pose).
-          const commercialTokens = userId ? await getTokenByUid(userId) : [];
-
-          await Promise.all([
-            sendNotification(
-                poseurTokens,
-                "🏗️ Nouveau chantier assigné",
-                `${client} le ${poseDateTimeStr}`,
-                {...baseData, type: "status"},
-            ),
-            sendNotification(
-                commercialTokens,
-                "📋 Pose programmée",
-                `${client} le ${poseDateStr} par ${poseurNames}`,
-                {...baseData, type: "status"},
-            ),
-          ]);
-          return null;
-        }
-
-        // ── Status → 'Terminé' ──
-        if (statusAfter === "Terminé") {
-          const commercialTokens = userId ? await getTokenByUid(userId) : [];
-          const metreurTokens = after.metreurId ?
-            await getTokenByUid(after.metreurId) : [];
-          const adminTokens = await getTokensByRole(workspaceId, "admin");
-          const tokens = [
-            ...commercialTokens, ...metreurTokens, ...adminTokens,
-          ];
-          await sendNotification(
-              tokens,
-              "🎉 Chantier terminé",
-              `Chantier ${client} terminé`,
-              {...baseData, type: "status"},
-          );
-          return null;
-        }
-
-        // ── Status → 'À clôturer' (chantier pas terminé) ──
-        if (statusAfter === "À clôturer") {
-          const commercialTokens = userId ? await getTokenByUid(userId) : [];
-          const metreurTokens = after.metreurId ?
-            await getTokenByUid(after.metreurId) : [];
-          const adminTokens = await getTokensByRole(workspaceId, "admin");
-          const tokens = [
-            ...commercialTokens, ...metreurTokens, ...adminTokens,
-          ];
-          const raison = (after.rapportProbleme &&
-            after.rapportProbleme.raison) || null;
-          await sendNotification(
-              tokens,
-              "⚠️ Chantier pas terminé",
-              raison ?
-                `Chantier ${client} pas terminé car ${raison}` :
-                `Chantier ${client} pas terminé`,
-              {...baseData, type: "status"},
-          );
-          return null;
-        }
+        // Toutes les transitions de statut suivantes (Acceptée, En cours,
+        // À commander, À planifier, En pose, Terminé, À clôturer) sont
+        // désormais notifiées depuis transitionDevisStatus (devisWorkflow.js)
+        // au moment même de l'écriture — ce trigger n'a plus qu'à gérer la
+        // création (avant) et les champs indépendants du statut (ci-dessus).
       } catch (e) {
         logger.error("onDevisStatusChange error:", e);
       }

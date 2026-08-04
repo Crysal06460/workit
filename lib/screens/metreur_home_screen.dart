@@ -12,6 +12,7 @@ import 'planner_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
 import '../core/theme/app_colors.dart';
+import '../services/devis_service.dart';
 
 const Color _metreurBg = AppColors.background;
 const Color _metreurCard = AppColors.surface;
@@ -573,13 +574,16 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-    await _persistRequestToCloud(
-      data.copyWith(
-        status: 'Acceptée',
-        metreurId: _userId,
-        updated: 'Acceptée à l’instant',
-      ),
-    );
+    if (_workspaceId != null) {
+      try {
+        await DevisService.updateStatus(
+          workspaceId: _workspaceId!,
+          devisId: data.id,
+          newStatus: 'Acceptée',
+          extraFields: const {'updated': 'Acceptée à l’instant'},
+        );
+      } catch (_) {}
+    }
     await _saveToPrefs();
   }
 
@@ -714,17 +718,12 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
     });
     if (_workspaceId != null) {
       try {
-        await _firestore
-            .collection('workspaces')
-            .doc(_workspaceId)
-            .collection('devis')
-            .doc(data.id)
-            .set({
-          'status': 'En cours',
-          'meetingAt': Timestamp.fromDate(dt),
-          'metreurId': _userId,
-          'metreurUpdatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await DevisService.updateStatus(
+          workspaceId: _workspaceId!,
+          devisId: data.id,
+          newStatus: 'En cours',
+          extraFields: {'meetingAt': Timestamp.fromDate(dt)},
+        );
       } catch (_) {}
     }
     await _saveToPrefs();
@@ -739,14 +738,12 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
       _toPlan = [..._toPlan, item.copyWith(status: 'À planifier', updated: 'Pose à programmer')];
     });
     try {
-      await _firestore
-          .collection('workspaces').doc(wsId)
-          .collection('devis').doc(item.id)
-          .set({
-        'status': 'À planifier',
-        'updated': 'Pose à programmer',
-        'metreurUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await DevisService.updateStatus(
+        workspaceId: wsId,
+        devisId: item.id,
+        newStatus: 'À planifier',
+        extraFields: const {'updated': 'Pose à programmer'},
+      );
     } catch (_) {}
   }
 
@@ -885,19 +882,17 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                           .join(', ');
                       Navigator.of(ctx).pop();
                       try {
-                        await _firestore
-                            .collection('workspaces')
-                            .doc(_workspaceId)
-                            .collection('devis')
-                            .doc(data.id)
-                            .set({
-                          'status': 'En pose',
-                          'poseDate': Timestamp.fromDate(dt),
-                          'poseurIds': poseurIds,
-                          'poseurNames': poseurNames,
-                          'metreurUpdatedAt': FieldValue.serverTimestamp(),
-                          'updated': 'Pose programmée',
-                        }, SetOptions(merge: true));
+                        await DevisService.updateStatus(
+                          workspaceId: _workspaceId!,
+                          devisId: data.id,
+                          newStatus: 'En pose',
+                          extraFields: {
+                            'poseDate': Timestamp.fromDate(dt),
+                            'poseurIds': poseurIds,
+                            'poseurNames': poseurNames,
+                            'updated': 'Pose programmée',
+                          },
+                        );
                       } catch (_) {}
                       if (mounted) {
                         setState(() {
@@ -925,26 +920,6 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
     );
   }
 
-  Future<void> _persistRequestToCloud(_MeasureCardData data) async {
-    if (_workspaceId == null) return;
-    try {
-      final doc = _firestore
-          .collection('workspaces')
-          .doc(_workspaceId)
-          .collection('devis')
-          .doc(data.id);
-      await doc.set(
-        {
-          'status': data.status ?? 'Acceptée',
-          'metreurId': data.metreurId ?? _userId,
-          'workspaceId': _workspaceId,
-          'updated': data.updated,
-          'metreurUpdatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-    } catch (_) {}
-  }
 }
 
 class _PrioritiesSection extends StatelessWidget {
@@ -1977,21 +1952,17 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         final wsId = data.workspaceId ?? widget.workspaceId;
         if (wsId == null) throw 'Workspace ID manquant';
 
-        final updatePayload = <String, dynamic>{
-          'status': 'À commander',
-          'updated': 'Métré terminé',
-          'metreurUpdatedAt': FieldValue.serverTimestamp(),
-        };
+        final extraFields = <String, dynamic>{'updated': 'Métré terminé'};
         if (updatedDraft != null) {
-          updatePayload['draft'] = updatedDraft.toMap();
+          extraFields['draft'] = updatedDraft.toMap();
         }
 
-        await FirebaseFirestore.instance
-            .collection('workspaces')
-            .doc(wsId)
-            .collection('devis')
-            .doc(data.id)
-            .set(updatePayload, SetOptions(merge: true));
+        await DevisService.updateStatus(
+          workspaceId: wsId,
+          devisId: data.id,
+          newStatus: 'À commander',
+          extraFields: extraFields,
+        );
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

@@ -105,10 +105,30 @@ service cloud.firestore {
       // ── Sous-collection devis/ ──────────────────────────────────────────
 
       match /devis/{devisId} {
-        allow read, write: if isAuth() && (
+        allow read: if isAuth() && (
           get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
           myWorkspaceId() == workspaceId
         );
+
+        // Création : reste une écriture client directe, mais le statut
+        // initial ne peut être que 'Nouvelle demande' — impossible de créer
+        // un chantier déjà avancé.
+        allow create: if isAuth() && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+          myWorkspaceId() == workspaceId
+        ) && request.resource.data.get('status', null) == 'Nouvelle demande';
+
+        // Mise à jour : tout champ reste modifiable directement SAUF le
+        // statut — toute transition passe désormais par la Cloud Function
+        // transitionDevisStatus (Admin SDK, contourne ces règles), seule
+        // habilitée à vérifier les droits par rôle et à écrire l'historique.
+        allow update: if isAuth() && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+          myWorkspaceId() == workspaceId
+        ) && request.resource.data.get('status', null) == resource.data.get('status', null)
+          && request.resource.data.get('metreurStatus', null) == resource.data.get('metreurStatus', null);
+
+        allow delete: if false;
 
         // ── Messagerie interne du chantier ──────────────────────────────
         match /messages/{messageId} {
@@ -116,6 +136,15 @@ service cloud.firestore {
             get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
             myWorkspaceId() == workspaceId
           );
+        }
+
+        // ── Historique immuable des transitions de statut ───────────────
+        match /statusHistory/{historyId} {
+          allow read: if isAuth() && (
+            get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+            myWorkspaceId() == workspaceId
+          );
+          allow write: if false;
         }
       }
 

@@ -12,6 +12,7 @@ import 'chantier_chat_screen.dart';
 import 'settings_screen.dart';
 import 'sign_in_screen.dart';
 import '../core/theme/app_colors.dart';
+import '../services/devis_service.dart';
 
 // ─── Palette ────────────────────────────────────────────────────────────────
 const Color _poseurBg = AppColors.background;
@@ -1119,25 +1120,19 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
     final attestationUrl = await _uploadFile(_attestation!, 'attestations_fin_travaux');
 
     try {
-      await FirebaseFirestore.instance
-          .collection('workspaces')
-          .doc(widget.workspaceId)
-          .collection('devis')
-          .doc(widget.devisId)
-          .set(
-            {
-              'status': 'Terminé',
-              'rapportFin': {
-                'date': _dateFin.toIso8601String(),
-                'photoUrls': photoUrls,
-                'attestationUrl': attestationUrl,
-              },
-              'paiementEffectue': _reglementEffectue,
-              'paiementSetAt': FieldValue.serverTimestamp(),
-              'clotureAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
+      await DevisService.updateStatus(
+        workspaceId: widget.workspaceId,
+        devisId: widget.devisId,
+        newStatus: 'Terminé',
+        extraFields: {
+          'rapportFin': {
+            'date': _dateFin.toIso8601String(),
+            'photoUrls': photoUrls,
+            'attestationUrl': attestationUrl,
+          },
+          'paiementEffectue': _reglementEffectue,
+        },
+      );
     } catch (e) {
       debugPrint('_valider error: $e');
     }
@@ -1482,23 +1477,15 @@ class _RapportProblemeState extends State<_RapportProbleme> {
     setState(() => _loading = true);
 
     try {
-      await FirebaseFirestore.instance
-          .collection('workspaces')
-          .doc(widget.workspaceId)
-          .collection('devis')
-          .doc(widget.devisId)
-          .set(
-            {
-              'status': 'À clôturer',
-              'rapportProbleme': {
-                'raison': raison,
-                'signaledAt': FieldValue.serverTimestamp(),
-              },
-              'paiementEffectue': _reglementEffectue,
-              'paiementSetAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
+      await DevisService.updateStatus(
+        workspaceId: widget.workspaceId,
+        devisId: widget.devisId,
+        newStatus: 'À clôturer',
+        extraFields: {
+          'rapportProbleme': {'raison': raison},
+          'paiementEffectue': _reglementEffectue,
+        },
+      );
     } catch (e) {
       debugPrint('_signaler error: $e');
     }

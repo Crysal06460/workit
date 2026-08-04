@@ -52,7 +52,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
         maxChildSize: 0.95,
         expand: false,
         builder: (_, scrollController) {
-          final status = (data['status'] ?? '').toString();
+          final status = (data['status'] ?? data['metreurStatus'] ?? '').toString();
           final client = (data['client'] ?? '—').toString();
           final address = (data['address'] ?? '').toString();
           final metreurName = (data['assignedMetreurName'] ?? '').toString();
@@ -360,22 +360,26 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
         final docs = snapshot.data!.docs;
 
         final enAttente = docs.where((d) {
-          final s = ((d.data() as Map<String, dynamic>)['status'] ?? '').toString();
+          final data = d.data() as Map<String, dynamic>;
+          final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
           return s == 'Nouvelle demande' || s == 'Acceptée' || s.isEmpty;
         }).length;
 
         final metreEnCours = docs.where((d) {
-          final s = ((d.data() as Map<String, dynamic>)['status'] ?? '').toString();
+          final data = d.data() as Map<String, dynamic>;
+          final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
           return s == 'En cours';
         }).length;
 
         final commandePose = docs.where((d) {
-          final s = ((d.data() as Map<String, dynamic>)['status'] ?? '').toString();
+          final data = d.data() as Map<String, dynamic>;
+          final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
           return s == 'À commander' || s == 'Commande en cours' || s == 'À planifier' || s == 'En pose';
         }).length;
 
         final termines = docs.where((d) {
-          final s = ((d.data() as Map<String, dynamic>)['status'] ?? '').toString();
+          final data = d.data() as Map<String, dynamic>;
+          final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
           return s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé';
         }).length;
 
@@ -475,7 +479,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) {
                       final data = recent[i].data() as Map<String, dynamic>;
-                      final status = (data['status'] ?? '').toString();
+                      final status = (data['status'] ?? data['metreurStatus'] ?? '').toString();
                       final client = (data['client'] ?? '—').toString();
                       final address = (data['address'] ?? '').toString();
                       final createdAt = data['createdAt'];
