@@ -346,7 +346,7 @@ class _PlannerBody extends StatelessWidget {
         newStatus: 'En pose',
         extraFields: {
           'teamId': team.id,
-          'poseDate': Timestamp.fromDate(day),
+          'poseDate': day.toIso8601String(),
           'poseurIds': team.memberIds,
           'poseurNames': names,
         },

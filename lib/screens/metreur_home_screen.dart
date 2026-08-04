@@ -722,7 +722,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
           workspaceId: _workspaceId!,
           devisId: data.id,
           newStatus: 'En cours',
-          extraFields: {'meetingAt': Timestamp.fromDate(dt)},
+          extraFields: {'meetingAt': dt.toIso8601String()},
         );
       } catch (_) {}
     }
@@ -887,7 +887,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                           devisId: data.id,
                           newStatus: 'En pose',
                           extraFields: {
-                            'poseDate': Timestamp.fromDate(dt),
+                            'poseDate': dt.toIso8601String(),
                             'poseurIds': poseurIds,
                             'poseurNames': poseurNames,
                             'updated': 'Pose programmée',

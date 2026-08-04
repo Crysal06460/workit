@@ -542,6 +542,15 @@ exports.transitionDevisStatus = onCall(
           updatedAt: now,
           ...extraFields,
         };
+        // Les dates transitent en ISO string (le SDK cloud_functions ne
+        // sait pas sérialiser un Timestamp Firestore) : reconverties ici en
+        // Timestamp pour rester compatibles avec tous les écrans qui les
+        // lisent déjà comme des Timestamp.
+        for (const key of transition.dateFields || []) {
+          if (extraFields[key]) {
+            updatePayload[key] = Timestamp.fromDate(new Date(extraFields[key]));
+          }
+        }
         if (extraFields.rapportProbleme) {
           updatePayload.rapportProbleme = {
             ...extraFields.rapportProbleme,

@@ -39,12 +39,14 @@ const TRANSITIONS = {
     // qu'aucun cas explicite n'existe pour 'En cours' côté client.
     {to: "Acceptée", roles: ["metreur", "admin"], extraFields: ["updated"]},
     // Modifier le rendez-vous déjà pris.
-    {to: "En cours", roles: ["metreur", "admin"], extraFields: ["meetingAt"]},
+    {to: "En cours", roles: ["metreur", "admin"], extraFields: ["meetingAt"],
+      dateFields: ["meetingAt"]},
     {to: "À commander", roles: ["metreur", "admin"],
       extraFields: ["draft", "updated"]},
   ],
   "Acceptée": [
-    {to: "En cours", roles: ["metreur", "admin"], extraFields: ["meetingAt"]},
+    {to: "En cours", roles: ["metreur", "admin"], extraFields: ["meetingAt"],
+      dateFields: ["meetingAt"]},
     {to: "À commander", roles: ["metreur", "admin"],
       extraFields: ["draft", "updated"]},
   ],
@@ -58,7 +60,8 @@ const TRANSITIONS = {
     {to: "En pose", roles: ["metreur", "admin"],
       extraFields: [
         "teamId", "poseDate", "poseurIds", "poseurNames", "updated",
-      ]},
+      ],
+      dateFields: ["poseDate"]},
   ],
   "En pose": [
     {to: "Terminé", roles: ["poseur", "admin"], requirePoseurAssigned: true,
