@@ -64,6 +64,14 @@ const TRANSITIONS = {
       dateFields: ["poseDate"]},
   ],
   "En pose": [
+    // Réaffectation (déplacer un chantier déjà planifié vers une autre
+    // équipe/jour depuis le Planner — glisser-déposer libre comme avant
+    // l'introduction du moteur de transitions).
+    {to: "En pose", roles: ["metreur", "admin"],
+      extraFields: [
+        "teamId", "poseDate", "poseurIds", "poseurNames", "updated",
+      ],
+      dateFields: ["poseDate"]},
     {to: "Terminé", roles: ["poseur", "admin"], requirePoseurAssigned: true,
       extraFields: ["rapportFin", "paiementEffectue"]},
     {to: "À clôturer", roles: ["poseur", "admin"], requirePoseurAssigned: true,
