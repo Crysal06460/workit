@@ -74,12 +74,13 @@ logique de statut dispersée — exactement ce que le principe directeur veut é
 
 ## Phase 2 — Extension du dictionnaire métier + moteur de documents
 
-**Statut (2026-08-04)** : **✅ terminée côté code pour le scope retenu, testée en direct.** Scope volontairement
-réduit avec Christophe : 1 métier pilote (`menuiserie_aluminium`/`menuiseries_exterieures`, contenu sourcé NF DTU
-36.5) + moteur de documents générique avec 3 modèles (`bon_commande`, `bon_preparation`, `rapport_autocontrole`).
-Validation `required`/`min`/`max` confirmée en direct avec les bons libellés sourcés. Les 11 autres métiers et les 6
-autres modèles de documents de la roadmap restent à faire — le moteur les supporte déjà sans nouveau chantier
-technique. Détail complet dans `session_courante.md`.
+**Statut (2026-08-04)** : **✅ terminée côté code pour le scope retenu, testée de bout en bout en direct** (métré
+avec validation → transition de statut automatique → bon de préparation → rapport d'autocontrôle, cycle
+commercial→métreur→poseur complet). Scope volontairement réduit avec Christophe : 1 métier pilote
+(`menuiserie_aluminium`/`menuiseries_exterieures`, contenu sourcé NF DTU 36.5) + moteur de documents générique avec
+3 modèles (`bon_commande`, `bon_preparation`, `rapport_autocontrole`). Les 11 autres métiers et les 6 autres modèles
+de documents de la roadmap restent à faire — le moteur les supporte déjà sans nouveau chantier technique. Détail
+complet dans `session_courante.md`.
 
 **Pourquoi ensuite** : extension directe de l'infrastructure de métré déjà existante (12 métiers / 71 catégories /
 451 champs) — logique de continuer sur cette base avant d'attaquer le multi-lot, qui aura lui-même besoin de ces

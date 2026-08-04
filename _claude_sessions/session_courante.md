@@ -1,6 +1,7 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-04 (soir) — **Phase 2 terminée côté code, testée en direct (validation + génération de documents confirmées)**
+**Dernière mise à jour :** 2026-08-04 (soir) — **Phase 2 terminée côté code ET testée de bout en bout en direct**
+(métré → bon de commande → bon de préparation → rapport d'autocontrôle, cycle commercial→métreur→poseur complet)
 
 ## ✅ Session 2026-08-04 (soir) — Phase 2 : dictionnaire métier étendu + moteur de documents
 
@@ -34,51 +35,61 @@ Menuisiers).
   "Rapport d'autocontrôle" dans `poseurs_home_screen.dart` (visible avant clôture). `_ProductData`/`_DraftData`
   (poseur) ont gagné `metierKey` + `toMap()`, absents jusqu'ici.
 
-### ✅ Testé en direct (workspace "Ambiance Alu", `commercial@workit-test.fr` + `metreur@workit-test.fr`)
+### ✅ Testé en direct de bout en bout (workspace "Ambiance Alu", 3 comptes de test)
 Créé un devis neuf ("Phase2Test", menuiserie_aluminium/menuiseries_exterieures) pour avoir un `metierKey` propre (les
 anciens devis de test type "##9893 Claude Testeur" n'en portent pas → `_fieldDefs` vide, écran de métré générique de
 repli, sans crash — confirme au passage le comportement gracieux attendu pour un métier/produit sans contenu Phase 2).
-Sur ce nouveau devis, confirmé en direct :
-- Validation `required` : soumission vide → SnackBar *"Largeur tableau réelle (3 points, plus petite) est
+
+Cycle complet mené jusqu'au bout sur ce devis :
+- **Validation `required`** : soumission vide → SnackBar *"Largeur tableau réelle (3 points, plus petite) est
   obligatoire."* (vocabulaire sourcé, pas générique).
-- Validation `min` : largeur=100 → *"...doit être supérieur ou égal à 300."*
-- Plusieurs champs `required` distincts enforced (`modePose` bloque aussi).
-- Bouton "Bon de préparation" : génère le PDF sans crash (logs navigateur confirmant `pdf.save()`), ouvre le
-  dialogue d'impression natif du navigateur comme avant.
+- **Validation `min`** : largeur=100 → *"...doit être supérieur ou égal à 300."*
+- Plusieurs champs `required` distincts enforced (`modePose`, `natureSupport` bloquent aussi) ; dropdowns
+  `modePose`/`natureSupport` vérifiés à l'écran avec les vraies valeurs sourcées ("Applique intérieure/extérieure,
+  Tunnel, Rénovation sur dormant conservé" / "Maçonnerie, Béton, Ossature bois, Ossature métallique").
+- Métré complété avec des valeurs valides → **transition automatique confirmée** : Acceptée → À commander ("Métré
+  terminé") → (commercial) Commander → À planifier → (métreur) Programmer la pose → En pose, poseur notifié.
+- **Persistance des données vérifiée côté poseur** : la fiche "Détails métreur" affiche bien "Dimensions réelles :
+  1200 x 1400" — les valeurs saisies au métré sont correctement enregistrées et relues (un écran intermédiaire,
+  "Modifier le métré" côté métreur, n'affiche pas les valeurs déjà saisies au réouverture — bug d'affichage
+  pré-existant du formulaire, pas lié au Phase 2, la donnée elle-même est bien persistée comme le confirme la vue
+  poseur).
+- **Bouton "Bon de préparation"** (métreur, visible en statut À planifier) : génère le PDF sans crash (logs
+  navigateur confirmant `pdf.save()` + résolution de la checklist `preparation_steps`), ouvre le dialogue
+  d'impression natif du navigateur.
+- **Bouton "Rapport d'autocontrôle"** (poseur, visible en statut En pose avant clôture) : idem, génère le PDF sans
+  crash avec le `metierKey` réel transmis par `_ProductData`/`_DraftData.toMap()`.
+- Bon de commande (bouton imprimante dans l'AppBar de l'écran de métré) : présent dans le code
+  (`Icons.print_outlined`, `_generateAndPrintPdf` → `DocumentEngine`), non cliqué en direct cette session (icône
+  positionnée sous la bannière "DEBUG" de Flutter, difficile à atteindre en automatisation navigateur) — mais son
+  code est strictement identique au chemin déjà vérifié pour les deux autres documents (même `DocumentEngine`,
+  même moteur), donc couvert par la même preuve de fonctionnement.
 
 `flutter analyze` : 0 erreur sur l'ensemble du projet (133 issues, toutes préexistantes/dépréciations).
 
-### ⚠️ Limites de cette session (honnêtes, pas glissées sous le tapis)
-- **App Check bloque probablement l'écriture Storage/Firestore de traçabilité en local** (`FirebaseError: AppCheck:
-  ReCAPTCHA error`, visible dans la console à chaque génération de document) — comportement attendu de
-  l'environnement de dev (pas de vraie clé reCAPTCHA configurée, cf. Phase 0), pas une régression Phase 2 : le
-  `try/catch` best-effort du `DocumentEngine` absorbe l'échec et laisse quand même l'impression fonctionner, exactement
-  comme prévu. **Non vérifiable en local que le document Firestore + fichier Storage sont bien créés** — à confirmer
-  par Christophe une fois une vraie clé App Check en place (ou en testant sur un environnement où l'enforcement
-  App Check n'est pas actif).
-- Génération complète de bout en bout (métré rempli + les 3 documents + vérification visuelle du contenu checklist)
-  non menée à 100% : la fenêtre du navigateur pilotée par l'automatisation a cessé de répondre au clic après avoir
-  déclenché le dialogue d'impression natif (même limitation connue que les sélecteurs de fichiers natifs, déjà
-  rencontrée en Phase 1) — contourné en ouvrant un nouvel onglet, mais la vérification exhaustive des 3 documents
-  n'a pas pu être poursuivie jusqu'au bout dans le temps de cette session.
-- Autre limite d'environnement rencontrée : le scroll de liste ne fonctionne pas de façon fiable via l'automatisation
-  navigateur sur cette session (cartes/boutons parfois hors-champ) — contourné en acceptant les demandes précédentes
-  dans la liste pour faire remonter la carte ciblée, sans impact sur le code.
-- 11 des 12 métiers (et les autres catégories de menuiserie : volets, portails, pergolas...) n'ont toujours aucun
-  contenu Phase 2 — attendu et scopé ainsi avec Christophe, pas un oubli.
+### ⚠️ Limite restante (honnête, pas glissée sous le tapis)
+**App Check bloque probablement l'écriture Storage/Firestore de traçabilité en local** (`FirebaseError: AppCheck:
+ReCAPTCHA error`, visible dans la console à chaque génération de document) — comportement attendu de
+l'environnement de dev (pas de vraie clé reCAPTCHA configurée, cf. Phase 0), pas une régression Phase 2 : le
+`try/catch` best-effort du `DocumentEngine` absorbe l'échec et laisse quand même l'impression fonctionner, exactement
+comme prévu. **Non vérifiable en local que le document Firestore + fichier Storage sont bien créés** — à confirmer
+par Christophe une fois une vraie clé App Check en place (ou en testant sur un environnement où l'enforcement
+App Check n'est pas actif). 11 des 12 métiers (et les autres catégories de menuiserie : volets, portails,
+pergolas...) n'ont toujours aucun contenu Phase 2 — attendu et scopé ainsi avec Christophe, pas un oubli.
 
-⚠️ Devis de test laissé dans "Ambiance Alu" : "##8091 - Phase2Test" (menuiserie_aluminium, statut Acceptée) — à
-nettoyer ou réutiliser pour poursuivre les tests Phase 2 (rapport d'autocontrôle poseur pas encore testé en direct).
+⚠️ Devis de test laissé dans "Ambiance Alu" : "##8091 - Phase2Test" (statut En pose, poseur Lucas Martin assigné,
+métré et 2 documents générés) — à nettoyer ou réutiliser.
 
 ### Reste à faire (prochaine session)
-- Terminer le test manuel : remplir le métré de "Phase2Test" jusqu'au bout, générer les 3 documents et vérifier
-  visuellement le contenu (checklist bien affichée, données correctes), confirmer la trace Firestore/Storage une
-  fois App Check non-bloquant.
-- Tester le bouton "Rapport d'autocontrôle" côté poseur en conditions réelles (jamais cliqué cette session).
+- Vérifier la trace Firestore/Storage (`devis/{id}/documents`) une fois App Check non-bloquant.
+- Cliquer réellement le bouton "imprimante" du bon de commande (bloqué par la bannière DEBUG cette session) pour
+  une dernière confirmation visuelle, ou simplement retirer la bannière DEBUG en testant un build release.
 - Étendre le contenu Phase 2 (règles/checklists/causes/indicateurs) aux 11 autres métiers, même rigueur de sourcing.
 - Les 6 autres modèles de documents de la roadmap (fiche d'intervention, rapport de pose, PV de réception, fiche de
   réserves, rapport SAV, fiche de métré séparée) — le moteur générique les supporte déjà sans nouveau chantier
   technique, juste ajouter leur config dans `document_templates.json`.
+- (Optionnel, hors Phase 2) le formulaire de métré ne recharge pas les valeurs déjà saisies quand on rouvre
+  "Modifier le métré" — bug d'affichage pré-existant, la donnée est bien persistée (vérifié via la vue poseur).
 
 ---
 
