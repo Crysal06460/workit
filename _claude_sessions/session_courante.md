@@ -1,6 +1,71 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-03 (soir, fin) — **Phase 0 terminée côté code**
+**Dernière mise à jour :** 2026-08-04 — **Phase 1 terminée côté code, déployée et testée en direct**
+
+## ✅ Session 2026-08-04 — Phase 1 : moteur de workflow générique + historique immuable des statuts
+
+Christophe a demandé d'attaquer la Phase 1 de la roadmap (`roadmap_plateforme_multimetier.md`) : remplacer les
+écritures directes de statut dispersées entre `metreur_home_screen.dart`/`poseurs_home_screen.dart` par un moteur
+centralisé, avec historique immuable et vérification de droits.
+
+### Implémenté et déployé (workit-1daa1)
+- **Nouvelle Cloud Function callable `transitionDevisStatus`** (`functions/index.js`) : point d'entrée unique pour
+  toute transition de statut d'un devis. Vérifie rôle/appartenance workspace/assignation poseur
+  (`requirePoseurAssigned` — ferme le trou où un poseur pouvait clôturer un chantier qui n'était pas le sien),
+  valide les champs additionnels autorisés (whitelist stricte par transition), écrit statut + une entrée dans la
+  nouvelle sous-collection immuable `statusHistory` de façon atomique (transaction), puis notifie.
+- **`functions/devisWorkflow.js`** (nouveau) : config déclarative des transitions (statuts → statuts autorisés,
+  rôles, champs additionnels whitelistés, champs de type date) — remplace les switch/if répétés.
+- **`functions/notifyHelpers.js`** (nouveau) : helpers FCM/in-app extraits de `index.js`, partagés avec
+  `devisWorkflow.js`. Les deux systèmes de notification (in-app + push), auparavant dupliqués et désynchronisés,
+  sont désormais fusionnés et pilotés depuis le même point.
+- **`onDevisStatusChange`** perd ses 8 blocs `if` de notification par statut (garde uniquement création,
+  `metreurNote`, `paiementEffectue` — champs indépendants du statut).
+- **`firestore.rules`** : le champ `status`/`metreurStatus` d'un devis ne peut plus être modifié par écriture
+  client directe (seule la Cloud Function, Admin SDK, le peut) ; création limitée à `status=='Nouvelle demande'` ;
+  nouvelle sous-collection `statusHistory` en lecture seule côté client.
+- **`DevisService.updateStatus`** (Dart) appelle désormais la Cloud Function au lieu d'écrire Firestore
+  directement. Les 7 sites d'écriture directe du statut dans `metreur_home_screen.dart`/`poseurs_home_screen.dart`
+  migrés ; `planner_screen.dart` l'utilisait déjà (migré automatiquement, zéro changement de code nécessaire).
+- **Bug latent corrigé au passage** : `admin_dashboard_tab.dart` était le seul écran sans le fallback
+  `status ?? metreurStatus` (un vieux devis n'ayant que `metreurStatus` y était invisible).
+
+### 🐛 Bug trouvé et corrigé en testant en direct
+Le SDK `cloud_functions` valide les paramètres côté client et **rejette silencieusement** tout objet non
+JSON-sérialisable (assertion `_debugIsValidParameterType`) **avant même d'émettre la requête HTTP** — passer un
+`Timestamp` Firestore directement dans `extraFields` (pour `meetingAt`/`poseDate`) faisait donc échouer la
+transition sans aucune trace côté serveur, alors que l'UI optimiste du client donnait l'impression que ça avait
+fonctionné. Repéré uniquement parce que le Planner (qui affiche l'erreur, contrairement aux `catch (_) {}` silencieux
+du métreur) a fini par montrer `Assertion failed: _debugIsValidParameterType(parameters) is not true`. Corrigé :
+les dates transitent désormais en chaîne ISO côté client, reconverties en `Timestamp` par la Cloud Function avant
+écriture (aucun changement nécessaire côté lecture, tous les écrans continuent de lire un vrai `Timestamp`).
+**Leçon à retenir pour la suite** : ne jamais passer un `Timestamp`/`GeoPoint`/objet Firestore directement à un
+appel `httpsCallable` — toujours le sérialiser en primitif (string/num) et le reconvertir côté serveur.
+
+### ✅ Testé en direct (workspace "Ambiance Alu", compte `metreur@workit-test.fr`)
+Cycle complet créé de bout en bout sur un devis de test ("Claude Phase1Test") : accepter → prendre RDV → démarrer/
+terminer le métré → confirmer la commande → programmer la pose (testé à la fois via le bouton dédié du métreur ET
+via le drag-and-drop du Planner, qui utilise le même point d'entrée) — chaque transition confirmée via les logs
+Cloud Functions (`firebase functions:log`) et le déclenchement du trigger `onDevisStatusChange`, données (date de
+pose, équipe assignée) correctement affichées ensuite côté commercial. `flutter analyze` : 0 erreur, 135 issues
+(inchangé). `npm run lint` (functions) : 0 erreur. **Committé (`fb176cf`, `12847eb`), pas encore poussé.**
+
+⚠️ **Non testé en direct faute d'identifiants** : les transitions poseur `En pose → Terminé` et `En pose → À
+clôturer` (`_valider`/`_signaler` dans `poseurs_home_screen.dart`). Le chantier de test a été assigné à "Guillaume
+Hervé" (membre réel de l'équipe Ambiance Alu, pas un des 3 comptes de test standard) — impossible de se connecter à
+sa place. Ces deux transitions ne passent aucun `Timestamp` en paramètre (uniquement des strings/bool), donc ne sont
+pas exposées au bug ci-dessus ; vérifiées par relecture de code uniquement. À tester manuellement dès qu'un compte
+poseur assigné est disponible.
+
+⚠️ Chantier de test laissé dans le workspace "Ambiance Alu" : devis "Claude Phase1Test" (statut `En pose`, équipe
+Guillaume Hervé, pose le 03/08/2026) — à nettoyer ou réutiliser pour tester la clôture poseur.
+
+### Reste à faire (prochaine session)
+- Tester manuellement la clôture poseur (`_valider`/`_signaler`) avec un compte poseur réellement assigné.
+- `git push` si Christophe veut sauvegarder sur le remote (2 commits locaux en attente : `fb176cf`, `12847eb`).
+- Passer à la Phase 2 (dictionnaire métier étendu + moteur de documents) une fois la Phase 1 validée en usage réel.
+
+---
 
 ## ✅ Session 2026-08-03 (soir, fin) — Phase 0 finalisée : lien d'activation, App Check, quota IA, logs d'audit
 

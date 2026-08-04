@@ -49,6 +49,13 @@ ces mêmes risques à chaque nouvelle brique.
 
 ## Phase 1 — Moteur de workflow générique + historique immuable
 
+**Statut (2026-08-04)** : **✅ terminée côté code, déployée et testée en direct.** Nouvelle Cloud Function callable
+`transitionDevisStatus` (config déclarative dans `functions/devisWorkflow.js`), sous-collection `statusHistory`
+immuable, `firestore.rules` verrouillé sur le champ statut, notifications in-app+push fusionnées. Cycle complet
+métreur testé de bout en bout (workspace "Ambiance Alu"). Un bug de sérialisation (`Timestamp` passé à une Cloud
+Function callable) a été trouvé et corrigé en cours de test. Reste à tester : clôture poseur (`Terminé`/`À
+clôturer`), faute de compte poseur assigné disponible pendant cette session — voir `session_courante.md`.
+
 **Pourquoi ensuite** : c'est le socle technique dont dépendent le multi-lot (Phase 3), le circuit de validation
 terrain (Phase 5) et le dashboard de délais (Phase 6). Sans ça, chaque nouvelle fonctionnalité recréerait sa propre
 logique de statut dispersée — exactement ce que le principe directeur veut éviter.
