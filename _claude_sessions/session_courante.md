@@ -1,6 +1,86 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-04 — **Phase 1 terminée côté code, déployée et testée en direct**
+**Dernière mise à jour :** 2026-08-04 (soir) — **Phase 2 terminée côté code, testée en direct (validation + génération de documents confirmées)**
+
+## ✅ Session 2026-08-04 (soir) — Phase 2 : dictionnaire métier étendu + moteur de documents
+
+Christophe a explicitement demandé un contenu **professionnel réel, sourcé sur internet**, pas générique — priorité
+absolue tenue tout du long (vocabulaire NF DTU 36.5 vérifié via FFB, Würth, Agence Qualité Construction, France
+Menuisiers).
+
+### Scope retenu avec Christophe (via AskUserQuestion)
+- 1 métier pilote (`menuiserie_aluminium`, catégorie `menuiseries_exterieures`) plutôt que les 12 métiers d'un coup.
+- Moteur de documents + 2-3 modèles clés plutôt que les 9 modèles de la roadmap.
+
+### Implémenté
+- **`workit_dictionary.json`** (`menuiserie_aluminium` uniquement cette session) : `metierVersion: 1` ; `required`/
+  `min`/`max` ajoutés sur les champs de métré existants (`largeurReelle`, `hauteurReelle`, `cjHaut/Bas/Gauche/Droite`,
+  `modePose`, `profondeurTableau`, `natureSupport`) ; 4 nouveaux blocs sourcés NF DTU 36.5 : `preparation_steps` (8),
+  `execution_checklist` (10), `non_conformite_causes` (10), `indicateurs` (4).
+- **`DictionaryService`** : `MetreFieldDef` gagne `required`/`min`/`max` (nullable, rétrocompatible) ; nouvelles
+  classes `PreparationStep`/`ChecklistItem`/`NonConformiteCause`/`MetierIndicateur` + méthodes associées, toutes
+  renvoient une liste vide (jamais d'exception) si le métier n'a pas encore ce contenu.
+- **`measurement_form_screen.dart`** : `_validateProduct()` bloque la navigation (SnackBar rouge) si un champ
+  `required` est vide ou hors bornes `min`/`max` ; migré vers `DocumentEngine.generateAndShare` (suppression
+  d'~340 lignes de génération PDF dupliquée).
+- **`document_templates.json`** + **`lib/services/document_engine.dart`** (nouveaux) : moteur générique — un builder
+  par *type* de section (header/client/chantier/elements/checklist/signature), jamais par document. 3 modèles :
+  `bon_commande` (migration de l'existant), `bon_preparation` (checklist `preparation_steps`), `rapport_autocontrole`
+  (checklist `execution_checklist`). Upload Storage + trace Firestore (`devis/{id}/documents`) en best-effort (ne
+  bloque jamais l'impression si ça échoue).
+- **`firestore.rules`** : règle `documents/{documentId}` sous `devis/{devisId}`, calquée sur `auditLogs` (lecture +
+  création ouvertes aux membres du workspace, update/delete `if false`) — **déployée**.
+- **Boutons ajoutés** : "Bon de préparation" dans `metreur_home_screen.dart` (visible si statut À planifier/En pose),
+  "Rapport d'autocontrôle" dans `poseurs_home_screen.dart` (visible avant clôture). `_ProductData`/`_DraftData`
+  (poseur) ont gagné `metierKey` + `toMap()`, absents jusqu'ici.
+
+### ✅ Testé en direct (workspace "Ambiance Alu", `commercial@workit-test.fr` + `metreur@workit-test.fr`)
+Créé un devis neuf ("Phase2Test", menuiserie_aluminium/menuiseries_exterieures) pour avoir un `metierKey` propre (les
+anciens devis de test type "##9893 Claude Testeur" n'en portent pas → `_fieldDefs` vide, écran de métré générique de
+repli, sans crash — confirme au passage le comportement gracieux attendu pour un métier/produit sans contenu Phase 2).
+Sur ce nouveau devis, confirmé en direct :
+- Validation `required` : soumission vide → SnackBar *"Largeur tableau réelle (3 points, plus petite) est
+  obligatoire."* (vocabulaire sourcé, pas générique).
+- Validation `min` : largeur=100 → *"...doit être supérieur ou égal à 300."*
+- Plusieurs champs `required` distincts enforced (`modePose` bloque aussi).
+- Bouton "Bon de préparation" : génère le PDF sans crash (logs navigateur confirmant `pdf.save()`), ouvre le
+  dialogue d'impression natif du navigateur comme avant.
+
+`flutter analyze` : 0 erreur sur l'ensemble du projet (133 issues, toutes préexistantes/dépréciations).
+
+### ⚠️ Limites de cette session (honnêtes, pas glissées sous le tapis)
+- **App Check bloque probablement l'écriture Storage/Firestore de traçabilité en local** (`FirebaseError: AppCheck:
+  ReCAPTCHA error`, visible dans la console à chaque génération de document) — comportement attendu de
+  l'environnement de dev (pas de vraie clé reCAPTCHA configurée, cf. Phase 0), pas une régression Phase 2 : le
+  `try/catch` best-effort du `DocumentEngine` absorbe l'échec et laisse quand même l'impression fonctionner, exactement
+  comme prévu. **Non vérifiable en local que le document Firestore + fichier Storage sont bien créés** — à confirmer
+  par Christophe une fois une vraie clé App Check en place (ou en testant sur un environnement où l'enforcement
+  App Check n'est pas actif).
+- Génération complète de bout en bout (métré rempli + les 3 documents + vérification visuelle du contenu checklist)
+  non menée à 100% : la fenêtre du navigateur pilotée par l'automatisation a cessé de répondre au clic après avoir
+  déclenché le dialogue d'impression natif (même limitation connue que les sélecteurs de fichiers natifs, déjà
+  rencontrée en Phase 1) — contourné en ouvrant un nouvel onglet, mais la vérification exhaustive des 3 documents
+  n'a pas pu être poursuivie jusqu'au bout dans le temps de cette session.
+- Autre limite d'environnement rencontrée : le scroll de liste ne fonctionne pas de façon fiable via l'automatisation
+  navigateur sur cette session (cartes/boutons parfois hors-champ) — contourné en acceptant les demandes précédentes
+  dans la liste pour faire remonter la carte ciblée, sans impact sur le code.
+- 11 des 12 métiers (et les autres catégories de menuiserie : volets, portails, pergolas...) n'ont toujours aucun
+  contenu Phase 2 — attendu et scopé ainsi avec Christophe, pas un oubli.
+
+⚠️ Devis de test laissé dans "Ambiance Alu" : "##8091 - Phase2Test" (menuiserie_aluminium, statut Acceptée) — à
+nettoyer ou réutiliser pour poursuivre les tests Phase 2 (rapport d'autocontrôle poseur pas encore testé en direct).
+
+### Reste à faire (prochaine session)
+- Terminer le test manuel : remplir le métré de "Phase2Test" jusqu'au bout, générer les 3 documents et vérifier
+  visuellement le contenu (checklist bien affichée, données correctes), confirmer la trace Firestore/Storage une
+  fois App Check non-bloquant.
+- Tester le bouton "Rapport d'autocontrôle" côté poseur en conditions réelles (jamais cliqué cette session).
+- Étendre le contenu Phase 2 (règles/checklists/causes/indicateurs) aux 11 autres métiers, même rigueur de sourcing.
+- Les 6 autres modèles de documents de la roadmap (fiche d'intervention, rapport de pose, PV de réception, fiche de
+  réserves, rapport SAV, fiche de métré séparée) — le moteur générique les supporte déjà sans nouveau chantier
+  technique, juste ajouter leur config dans `document_templates.json`.
+
+---
 
 ## ✅ Session 2026-08-04 — Phase 1 : moteur de workflow générique + historique immuable des statuts
 

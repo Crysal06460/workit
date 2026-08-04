@@ -12,6 +12,9 @@ class MetreFieldDef {
     required this.type,
     this.unit,
     this.choices = const [],
+    this.required = false,
+    this.min,
+    this.max,
   });
 
   /// Clé de stockage de la valeur saisie (ex: 'largeur', 'cjHaut').
@@ -23,6 +26,13 @@ class MetreFieldDef {
   final String? unit;
   final List<String> choices;
 
+  /// Contraintes de validation optionnelles (absentes pour la plupart des
+  /// champs existants — pas de régression tant qu'un métier ne les déclare
+  /// pas explicitement dans le dictionnaire).
+  final bool required;
+  final num? min;
+  final num? max;
+
   factory MetreFieldDef.fromMap(Map<String, dynamic> map) {
     return MetreFieldDef(
       key: map['key']?.toString() ?? '',
@@ -30,8 +40,64 @@ class MetreFieldDef {
       type: map['type']?.toString() ?? 'text',
       unit: map['unit']?.toString(),
       choices: (map['choices'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      required: map['required'] == true,
+      min: map['min'] as num?,
+      max: map['max'] as num?,
     );
   }
+}
+
+/// Étape de préparation avant intervention terrain (bon de préparation),
+/// déclarée au niveau du métier : `metiers.<metier>.preparation_steps[]`.
+class PreparationStep {
+  const PreparationStep({required this.key, required this.label});
+  final String key;
+  final String label;
+
+  factory PreparationStep.fromMap(Map<String, dynamic> map) => PreparationStep(
+        key: map['key']?.toString() ?? '',
+        label: map['label']?.toString() ?? '',
+      );
+}
+
+/// Point de contrôle d'une checklist d'exécution/autocontrôle terrain,
+/// déclaré au niveau du métier : `metiers.<metier>.execution_checklist[]`.
+class ChecklistItem {
+  const ChecklistItem({required this.key, required this.label});
+  final String key;
+  final String label;
+
+  factory ChecklistItem.fromMap(Map<String, dynamic> map) => ChecklistItem(
+        key: map['key']?.toString() ?? '',
+        label: map['label']?.toString() ?? '',
+      );
+}
+
+/// Cause de non-conformité structurée propre au métier :
+/// `metiers.<metier>.non_conformite_causes[]`.
+class NonConformiteCause {
+  const NonConformiteCause({required this.key, required this.label});
+  final String key;
+  final String label;
+
+  factory NonConformiteCause.fromMap(Map<String, dynamic> map) => NonConformiteCause(
+        key: map['key']?.toString() ?? '',
+        label: map['label']?.toString() ?? '',
+      );
+}
+
+/// Indicateur métier (tableau de bord) : `metiers.<metier>.indicateurs[]`.
+class MetierIndicateur {
+  const MetierIndicateur({required this.key, required this.label, this.unit});
+  final String key;
+  final String label;
+  final String? unit;
+
+  factory MetierIndicateur.fromMap(Map<String, dynamic> map) => MetierIndicateur(
+        key: map['key']?.toString() ?? '',
+        label: map['label']?.toString() ?? '',
+        unit: map['unit']?.toString(),
+      );
 }
 
 /// Champs de métré d'une catégorie de produit, avec le mode de rendu à
@@ -171,4 +237,47 @@ class DictionaryService {
     if (metre is! Map) return null;
     return MetreCategoryFields.fromMap(Map<String, dynamic>.from(metre));
   }
+
+  /// Version du schéma du métier (`metiers.<metier>.metierVersion`), pour
+  /// traçabilité (stampée sur le devis au moment du métré). `1` par défaut
+  /// pour un métier qui ne déclare pas encore cet attribut.
+  Future<int> metierVersion(String metierKey) async {
+    final node = await _metierNode(metierKey);
+    final v = node?['metierVersion'];
+    return v is int ? v : (int.tryParse(v?.toString() ?? '') ?? 1);
+  }
+
+  Future<List<T>> _listFor<T>(
+    String metierKey,
+    String jsonKey,
+    T Function(Map<String, dynamic>) fromMap,
+  ) async {
+    final node = await _metierNode(metierKey);
+    final raw = node?[jsonKey];
+    if (raw is! List) return const [];
+    return raw
+        .whereType<Map>()
+        .map((e) => fromMap(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  /// Étapes de préparation à prévoir avant l'intervention, pour le bon de
+  /// préparation. Liste vide si le métier n'en déclare pas encore.
+  Future<List<PreparationStep>> preparationStepsFor(String metierKey) =>
+      _listFor(metierKey, 'preparation_steps', PreparationStep.fromMap);
+
+  /// Points de contrôle de la checklist d'exécution/autocontrôle terrain.
+  /// Liste vide si le métier n'en déclare pas encore.
+  Future<List<ChecklistItem>> executionChecklistFor(String metierKey) =>
+      _listFor(metierKey, 'execution_checklist', ChecklistItem.fromMap);
+
+  /// Causes de non-conformité structurées propres au métier.
+  /// Liste vide si le métier n'en déclare pas encore.
+  Future<List<NonConformiteCause>> nonConformiteCausesFor(String metierKey) =>
+      _listFor(metierKey, 'non_conformite_causes', NonConformiteCause.fromMap);
+
+  /// Indicateurs métier pour le futur tableau de bord (Phase 6).
+  /// Liste vide si le métier n'en déclare pas encore.
+  Future<List<MetierIndicateur>> indicateursFor(String metierKey) =>
+      _listFor(metierKey, 'indicateurs', MetierIndicateur.fromMap);
 }

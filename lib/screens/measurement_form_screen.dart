@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../core/dictionary_service.dart';
+import '../services/document_engine.dart';
 
 const Color _bg = Color(0xFF07090D);
 const Color _accent = Color(0xFF00E676); // Metreur Green
 const Color _cardBg = Color(0xFF13161C);
 
-// PDF accent color matching WorkIt branding
-final _pdfAccent = PdfColor.fromHex('#00F795');
-const _pdfGrey = PdfColors.grey200;
-const _pdfDarkGrey = PdfColors.grey600;
-const _pdfBlack = PdfColors.black;
-
 class MeasurementFormScreen extends StatefulWidget {
-  const MeasurementFormScreen({super.key, required this.draftData, this.initialIndex = 0});
+  const MeasurementFormScreen({
+    super.key,
+    required this.draftData,
+    required this.workspaceId,
+    required this.devisId,
+    this.initialIndex = 0,
+  });
 
   final Map<String, dynamic> draftData;
+  final String workspaceId;
+  final String devisId;
   final int initialIndex;
 
   @override
@@ -43,6 +43,11 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
   /// tant que non chargés, ou si le produit n'a pas de métier/catégorie
   /// reconnue (repli sur le footer générique uniquement).
   final Map<int, MetreCategoryFields?> _fieldDefs = {};
+
+  /// Version du dictionnaire (`metierVersion`) active pour le métier de
+  /// chaque produit au moment du métré — stampée sur le produit pour
+  /// traçabilité (voir `_buildProductsWithMeasurements`).
+  final Map<int, int> _metierVersions = {};
 
   // Valeurs saisies par produit, indexées par clé de champ (celles du
   // dictionnaire + les clés universelles 'couleur'/'quantite'/'ref'/'note').
@@ -87,6 +92,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
         continue;
       }
       _fieldDefs[i] = await DictionaryService.instance.metreFieldsFor(metierKey, categoryKey);
+      _metierVersions[i] = await DictionaryService.instance.metierVersion(metierKey);
     }
     if (mounted) setState(() => _loadingFields = false);
   }
@@ -145,6 +151,35 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
     });
   }
 
+  /// Vérifie les contraintes `required`/`min`/`max` déclarées dans le
+  /// dictionnaire pour le produit [index]. Retourne le premier message
+  /// d'erreur rencontré, ou `null` si tout est valide. Les champs sans
+  /// contrainte (la grande majorité, pour les métiers qui n'en déclarent pas
+  /// encore) ne sont jamais bloquants.
+  String? _validateProduct(int index) {
+    final fields = _fieldDefs[index]?.fields ?? const <MetreFieldDef>[];
+    final values = _measurements[index] ?? const <String, String>{};
+    for (final field in fields) {
+      final raw = values[field.key];
+      if (field.required && (raw == null || raw.trim().isEmpty)) {
+        return '${field.label} est obligatoire.';
+      }
+      if (field.type == 'number' && raw != null && raw.trim().isNotEmpty) {
+        final numValue = num.tryParse(raw.trim());
+        if (numValue == null) {
+          return '${field.label} doit être un nombre.';
+        }
+        if (field.min != null && numValue < field.min!) {
+          return '${field.label} doit être supérieur ou égal à ${field.min}.';
+        }
+        if (field.max != null && numValue > field.max!) {
+          return '${field.label} doit être inférieur ou égal à ${field.max}.';
+        }
+      }
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   // PDF helpers
   // ---------------------------------------------------------------------------
@@ -156,6 +191,10 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
     final result = <Map<String, dynamic>>[];
     for (int i = 0; i < _products.length; i++) {
       final base = Map<String, dynamic>.from(_products[i]);
+      final dictionaryVersion = _metierVersions[i];
+      if (dictionaryVersion != null) {
+        base['dictionaryVersion'] = dictionaryVersion;
+      }
       final m = _measurements[i];
       if (m != null) {
         m.forEach((key, value) {
@@ -172,343 +211,20 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
     return result;
   }
 
-  String _fmt(dynamic value, {String fallback = '—'}) {
-    if (value == null) return fallback;
-    final s = value.toString().trim();
-    return s.isEmpty ? fallback : s;
-  }
-
-  String _today() {
-    final now = DateTime.now();
-    final d = now.day.toString().padLeft(2, '0');
-    final mo = now.month.toString().padLeft(2, '0');
-    return '$d/${mo}/${now.year}';
-  }
-
-  // -- Section builders --
-
-  pw.Widget _buildPdfHeader() {
-    return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: pw.BoxDecoration(
-        color: _pdfAccent,
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-      ),
-      child: pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
-            'WorkIt',
-            style: pw.TextStyle(
-              fontSize: 28,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.black,
-            ),
-          ),
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
-            children: [
-              pw.Text(
-                'BON DE COMMANDE — MÉTRÉ',
-                style: pw.TextStyle(
-                  fontSize: 13,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.black,
-                ),
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                'Date : ${_today()}',
-                style: const pw.TextStyle(fontSize: 10, color: PdfColors.black),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildSectionTitle(String title) {
-    return pw.Container(
-      margin: const pw.EdgeInsets.only(bottom: 8),
-      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: pw.BoxDecoration(
-        color: _pdfAccent,
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-      ),
-      child: pw.Text(
-        title.toUpperCase(),
-        style: pw.TextStyle(
-          fontSize: 10,
-          fontWeight: pw.FontWeight.bold,
-          color: PdfColors.black,
-        ),
-      ),
-    );
-  }
-
-  pw.Widget _buildInfoRow(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 3),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.SizedBox(
-            width: 110,
-            child: pw.Text(
-              label,
-              style: pw.TextStyle(
-                fontSize: 9,
-                fontWeight: pw.FontWeight.bold,
-                color: _pdfDarkGrey,
-              ),
-            ),
-          ),
-          pw.Expanded(
-            child: pw.Text(
-              value,
-              style: const pw.TextStyle(fontSize: 9, color: PdfColors.black),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildPdfClientSection() {
-    final d = widget.draftData;
-    final firstName = _fmt(d['clientFirstName']);
-    final lastName = _fmt(d['clientName']);
-    final fullName = (firstName == '—' && lastName == '—')
-        ? '—'
-        : [if (firstName != '—') firstName, if (lastName != '—') lastName].join(' ');
-
-    final street = _fmt(d['street']);
-    final postal = _fmt(d['postal']);
-    final city = _fmt(d['city']);
-    final addressParts = [
-      if (street != '—') street,
-      if (postal != '—' || city != '—') '${postal != '—' ? postal : ''} ${city != '—' ? city : ''}'.trim(),
-    ];
-    final address = addressParts.isEmpty ? '—' : addressParts.join(', ');
-
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color: _pdfGrey,
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          _buildSectionTitle('Client'),
-          _buildInfoRow('Nom', fullName),
-          _buildInfoRow('Adresse', address),
-          _buildInfoRow('Téléphone', _fmt(d['phone'])),
-          _buildInfoRow('Email', _fmt(d['email'])),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildPdfChantierSection() {
-    final d = widget.draftData;
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color: _pdfGrey,
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          _buildSectionTitle('Chantier'),
-          _buildInfoRow('Type de chantier', _fmt(d['chantierType'])),
-          _buildInfoRow('Type d\'habitation', _fmt(d['typeHabitation'])),
-          _buildInfoRow('Accessibilité', _fmt(d['accessibilite'])),
-          if (_fmt(d['chantierNotes']) != '—')
-            _buildInfoRow('Notes commerciales', _fmt(d['chantierNotes'])),
-          if (_fmt(d['commentaire']) != '—')
-            _buildInfoRow('Commentaire', _fmt(d['commentaire'])),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildPdfElementsSection(List<Map<String, dynamic>> products) {
-    final elements = <pw.Widget>[
-      _buildSectionTitle('Éléments — ${products.length} article(s)'),
-    ];
-
-    for (int i = 0; i < products.length; i++) {
-      final p = products[i];
-      final isEven = i % 2 == 0;
-      final bgColor = isEven ? PdfColors.white : _pdfGrey;
-
-      // Build type string
-      final typeParts = [
-        _fmt(p['categoryKey']),
-        _fmt(p['typeProduit']),
-        _fmt(p['sousCategorie']),
-        _fmt(p['variante']),
-      ].where((s) => s != '—').toList();
-      final typeStr = typeParts.isEmpty ? '—' : typeParts.join(' > ');
-
-      // Couleur
-      final couleur = _fmt(p['couleur']);
-      final couleurDetail = _fmt(p['couleurDetail']);
-      final couleurStr = couleur == '—'
-          ? '—'
-          : (couleurDetail != '—' ? '$couleur ($couleurDetail)' : couleur);
-
-      // Dimensions prévues
-      final lPrev = _fmt(p['largeur']);
-      final hPrev = _fmt(p['hauteur']);
-      final unite = _fmt(p['unite'], fallback: 'mm');
-      final prevStr = (lPrev == '—' && hPrev == '—')
-          ? '—'
-          : '${lPrev == '—' ? '?' : lPrev} x ${hPrev == '—' ? '?' : hPrev} $unite';
-
-      // Champs de métré spécifiques au métier/catégorie (dictionnaire),
-      // affichés génériquement avec leur libellé ; repli sur la clé brute
-      // si la catégorie n'a pas (ou plus) de définition connue.
-      final fieldDef = _fieldDefs[i];
-      final metreRows = <pw.Widget>[];
-      if (fieldDef != null) {
-        for (final field in fieldDef.fields) {
-          final value = p[field.key];
-          if (value == null || value.toString().trim().isEmpty) continue;
-          final unitSuffix = field.unit != null ? ' ${field.unit}' : '';
-          metreRows.add(_buildInfoRow(field.label, '$value$unitSuffix'));
-        }
-      }
-
-      // Note & ref
-      final note = _fmt(p['note']);
-      final ref = _fmt(p['ref']);
-      final qty = _fmt(p['quantite']);
-
-      elements.add(
-        pw.Container(
-          margin: const pw.EdgeInsets.only(bottom: 6),
-          padding: const pw.EdgeInsets.all(10),
-          decoration: pw.BoxDecoration(
-            color: bgColor,
-            border: pw.Border.all(color: PdfColors.grey300),
-            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
-          ),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              // Element header
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Élément ${i + 1}',
-                    style: pw.TextStyle(
-                      fontSize: 11,
-                      fontWeight: pw.FontWeight.bold,
-                      color: _pdfAccent,
-                    ),
-                  ),
-                  if (ref != '—')
-                    pw.Text(
-                      ref,
-                      style: pw.TextStyle(
-                        fontSize: 9,
-                        fontStyle: pw.FontStyle.italic,
-                        color: _pdfDarkGrey,
-                      ),
-                    ),
-                ],
-              ),
-              pw.Divider(color: PdfColors.grey300, thickness: 0.5),
-              // Type
-              _buildInfoRow('Type', typeStr),
-              _buildInfoRow('Couleur', couleurStr),
-              _buildInfoRow('Dim. prévues', prevStr),
-              // Champs de métré spécifiques (dimensions réelles, couvre-joints,
-              // ou tout autre champ propre au métier/catégorie)
-              ...metreRows,
-              _buildInfoRow('Quantité', qty),
-              if (note != '—') _buildInfoRow('Note métreur', note),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: elements,
-    );
-  }
-
-  pw.Widget _buildPdfFooter() {
-    return pw.Container(
-      padding: const pw.EdgeInsets.all(12),
-      decoration: pw.BoxDecoration(
-        color: _pdfGrey,
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(
-            'Document généré par WorkIt le ${_today()}',
-            style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
-          ),
-          pw.SizedBox(height: 16),
-          pw.Row(
-            children: [
-              pw.Text(
-                'Visa métreur :',
-                style: pw.TextStyle(
-                  fontSize: 10,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(width: 120),
-              pw.Container(
-                width: 150,
-                height: 1,
-                color: PdfColors.black,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
+  /// Génère le "bon de commande" via le moteur de documents générique
+  /// (`DocumentEngine`, config `assets/dictionnaire_workit/
+  /// document_templates.json`) — remplace l'ancienne génération PDF codée en
+  /// dur ici, comportement visuel inchangé pour l'utilisateur.
   Future<void> _generateAndPrintPdf() async {
     setState(() => _generating = true);
     try {
-      final pdf = pw.Document();
-      final allProducts = _buildProductsWithMeasurements();
-
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(32),
-          build: (context) => [
-            _buildPdfHeader(),
-            pw.SizedBox(height: 20),
-            _buildPdfClientSection(),
-            pw.SizedBox(height: 16),
-            _buildPdfChantierSection(),
-            pw.SizedBox(height: 16),
-            _buildPdfElementsSection(allProducts),
-            pw.SizedBox(height: 24),
-            _buildPdfFooter(),
-          ],
-        ),
-      );
-
-      await Printing.layoutPdf(
-        onLayout: (format) async => pdf.save(),
-        name: 'bon_commande_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      await DocumentEngine.generateAndShare(
+        templateId: 'bon_commande',
+        workspaceId: widget.workspaceId,
+        devisId: widget.devisId,
+        devisData: widget.draftData,
+        generatedByRole: 'metreur',
+        products: _buildProductsWithMeasurements(),
       );
     } finally {
       if (mounted) setState(() => _generating = false);
@@ -586,6 +302,13 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
               total: _products.length,
               current: _currentIndex,
               onNext: () {
+                final error = _validateProduct(_currentIndex);
+                if (error != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(error), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
                 if (_currentIndex < _products.length - 1) {
                   _pageController.nextPage(
                     duration: const Duration(milliseconds: 300),

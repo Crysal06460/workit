@@ -13,6 +13,7 @@ import 'sign_in_screen.dart';
 import 'settings_screen.dart';
 import '../core/theme/app_colors.dart';
 import '../services/devis_service.dart';
+import '../services/document_engine.dart';
 
 const Color _metreurBg = AppColors.background;
 const Color _metreurCard = AppColors.surface;
@@ -1920,11 +1921,39 @@ class _MeasureRequestSummary extends StatefulWidget {
 
 class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
   DateTime? meetingAt;
+  bool _generatingDoc = false;
 
   @override
   void initState() {
     super.initState();
     meetingAt = widget.data.meetingAt;
+  }
+
+  Future<void> _generateBonPreparation() async {
+    final data = widget.data;
+    final workspaceId = data.workspaceId ?? widget.workspaceId ?? '';
+    setState(() => _generatingDoc = true);
+    try {
+      await DocumentEngine.generateAndShare(
+        templateId: 'bon_preparation',
+        workspaceId: workspaceId,
+        devisId: data.id,
+        devisData: (data.draft ?? const _QuoteDraft()).toMap(),
+        generatedByRole: 'metreur',
+        products: (data.draft?.products ?? const <_ProductFormData>[]).map((e) => e.toMap()).toList(),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Impossible de générer le bon de préparation.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generatingDoc = false);
+    }
   }
 
   Future<void> _openMeasurementForm(int initialIndex) async {
@@ -1935,6 +1964,8 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         builder: (_) => MeasurementFormScreen(
           draftData: (data.draft ?? const _QuoteDraft()).toMap(),
           initialIndex: initialIndex,
+          workspaceId: data.workspaceId ?? widget.workspaceId ?? '',
+          devisId: data.id,
         ),
       ),
     );
@@ -2290,6 +2321,30 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                 ),
               ),
             ),
+            if (data.status == 'À planifier' || data.status == 'En pose')
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: _metreurAccent),
+                      foregroundColor: _metreurAccent,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _generatingDoc ? null : _generateBonPreparation,
+                    icon: _generatingDoc
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: _metreurAccent),
+                          )
+                        : const Icon(Icons.description_outlined),
+                    label: const Text('Bon de préparation'),
+                  ),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
               child: Row(

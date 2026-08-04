@@ -87,6 +87,7 @@
   },
   "metiers": {
     "menuiserie_aluminium": {
+      "metierVersion": 1,
       "label": "Menuiserie Aluminium / PVC / Bois / Mixte",
       "categories": {
         "menuiseries_exterieures": {
@@ -351,15 +352,15 @@
         "menuiseries_exterieures": {
           "render": "schematic_ouverture",
           "fields": [
-            {"key": "largeurReelle", "label": "Largeur tableau réelle (3 points, plus petite)", "type": "number", "unit": "mm"},
-            {"key": "hauteurReelle", "label": "Hauteur tableau réelle (3 points, plus petite)", "type": "number", "unit": "mm"},
-            {"key": "cjHaut", "label": "Couvre-joint Haut", "type": "number", "unit": "mm"},
-            {"key": "cjBas", "label": "Couvre-joint Bas", "type": "number", "unit": "mm"},
-            {"key": "cjGauche", "label": "Couvre-joint Gauche", "type": "number", "unit": "mm"},
-            {"key": "cjDroite", "label": "Couvre-joint Droite", "type": "number", "unit": "mm"},
-            {"key": "modePose", "label": "Mode de pose", "type": "dropdown", "choices": ["Applique intérieure", "Applique extérieure", "Tunnel", "Rénovation sur dormant conservé"]},
-            {"key": "profondeurTableau", "label": "Profondeur du tableau / épaisseur du mur", "type": "number", "unit": "mm"},
-            {"key": "natureSupport", "label": "Nature du support de fixation", "type": "dropdown", "choices": ["Maçonnerie", "Béton", "Ossature bois", "Ossature métallique"]},
+            {"key": "largeurReelle", "label": "Largeur tableau réelle (3 points, plus petite)", "type": "number", "unit": "mm", "required": true, "min": 300, "max": 4000},
+            {"key": "hauteurReelle", "label": "Hauteur tableau réelle (3 points, plus petite)", "type": "number", "unit": "mm", "required": true, "min": 300, "max": 3000},
+            {"key": "cjHaut", "label": "Couvre-joint Haut", "type": "number", "unit": "mm", "min": 0, "max": 200},
+            {"key": "cjBas", "label": "Couvre-joint Bas", "type": "number", "unit": "mm", "min": 0, "max": 200},
+            {"key": "cjGauche", "label": "Couvre-joint Gauche", "type": "number", "unit": "mm", "min": 0, "max": 200},
+            {"key": "cjDroite", "label": "Couvre-joint Droite", "type": "number", "unit": "mm", "min": 0, "max": 200},
+            {"key": "modePose", "label": "Mode de pose", "type": "dropdown", "choices": ["Applique intérieure", "Applique extérieure", "Tunnel", "Rénovation sur dormant conservé"], "required": true},
+            {"key": "profondeurTableau", "label": "Profondeur du tableau / épaisseur du mur", "type": "number", "unit": "mm", "min": 50, "max": 500},
+            {"key": "natureSupport", "label": "Nature du support de fixation", "type": "dropdown", "choices": ["Maçonnerie", "Béton", "Ossature bois", "Ossature métallique"], "required": true},
             {"key": "deposeAncien", "label": "Dépose d'un ancien dormant nécessaire", "type": "boolean"},
             {"key": "sensOuverture", "label": "Sens d'ouverture à confirmer", "type": "dropdown", "choices": ["Gauche", "Droite", "Sans objet"]},
             {"key": "accesChantier", "label": "Contraintes d'accès chantier", "type": "dropdown", "choices": ["RDC", "Étage - échafaudage", "Étage - nacelle nécessaire"]},
@@ -486,6 +487,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_dimensions_tableau", "label": "Vérifier les dimensions du tableau au métré (3 points en largeur, 3 points en hauteur)"},
+        {"key": "verif_aplomb_equerrage_support", "label": "Vérifier l'aplomb et l'équerrage du support"},
+        {"key": "verif_support_sec_propre", "label": "Vérifier que le support est sec, propre et exempt de traces d'humidité"},
+        {"key": "prevoir_depose_ancien", "label": "Prévoir la dépose de l'ancienne menuiserie (scie sabre/oscillante, disqueuse) et l'évacuation des déchets"},
+        {"key": "preparer_calage", "label": "Préparer les cales de calage d'assise et de champ"},
+        {"key": "reunir_materiel_calfeutrement", "label": "Réunir le matériel de calfeutrement (compribande, cordon de silicone) et les EPI"},
+        {"key": "verif_appui_seuil", "label": "Vérifier l'état de l'appui/seuil (pente d'écoulement, rejingot si nécessaire)"},
+        {"key": "proteger_chantier", "label": "Prévoir la protection du chantier et des abords"}
+      ],
+      "execution_checklist": [
+        {"key": "aplomb_verifie", "label": "Aplomb vérifié"},
+        {"key": "equerrage_verifie", "label": "Équerrage vérifié (diagonales égales)"},
+        {"key": "calage_assise_reparti", "label": "Calage d'assise correctement réparti"},
+        {"key": "fixations_entraxe_conforme", "label": "Fixations conformes à l'entraxe préconisé (tous les 60 à 80 cm) et adaptées au support"},
+        {"key": "jeu_peripherique_comble", "label": "Jeu périphérique comblé (compribande ou mousse)"},
+        {"key": "cordon_silicone_pose", "label": "Cordon de silicone périphérique posé côté extérieur"},
+        {"key": "bavette_pente_ecoulement", "label": "Bavette/cornière d'appui posée avec pente d'écoulement vers l'extérieur"},
+        {"key": "absence_traces_humidite", "label": "Absence de traces d'humidité au tableau"},
+        {"key": "fonctionnement_ouvrants", "label": "Fonctionnement des ouvrants vérifié (ouverture, fermeture, verrouillage)"},
+        {"key": "nettoyage_evacuation_dechets", "label": "Nettoyage du poste de travail et évacuation des déchets"}
+      ],
+      "non_conformite_causes": [
+        {"key": "defaut_calfeutrement", "label": "Défaut de calfeutrement / jeu périphérique non comblé"},
+        {"key": "fixations_insuffisantes", "label": "Fixations insuffisantes ou entraxe non conforme"},
+        {"key": "tableau_non_plan", "label": "Tableau non plan ou non d'équerre (dormant vrillé au serrage)"},
+        {"key": "support_humide", "label": "Support humide au moment de la pose"},
+        {"key": "pente_seuil_absente", "label": "Absence ou insuffisance de pente du seuil / absence de rejingot"},
+        {"key": "larmier_absent", "label": "Absence de larmier"},
+        {"key": "produit_endommage_livraison", "label": "Produit endommagé à la livraison (casse vitrage, choc profilé)"},
+        {"key": "erreur_metre", "label": "Erreur de métré"},
+        {"key": "erreur_commande", "label": "Erreur de commande (référence, couleur, quantité)"},
+        {"key": "client_absent_acces_impossible", "label": "Client absent / accès chantier impossible"}
+      ],
+      "indicateurs": [
+        {"key": "delai_moyen_metre_pose", "label": "Délai moyen métré → pose", "unit": "jours"},
+        {"key": "taux_casse_livraison", "label": "Taux de casse/dommage à la livraison", "unit": "%"},
+        {"key": "taux_non_conformite_autocontrole", "label": "Taux de non-conformité à l'autocontrôle", "unit": "%"},
+        {"key": "taux_sav_post_pose", "label": "Taux de SAV post-pose", "unit": "%"}
+      ],
       "options": {
         "couleurs": {
           "ral": "Tous RAL",

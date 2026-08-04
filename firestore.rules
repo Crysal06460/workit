@@ -146,6 +146,18 @@ service cloud.firestore {
           );
           allow write: if false;
         }
+
+        // ── Documents générés (bon de commande, bon de préparation, ────
+        // rapport d'autocontrôle...) — créés côté client par DocumentEngine
+        // (contrairement à statusHistory, pas via Cloud Function), jamais
+        // modifiés ni supprimés après coup.
+        match /documents/{documentId} {
+          allow read, create: if isAuth() && (
+            get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+            myWorkspaceId() == workspaceId
+          );
+          allow update, delete: if false;
+        }
       }
 
       // ── Sous-collection invites/ ────────────────────────────────────────

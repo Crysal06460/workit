@@ -1,0 +1,35 @@
+{
+  "bon_commande": {
+    "version": 1,
+    "title": "BON DE COMMANDE — MÉTRÉ",
+    "sections": [
+      { "type": "header" },
+      { "type": "client" },
+      { "type": "chantier" },
+      { "type": "elements", "showMeasurements": true },
+      { "type": "signature", "label": "Visa métreur :" }
+    ]
+  },
+  "bon_preparation": {
+    "version": 1,
+    "title": "BON DE PRÉPARATION",
+    "sections": [
+      { "type": "header" },
+      { "type": "client" },
+      { "type": "chantier" },
+      { "type": "checklist", "source": "preparation_steps", "title": "Préparation à prévoir" },
+      { "type": "elements", "showMeasurements": false }
+    ]
+  },
+  "rapport_autocontrole": {
+    "version": 1,
+    "title": "RAPPORT D'AUTOCONTRÔLE",
+    "sections": [
+      { "type": "header" },
+      { "type": "client" },
+      { "type": "chantier" },
+      { "type": "checklist", "source": "execution_checklist", "title": "Points de contrôle" },
+      { "type": "signature", "label": "Signature poseur :" }
+    ]
+  }
+}

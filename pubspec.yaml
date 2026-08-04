@@ -75,6 +75,7 @@ flutter:
   assets:
     - assets/dictionnaire_workit/workit_dictionary.json
     - assets/dictionnaire_workit/metiers_workit.json
+    - assets/dictionnaire_workit/document_templates.json
     - assets/icons/
 
 

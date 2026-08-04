@@ -13,6 +13,7 @@ import 'settings_screen.dart';
 import 'sign_in_screen.dart';
 import '../core/theme/app_colors.dart';
 import '../services/devis_service.dart';
+import '../services/document_engine.dart';
 
 // ─── Palette ────────────────────────────────────────────────────────────────
 const Color _poseurBg = AppColors.background;
@@ -486,9 +487,36 @@ class _PoseurChantierDetail extends StatefulWidget {
 }
 
 class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
+  bool _generatingRapport = false;
+
   bool get _isReadOnly {
     final s = widget.data.metreurStatus;
     return s == 'Terminé' || s == 'Clôturé';
+  }
+
+  Future<void> _generateRapportAutocontrole() async {
+    final data = widget.data;
+    setState(() => _generatingRapport = true);
+    try {
+      await DocumentEngine.generateAndShare(
+        templateId: 'rapport_autocontrole',
+        workspaceId: widget.workspaceId,
+        devisId: data.id,
+        devisData: data.draft?.toMap() ?? const {},
+        generatedByRole: 'poseur',
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Impossible de générer le rapport d\'autocontrôle.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generatingRapport = false);
+    }
   }
 
   @override
@@ -728,48 +756,81 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                         color: AppColors.grey50),
                   ),
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
+                    SizedBox(
+                      width: double.infinity,
                       child: OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.orangeAccent,
-                          side: const BorderSide(
-                              color: Colors.orangeAccent, width: 1.5),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                          foregroundColor: _poseurAccent,
+                          side: BorderSide(color: _poseurAccent, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14)),
                         ),
-                        onPressed: () => _openRapportProbleme(context),
-                        icon: const Icon(Icons.warning_amber_outlined,
-                            size: 18),
+                        onPressed: _generatingRapport
+                            ? null
+                            : _generateRapportAutocontrole,
+                        icon: _generatingRapport
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: _poseurAccent),
+                              )
+                            : const Icon(Icons.fact_check_outlined, size: 18),
                         label: const Text(
-                          'Chantier pas terminé',
+                          'Rapport d\'autocontrôle',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _poseurAccent,
-                          foregroundColor: Colors.black,
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.orangeAccent,
+                              side: const BorderSide(
+                                  color: Colors.orangeAccent, width: 1.5),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                            ),
+                            onPressed: () => _openRapportProbleme(context),
+                            icon: const Icon(Icons.warning_amber_outlined,
+                                size: 18),
+                            label: const Text(
+                              'Chantier pas terminé',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
                         ),
-                        onPressed: () => _openRapportFin(context),
-                        icon: const Icon(Icons.check_circle_outline,
-                            size: 18),
-                        label: const Text(
-                          'Chantier terminé',
-                          style: TextStyle(fontWeight: FontWeight.w700),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _poseurAccent,
+                              foregroundColor: Colors.black,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                              elevation: 0,
+                            ),
+                            onPressed: () => _openRapportFin(context),
+                            icon: const Icon(Icons.check_circle_outline,
+                                size: 18),
+                            label: const Text(
+                              'Chantier terminé',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -2019,6 +2080,22 @@ class _DraftData {
   final String? accessibilite;
   final List<_ProductData> products;
 
+  Map<String, dynamic> toMap() => {
+        'clientName': clientName,
+        'clientFirstName': clientFirstName,
+        'street': street,
+        'postal': postal,
+        'city': city,
+        'phone': phone,
+        'email': email,
+        'commentaire': commentaire,
+        'chantierNotes': chantierNotes,
+        'chantierType': chantierType,
+        'typeHabitation': typeHabitation,
+        'accessibilite': accessibilite,
+        'products': products.map((e) => e.toMap()).toList(),
+      };
+
   factory _DraftData.fromMap(Map<String, dynamic> map) {
     final rawProducts = map['products'];
     final products = <_ProductData>[];
@@ -2052,6 +2129,7 @@ class _DraftData {
 
 class _ProductData {
   const _ProductData({
+    this.metierKey,
     this.categoryKey,
     this.sousCategorie,
     this.typeProduit,
@@ -2072,6 +2150,7 @@ class _ProductData {
     this.ref,
   });
 
+  final String? metierKey;
   final String? categoryKey;
   final String? sousCategorie;
   final String? typeProduit;
@@ -2092,6 +2171,7 @@ class _ProductData {
   final String? ref;
 
   factory _ProductData.fromMap(Map<String, dynamic> map) => _ProductData(
+        metierKey: map['metierKey']?.toString(),
         categoryKey: map['categoryKey']?.toString(),
         sousCategorie: map['sousCategorie']?.toString(),
         typeProduit: map['typeProduit']?.toString(),
@@ -2111,6 +2191,28 @@ class _ProductData {
         note: map['note']?.toString(),
         ref: map['ref']?.toString(),
       );
+
+  Map<String, dynamic> toMap() => {
+        'metierKey': metierKey,
+        'categoryKey': categoryKey,
+        'sousCategorie': sousCategorie,
+        'typeProduit': typeProduit,
+        'variante': variante,
+        'couleur': couleur,
+        'couleurDetail': couleurDetail,
+        'largeur': largeur,
+        'hauteur': hauteur,
+        'largeurReelle': largeurReelle,
+        'hauteurReelle': hauteurReelle,
+        'cjHaut': cjHaut,
+        'cjBas': cjBas,
+        'cjGauche': cjGauche,
+        'cjDroite': cjDroite,
+        'quantite': quantite,
+        'unite': unite,
+        'note': note,
+        'ref': ref,
+      };
 }
 
 // ════════════════════════════════════════════════════════════════════════════
