@@ -1923,14 +1923,21 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
   DateTime? meetingAt;
   bool _generatingDoc = false;
 
+  // Copie locale mutable de widget.data — widget.data lui-même ne change
+  // jamais (capturé une fois à l'ouverture de l'écran), donc sans cette
+  // copie, rouvrir "Modifier le métré" après une sauvegarde réaffichait un
+  // formulaire vide au lieu des valeurs qu'on venait d'enregistrer.
+  late _MeasureCardData _data;
+
   @override
   void initState() {
     super.initState();
+    _data = widget.data;
     meetingAt = widget.data.meetingAt;
   }
 
   Future<void> _generateBonPreparation() async {
-    final data = widget.data;
+    final data = _data;
     final workspaceId = data.workspaceId ?? widget.workspaceId ?? '';
     setState(() => _generatingDoc = true);
     try {
@@ -1957,7 +1964,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
   }
 
   Future<void> _openMeasurementForm(int initialIndex) async {
-    final data = widget.data;
+    final data = _data;
     // Navigate to Measurement Form and await result
     final updatedProducts = await Navigator.of(context).push(
       MaterialPageRoute(
@@ -1996,6 +2003,13 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         );
 
         if (mounted) {
+          setState(() {
+            _data = _data.copyWith(
+              draft: updatedDraft,
+              status: 'À commander',
+              updated: 'Métré terminé',
+            );
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Métré enregistré avec succès'),
@@ -2025,7 +2039,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
 
   @override
   Widget build(BuildContext context) {
-    final data = widget.data;
+    final data = _data;
     return Scaffold(
       backgroundColor: _metreurBg,
       appBar: AppBar(

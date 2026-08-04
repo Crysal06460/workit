@@ -1,7 +1,34 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-04 (soir) — **Phase 2 terminée côté code ET testée de bout en bout en direct**
-(métré → bon de commande → bon de préparation → rapport d'autocontrôle, cycle commercial→métreur→poseur complet)
+**Dernière mise à jour :** 2026-08-04 (soir) — Phase 2 terminée et testée de bout en bout + bug d'affichage
+"Modifier le métré" corrigé et vérifié en direct
+
+## ✅ Session 2026-08-04 (soir, suite) — Bug corrigé : "Modifier le métré" n'affichait pas les valeurs déjà saisies
+
+Repéré à la fin de la session Phase 2 précédente (voir plus bas) : rouvrir "Modifier le métré" sur un devis dont le
+métré venait d'être enregistré affichait un formulaire vide au lieu des valeurs saisies. La donnée elle-même était
+bien persistée (confirmé alors via la vue poseur) — c'était un bug d'affichage pur.
+
+**Cause** : `_MeasureRequestSummary` (dans `metreur_home_screen.dart`) est un `StatefulWidget` dont le champ `data`
+(`_MeasureCardData`, contenant le `draft` avec les mesures) est capturé une seule fois à l'ouverture de l'écran et
+ne change jamais — `widget.data` reste figé même après un aller-retour réussi vers `MeasurementFormScreen` qui
+renvoie les mesures à jour. `_openMeasurementForm` écrivait bien la donnée dans Firestore, mais ne mettait à jour
+que l'écran *parent* (`widget.onRefresh!()`), jamais l'écran de détail actuellement ouvert. Rouvrir "Modifier"
+depuis ce même écran repassait donc systématiquement l'ancien `widget.data.draft` (sans les mesures) à
+`MeasurementFormScreen`.
+
+**Correctif** : ajout d'une copie locale mutable `_data` dans `_MeasureRequestSummaryState` (initialisée depuis
+`widget.data`), utilisée partout à la place de `widget.data` dans cette classe. Après un enregistrement réussi du
+métré, `_data` est mise à jour via `setState` avec le nouveau `draft`/statut — cohérent avec ce qui est écrit en
+base (même `updatedDraft`, même statut `'À commander'`).
+
+**Testé en direct** (workspace "Ambiance Alu", `metreur@workit-test.fr`, devis "##9893 - Claude Testeur") : rempli
+le champ "Note" avec une valeur test unique ("TESTFIXBUG123") → "Terminer et Valider" → "Métré enregistré avec
+succès" → réouverture immédiate de "Modifier le métré" sur le même écran → le champ "Note" affiche bien
+"TESTFIXBUG123" (confirmé par capture zoomée). `flutter analyze` : 0 erreur, 26 issues sur le fichier (133 sur le
+projet, inchangé, toutes préexistantes).
+
+---
 
 ## ✅ Session 2026-08-04 (soir) — Phase 2 : dictionnaire métier étendu + moteur de documents
 
