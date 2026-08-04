@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -1038,6 +1038,15 @@ class _DevisButton extends StatelessWidget {
   }
 }
 
+// Photo choisie via image_picker, déjà lue en mémoire (Uint8List) — évite
+// dart:io File, qui n'est pas utilisable sur Flutter Web (Image.file et
+// Reference.putFile y échouent tous les deux).
+class _PickedPhoto {
+  const _PickedPhoto(this.bytes, this.name);
+  final Uint8List bytes;
+  final String name;
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // _RapportFinChantier (bottom sheet)
 // ════════════════════════════════════════════════════════════════════════════
@@ -1059,39 +1068,43 @@ class _RapportFinChantier extends StatefulWidget {
 class _RapportFinChantierState extends State<_RapportFinChantier> {
   DateTime _dateFin = DateTime.now();
   bool _reglementEffectue = false;
-  final List<File> _photos = [];
-  File? _attestation;
+  final List<_PickedPhoto> _photos = [];
+  _PickedPhoto? _attestation;
   bool _loading = false;
   bool _showAttestationError = false;
 
   Future<void> _pickPhotos() async {
     final picker = ImagePicker();
     final picked = await picker.pickMultiImage(imageQuality: 80);
-    if (picked.isNotEmpty && mounted) {
-      setState(() {
-        _photos.addAll(picked.map((e) => File(e.path)));
-      });
+    if (picked.isEmpty) return;
+    final photos = await Future.wait(
+      picked.map((e) async => _PickedPhoto(await e.readAsBytes(), e.name)),
+    );
+    if (mounted) {
+      setState(() => _photos.addAll(photos));
     }
   }
 
   Future<void> _pickAttestation() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
-    if (picked != null && mounted) {
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (mounted) {
       setState(() {
-        _attestation = File(picked.path);
+        _attestation = _PickedPhoto(bytes, picked.name);
         _showAttestationError = false;
       });
     }
   }
 
-  Future<String?> _uploadFile(File file, String folder) async {
+  Future<String?> _uploadFile(_PickedPhoto photo, String folder) async {
     try {
       final ref = FirebaseStorage.instanceFor(bucket: _storageBucket)
           .ref()
           .child(
-              '$folder/${widget.workspaceId}/${widget.devisId}/${DateTime.now().millisecondsSinceEpoch}_${file.path.split('/').last}');
-      await ref.putFile(file);
+              '$folder/${widget.workspaceId}/${widget.devisId}/${DateTime.now().millisecondsSinceEpoch}_${photo.name}');
+      await ref.putData(photo.bytes);
       return await ref.getDownloadURL();
     } catch (e) {
       debugPrint('Upload file error: $e');
@@ -1101,8 +1114,8 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
 
   Future<List<String>> _uploadPhotos() async {
     final urls = <String>[];
-    for (final file in _photos) {
-      final url = await _uploadFile(file, 'chantier_photos');
+    for (final photo in _photos) {
+      final url = await _uploadFile(photo, 'chantier_photos');
       if (url != null) urls.add(url);
     }
     return urls;
@@ -1249,8 +1262,8 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.file(
-                      _attestation!,
+                    child: Image.memory(
+                      _attestation!.bytes,
                       width: double.infinity,
                       height: 140,
                       fit: BoxFit.cover,
@@ -1351,8 +1364,8 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
-                        child: Image.file(
-                          _photos[i],
+                        child: Image.memory(
+                          _photos[i].bytes,
                           width: 80,
                           height: 80,
                           fit: BoxFit.cover,
