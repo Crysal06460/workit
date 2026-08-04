@@ -42,27 +42,45 @@ les dates transitent désormais en chaîne ISO côté client, reconverties en `T
 **Leçon à retenir pour la suite** : ne jamais passer un `Timestamp`/`GeoPoint`/objet Firestore directement à un
 appel `httpsCallable` — toujours le sérialiser en primitif (string/num) et le reconvertir côté serveur.
 
-### ✅ Testé en direct (workspace "Ambiance Alu", compte `metreur@workit-test.fr`)
+### ✅ Testé en direct (workspace "Ambiance Alu", comptes `metreur@workit-test.fr` puis `poseur@workit-test.fr`)
 Cycle complet créé de bout en bout sur un devis de test ("Claude Phase1Test") : accepter → prendre RDV → démarrer/
 terminer le métré → confirmer la commande → programmer la pose (testé à la fois via le bouton dédié du métreur ET
 via le drag-and-drop du Planner, qui utilise le même point d'entrée) — chaque transition confirmée via les logs
 Cloud Functions (`firebase functions:log`) et le déclenchement du trigger `onDevisStatusChange`, données (date de
-pose, équipe assignée) correctement affichées ensuite côté commercial. `flutter analyze` : 0 erreur, 135 issues
-(inchangé). `npm run lint` (functions) : 0 erreur. **Committé (`fb176cf`, `12847eb`), pas encore poussé.**
+pose, équipe assignée) correctement affichées ensuite côté commercial.
 
-⚠️ **Non testé en direct faute d'identifiants** : les transitions poseur `En pose → Terminé` et `En pose → À
-clôturer` (`_valider`/`_signaler` dans `poseurs_home_screen.dart`). Le chantier de test a été assigné à "Guillaume
-Hervé" (membre réel de l'équipe Ambiance Alu, pas un des 3 comptes de test standard) — impossible de se connecter à
-sa place. Ces deux transitions ne passent aucun `Timestamp` en paramètre (uniquement des strings/bool), donc ne sont
-pas exposées au bug ci-dessus ; vérifiées par relecture de code uniquement. À tester manuellement dès qu'un compte
-poseur assigné est disponible.
+Le chantier avait été assigné à "Guillaume Hervé" (membre réel de l'équipe, pas un compte de test) — Christophe a
+demandé de le réaffecter à `poseur@workit-test.fr` (Lucas Martin) pour pouvoir tester la clôture. Ça a révélé un
+**deuxième trou dans la config des transitions** : les cartes déjà planifiées restent glissables dans le Planner
+pour être réaffectées à une autre équipe/jour (comportement libre déjà présent avant la Phase 1), mais `En pose →
+En pose` n'était pas dans `TRANSITIONS` → le drag de réaffectation échouait silencieusement. Ajouté et déployé.
+Réaffectation testée avec succès (ajout de Lucas Martin à "Équipe 1", re-drag), puis clôture testée avec ce compte :
+bouton "Chantier pas terminé" (`_signaler` → `À clôturer`) confirmé de bout en bout, y compris la vérification de
+sécurité `requirePoseurAssigned` (le compte est bien dans `poseurIds`, sinon la Cloud Function aurait rejeté).
+Confirmé via les logs serveur et l'affichage côté commercial (équipe "Guillaume Hervé, Lucas Martin", statut
+`À clôturer`, "Problème signalé").
 
-⚠️ Chantier de test laissé dans le workspace "Ambiance Alu" : devis "Claude Phase1Test" (statut `En pose`, équipe
-Guillaume Hervé, pose le 03/08/2026) — à nettoyer ou réutiliser pour tester la clôture poseur.
+⚠️ **Bouton "Chantier terminé" (`_valider` → `Terminé`) non testé** : la pièce jointe obligatoire (photo
+d'attestation) ouvre un sélecteur de fichier natif inaccessible depuis l'automatisation navigateur. Cette tentative
+a néanmoins révélé un **bug pré-existant hors Phase 1** : l'écran utilise `Image.file()` pour prévisualiser la
+photo choisie, qui n'est pas supporté par Flutter Web (`Assertion failed: ... "Image.file is not supported on
+Flutter Web. Consider using either Image.asset or Image.network instead."`) — le rapport de fin de chantier plante
+donc systématiquement côté web. Ce chemin n'ajoute/ne modifie aucun `Timestamp` en paramètre Cloud Function, donc
+n'est pas concerné par le bug de sérialisation trouvé plus haut ; la logique serveur de la transition elle-même a
+été vérifiée par relecture de code uniquement. **À corriger dans une session dédiée** (remplacer `Image.file` par
+un affichage conditionnel web/mobile, ou `Image.memory` avec les bytes du fichier) — non traité ici, hors périmètre
+Phase 1, et probablement un problème seulement visible en test web (l'app mobile réelle n'est pas affectée).
+
+`flutter analyze` : 0 erreur, 135 issues (inchangé). `npm run lint` (functions) : 0 erreur. **Committé et poussé**
+(`fb176cf`, `12847eb`, `bb032e9`, `77735c4`).
+
+⚠️ Chantier de test laissé dans le workspace "Ambiance Alu" : devis "Claude Phase1Test" (statut `À clôturer`,
+équipe "Guillaume Hervé, Lucas Martin", pose le 04/08/2026) — à nettoyer ou réutiliser.
 
 ### Reste à faire (prochaine session)
-- Tester manuellement la clôture poseur (`_valider`/`_signaler`) avec un compte poseur réellement assigné.
-- `git push` si Christophe veut sauvegarder sur le remote (2 commits locaux en attente : `fb176cf`, `12847eb`).
+- Corriger le bug `Image.file` non supporté sur Flutter Web dans `poseurs_home_screen.dart` (bloque le rapport de
+  fin de chantier "Chantier terminé" en test web — l'app mobile n'est probablement pas affectée, à confirmer).
+- Tester manuellement "Chantier terminé" (`_valider` → `Terminé`) une fois ce bug corrigé, ou directement sur mobile.
 - Passer à la Phase 2 (dictionnaire métier étendu + moteur de documents) une fois la Phase 1 validée en usage réel.
 
 ---
