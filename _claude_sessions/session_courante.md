@@ -1,7 +1,89 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-04 (soir) — Phase 2 terminée et testée de bout en bout + bug d'affichage
-"Modifier le métré" corrigé et vérifié en direct
+**Dernière mise à jour :** 2026-08-05 — Phase 2 étendue aux 11 autres métiers (dictionnaire sourcé), même
+rigueur que le pilote `menuiserie_aluminium`
+
+## ✅ Session 2026-08-05 — Phase 2 : contenu métier étendu aux 11 métiers restants
+
+Christophe a demandé de continuer la Phase 2 (interrompue à `menuiserie_aluminium` seul le 04/08) sur les 11
+autres métiers du dictionnaire, avec la même exigence de contenu professionnel réel et sourcé (pas générique).
+
+### Méthode
+Vu le volume (11 métiers × recherche normative réelle), 11 agents de recherche ont tourné en parallèle en
+arrière-plan, chacun chargé de : lire les catégories/champs de métré existants de son métier, vérifier par
+vraie recherche web les normes NF DTU/référentiels professionnels applicables (interdiction de citer un
+numéro non vérifié), choisir une catégorie « pilote » et proposer des contraintes `required`/`min`/`max`
+sourcées, rédiger les 4 blocs `preparation_steps`/`execution_checklist`/`non_conformite_causes`/`indicateurs`.
+Chaque rendu a été relu et intégré à la main dans `workit_dictionary.json` (pas de copier-coller aveugle),
+avec `"metierVersion": 1` ajouté sur chacun des 11 métiers.
+
+### Sourcing retenu par métier (catégorie pilote → normes/références vérifiées)
+- **Plâtrerie-isolation-cloisons** (`cloisons`) : NF DTU 25.41 (plaques de plâtre), NF DTU 25.42 (doublages),
+  NF DTU 58.1 (plafonds suspendus), guides Placo/Siniat, AQC.
+- **Électricité-courants faibles** (`tableaux_electriques`) : NF C15-100, Promotelec, Legrand/Nexans pour
+  sections de câble. ⚠️ Les bornes numériques (nb rangées, distance compteur) sont des bornes de
+  vraisemblance métier, pas des valeurs tirées du texte normatif lui-même — précisé pour ne pas laisser croire
+  à une citation NF C15-100 inventée.
+- **Chauffage-clim-ventilation** (`pompes_a_chaleur`) : pas un « NF DTU 65 » unique (famille éclatée en
+  65.10/65.11/65.14/65.16), NF DTU 68.3 (VMC), QualiPAC/RGE, arrêté du 24/03/1982 (débits VMC réglementaires).
+- **Plomberie-sanitaire** (`chauffe_eau`) : NF DTU 60.1/60.11, NF EN 1487 (groupe de sécurité), volumes
+  électriques NF C15-100. ⚠️ Le label existant `distanceBaignoire` mentionne « volume 3 », terminologie
+  obsolète de l'ancienne NF C15-100 (fusionné avec le volume 2 depuis 2015) — pas corrigé cette session
+  (scope = required/min/max uniquement), à corriger un jour.
+- **Peinture-revêtements** (`peinture_interieure`) : NF DTU 59.1 (peinture), NF DTU 59.4 (papier peint),
+  classement UPEC. Correction au passage : le DTU sols souples n'est plus le 59.3 mais le **NF DTU 53.12**
+  (fusion 2020 des anciens 53.1/53.2).
+- **Carrelage-maçonnerie fine** (`carrelage_sols`) : NF DTU 52.1/52.2, NF DTU 26.2 (joints de fractionnement
+  chape, 40m²/8ml max), tolérances de planéité/désaffleurement sourcées FFB.
+- **Cuisine-aménagement intérieur** (`plans_de_travail`) : ⚠️ sourcing structurellement plus faible — **il
+  n'existe aucun NF DTU pour l'agencement de cuisine**. Retenu : NF EN 1116 (cotes électroménager), NF EN
+  14749 (sécurité mobilier), NF C15-100 (prises cuisine, bien documentée). Les règles de type « triangle
+  d'activité » et hauteur de plan de travail ergonomique sont un consensus de métier, pas une norme opposable.
+  L'agent a aussi corrigé une fausse piste du prompt initial : « UFME » n'est pas l'organisme cuisine
+  (c'est celui des menuiseries), et une « norme DTU 52.1 pour le débord de plan de travail » trouvée sur un
+  site tiers est une fausse attribution (le DTU 52.1 concerne le carrelage) — non reprise.
+- **Salle de bain-étanchéité** (`etancheite`) : fiches pathologie AQC (douches à l'italienne = un des tout
+  premiers postes de sinistres bâtiment documentés), Cahier CSTB 3567/3756 (SPEC/SEL), NF DTU 52.2 (carrelage
+  collé zone humide, pas 52.1 qui est la pose scellée), volumes électriques NF C15-100.
+- **Sols extérieurs-aménagements** (`dallage_exterieur`) : NF DTU 52.1, NF DTU 13.3 (dallages), NF P98-335
+  (pavés/dalles béton), règles pro UNEP/FFB terrasses collées (pente mini 1,5%).
+- **Vitrerie-miroiterie** (`remplacement_vitrage`) : NF DTU 39 (parties P1 à P5), NF EN 12600/NF EN 356
+  (classement sécurité/anti-effraction), NF P01-012/013 (garde-corps). Le PDF du DTU 39 P5 n'a pas pu être lu
+  intégralement par l'agent — seules les affirmations recoupées par ≥2 sources indépendantes ont été retenues.
+- **Automatismes-portails** (`motorisations`) : NF EN 13241-1 (norme produit), NF EN 12453/12445 (sécurité,
+  seuils de force 400N dynamique/150N statique), art. R134-55 du Code de la construction. Le « décret 2013 »
+  évoqué dans la consigne initiale n'a pas été retrouvé tel quel — non cité, base légale réelle utilisée à la
+  place.
+
+### Choix méthodologique assumé
+Comme pour le pilote, `required`/`min`/`max` n'a été ajouté que sur **une catégorie pilote par métier** (celle
+qui porte le plus d'enjeux bloquants/réglementaires), pas sur toutes les catégories — cohérent avec la
+décision prise avec Christophe le 04/08 de limiter le scope. Les clés des 4 blocs sont en **snake_case**
+(`verif_xxx`, `xxx_conforme`...) pour rester cohérentes avec le pilote réel dans le fichier, malgré une
+consigne de prompt qui mentionnait du camelCase — plusieurs agents l'ont noté et corrigé d'eux-mêmes.
+
+### Vérifications faites cette session
+- JSON validé syntaxiquement (`ConvertFrom-Json` sans erreur).
+- `flutter analyze` : 0 erreur, 133 issues (inchangé, toutes préexistantes).
+- Confirmé que `_validateProduct()` (`measurement_form_screen.dart`) est déjà 100% générique (itère sur les
+  `fields` du dictionnaire) — **aucun changement de code Dart nécessaire**, les nouvelles contraintes
+  `required`/`min`/`max` des 11 métiers sont automatiquement appliquées par l'écran de métré existant.
+- 12/12 métiers ont maintenant `"metierVersion": 1` et les 4 blocs Phase 2.
+
+### ⚠️ Pas testé en direct dans l'app cette session
+Contrairement à la session pilote du 04/08 (testée de bout en bout dans Chrome), ce travail est purement
+contenu/données — **aucun test manuel dans l'app** n'a été fait pour les 11 nouveaux métiers cette fois
+(pas de devis créé sur un métier autre que menuiserie pour vérifier l'affichage réel du formulaire de métré
+avec les nouvelles contraintes). À faire à l'occasion : créer un devis sur au moins un des 11 métiers (ex.
+plomberie/chauffe-eau) et vérifier que les messages `required`/`min`/`max` s'affichent bien comme pour le
+pilote.
+
+### Reste à faire (prochaine session)
+- Tester en direct au moins un des 11 nouveaux métiers dans l'app (formulaire de métré + validation).
+- Étendre `required`/`min`/`max` aux autres catégories de chaque métier (actuellement 1 seule catégorie pilote
+  par métier, comme pour `menuiserie_aluminium`) si Christophe veut aller plus loin.
+- Corriger la terminologie obsolète « volume 3 » dans le label `distanceBaignoire` (plomberie).
+- Committer et pousser ce travail (fait en fin de session, voir commit).
 
 ## ✅ Session 2026-08-04 (soir, suite) — Bug corrigé : "Modifier le métré" n'affichait pas les valeurs déjà saisies
 

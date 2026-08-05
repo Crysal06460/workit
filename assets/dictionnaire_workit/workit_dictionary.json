@@ -535,6 +535,7 @@
       }
     },
     "platrerie_isolation_cloisons": {
+      "metierVersion": 1,
       "label": "Plâtrerie – Isolation – Cloisons",
       "categories": {
         "cloisons": {
@@ -687,12 +688,12 @@
         "cloisons": {
           "render": "list",
           "fields": [
-            {"key": "longueurLineaire", "label": "Longueur du linéaire de cloison", "type": "number", "unit": "m"},
-            {"key": "hauteurReelle", "label": "Hauteur sol-plafond réelle (plusieurs points)", "type": "number", "unit": "mm"},
-            {"key": "epaisseurDisponible", "label": "Épaisseur totale disponible pour l'ossature", "type": "number", "unit": "mm"},
-            {"key": "natureFixation", "label": "Nature du sol/plafond de fixation", "type": "dropdown", "choices": ["Dalle béton", "Plancher bois", "Faux plafond existant"]},
+            {"key": "longueurLineaire", "label": "Longueur du linéaire de cloison", "type": "number", "unit": "m", "required": true, "min": 0.3, "max": 60},
+            {"key": "hauteurReelle", "label": "Hauteur sol-plafond réelle (plusieurs points)", "type": "number", "unit": "mm", "required": true, "min": 2000, "max": 4000},
+            {"key": "epaisseurDisponible", "label": "Épaisseur totale disponible pour l'ossature", "type": "number", "unit": "mm", "required": true, "min": 45, "max": 300},
+            {"key": "natureFixation", "label": "Nature du sol/plafond de fixation", "type": "dropdown", "choices": ["Dalle béton", "Plancher bois", "Faux plafond existant"], "required": true},
             {"key": "reseauxIntegres", "label": "Réseaux à intégrer (électricité/plomberie)", "type": "boolean"},
-            {"key": "performanceRequise", "label": "Performance requise", "type": "dropdown", "choices": ["Standard", "Phonique renforcé", "Coupe-feu EI30-EI60"]},
+            {"key": "performanceRequise", "label": "Performance requise", "type": "dropdown", "choices": ["Standard", "Phonique renforcé", "Coupe-feu EI30-EI60"], "required": true},
             {"key": "porteIntegree", "label": "Porte(s) à intégrer et dimensions du bloc-porte", "type": "text"}
           ]
         },
@@ -728,6 +729,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_cotes_metre_site", "label": "Vérifier sur site les cotes du métré (longueur, hauteur sol-plafond en plusieurs points, épaisseur disponible)"},
+        {"key": "verif_portance_support_fixation", "label": "Vérifier la nature et la portance du support de fixation (sol, plafond, murs adjacents)"},
+        {"key": "verif_local_hors_eau_hors_air", "label": "Vérifier que le local est hors d'eau/hors d'air et que le support est sec avant intervention"},
+        {"key": "reperer_devoyer_reseaux_existants", "label": "Repérer et faire dévoyer les réseaux existants (électricité, plomberie, VMC) présents dans l'emprise de l'ouvrage"},
+        {"key": "definir_ossature_selon_hauteur_performance", "label": "Définir le type et l'épaisseur d'ossature adaptés à la hauteur et à la performance requise (acoustique/coupe-feu)"},
+        {"key": "reunir_plaques_accessoires_adaptes", "label": "Réunir les plaques et accessoires adaptés à la destination des locaux (hydrofuges en zones humides, phoniques, coupe-feu)"},
+        {"key": "verif_stockage_calepinage_plaques", "label": "Vérifier les conditions de stockage des plaques (à plat, à l'abri de l'humidité) et préparer le calepinage"},
+        {"key": "proteger_sols_ouvrages_finis", "label": "Protéger les sols et ouvrages finis adjacents avant travaux"}
+      ],
+      "execution_checklist": [
+        {"key": "tracage_sol_plafond_conforme", "label": "Traçage au sol et au plafond conforme au plan, aplomb contrôlé (fil à plomb ou laser)"},
+        {"key": "entraxe_montants_conforme", "label": "Entraxe des montants conforme (60 cm standard, réduit si renfort ou charges lourdes prévues)"},
+        {"key": "rails_bande_resiliente_posee", "label": "Rails fixés avec bande résiliente/joint d'étanchéité en pied et en tête de cloison"},
+        {"key": "fixations_espacement_profondeur_conformes", "label": "Fixations (vis) conformes en espacement et en profondeur, têtes légèrement noyées sans percer le carton"},
+        {"key": "isolant_pose_sans_discontinuite", "label": "Isolant posé sans discontinuité, jointif entre montants"},
+        {"key": "plaques_joints_decales_quinconce", "label": "Plaques posées à joints décalés (en quinconce) d'un montant entre les deux parements"},
+        {"key": "traitement_joints_trois_passes", "label": "Traitement des joints réalisé en 3 passes (bande + 2 couches d'enduit) avec respect des temps de séchage"},
+        {"key": "continuite_performance_traversees", "label": "Continuité de la performance coupe-feu/acoustique assurée aux traversées de réseaux et jonctions avec le gros-œuvre"},
+        {"key": "planeite_aplomb_verifies", "label": "Planéité et aplomb vérifiés (contrôle à la règle de 2 m)"},
+        {"key": "nettoyage_evacuation_chutes", "label": "Nettoyage du poste de travail et évacuation des chutes de plaques"}
+      ],
+      "non_conformite_causes": [
+        {"key": "entraxe_montants_non_conforme", "label": "Entraxe de montants non conforme ou profilé sous-dimensionné pour la hauteur posée"},
+        {"key": "absence_bande_resiliente", "label": "Absence de bande résiliente en pied/tête de cloison (pont phonique, fissuration en about)"},
+        {"key": "vis_mal_positionnees", "label": "Vis mal positionnées (carton arraché, tête trop enfoncée ou affleurante)"},
+        {"key": "joints_non_decales", "label": "Joints entre plaques non décalés (alignés sur le même montant), risque de fissuration"},
+        {"key": "sechage_joints_insuffisant", "label": "Traitement des joints bâclé ou mise en peinture avant séchage complet (fissures, désaffleurs visibles)"},
+        {"key": "absence_plaques_hydrofuges_zone_humide", "label": "Absence de plaques hydrofuges en pièce humide"},
+        {"key": "rupture_continuite_coupe_feu_acoustique", "label": "Rupture de la continuité coupe-feu ou acoustique au droit des traversées de réseaux"},
+        {"key": "support_accroche_insuffisant", "label": "Support d'accroche insuffisant pour charges lourdes (meuble suspendu, sanitaire) non anticipé au métré"},
+        {"key": "intervention_support_humide", "label": "Intervention sur support humide ou local non hors d'eau/hors d'air"},
+        {"key": "cloison_non_desolidarisee_structure", "label": "Cloison non désolidarisée de la structure porteuse, fissuration liée aux mouvements du gros-œuvre"}
+      ],
+      "indicateurs": [
+        {"key": "delai_moyen_metre_pose", "label": "Délai moyen métré → pose", "unit": "jours"},
+        {"key": "taux_reprise_joints_fissures", "label": "Taux de reprise sur joints/enduits (fissures, désaffleurs)", "unit": "%"},
+        {"key": "taux_non_conformite_autocontrole", "label": "Taux de non-conformité à l'autocontrôle", "unit": "%"},
+        {"key": "taux_sav_post_pose", "label": "Taux de SAV post-livraison", "unit": "%"}
+      ],
       "options": {
         "couleurs": {
           "standard": ["Blanc", "Blanc mat", "Gris clair", "Beige", "Aucun (brut)"]
@@ -739,6 +780,7 @@
       }
     },
     "electricite_courants_faibles": {
+      "metierVersion": 1,
       "label": "Électricité – Courants faibles",
       "categories": {
         "tableaux_electriques": {
@@ -924,12 +966,12 @@
         "tableaux_electriques": {
           "render": "list",
           "fields": [
-            {"key": "emplacementActuel", "label": "Emplacement actuel du tableau", "type": "dropdown", "choices": ["Garage", "Cellier", "Placard technique", "À créer"]},
-            {"key": "nbRangeesLibres", "label": "Nombre de rangées libres / à ajouter", "type": "number"},
-            {"key": "nbModulesDisponibles", "label": "Nombre de modules disponibles", "type": "number"},
-            {"key": "etatTableau", "label": "État du tableau existant", "type": "dropdown", "choices": ["Ancien sans différentiel", "Aux normes NF C15-100", "Absent"]},
-            {"key": "presenceTerre", "label": "Présence de la terre", "type": "boolean"},
-            {"key": "distanceCompteur", "label": "Distance au compteur / point de livraison", "type": "number", "unit": "m"},
+            {"key": "emplacementActuel", "label": "Emplacement actuel du tableau", "type": "dropdown", "choices": ["Garage", "Cellier", "Placard technique", "À créer"], "required": true},
+            {"key": "nbRangeesLibres", "label": "Nombre de rangées libres / à ajouter", "type": "number", "min": 0, "max": 15},
+            {"key": "nbModulesDisponibles", "label": "Nombre de modules disponibles", "type": "number", "min": 0, "max": 200},
+            {"key": "etatTableau", "label": "État du tableau existant", "type": "dropdown", "choices": ["Ancien sans différentiel", "Aux normes NF C15-100", "Absent"], "required": true},
+            {"key": "presenceTerre", "label": "Présence de la terre", "type": "boolean", "required": true},
+            {"key": "distanceCompteur", "label": "Distance au compteur / point de livraison", "type": "number", "unit": "m", "required": true, "min": 0, "max": 50},
             {"key": "marqueExistante", "label": "Marque / référence existante", "type": "text"}
           ]
         },
@@ -978,6 +1020,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_puissance_souscrite", "label": "Vérifier la puissance souscrite et le type de compteur (mono/triphasé) auprès du client"},
+        {"key": "verif_presence_terre_existante", "label": "Vérifier la présence et mesurer la valeur de la prise de terre existante"},
+        {"key": "identifier_type_tableau_existant", "label": "Identifier le type de tableau existant et sa conformité NF C15-100 (présence de différentiels 30 mA)"},
+        {"key": "reperer_circuits_existants", "label": "Repérer et étiqueter les circuits existants avant toute intervention"},
+        {"key": "consigner_installation", "label": "Couper l'alimentation générale et consigner l'installation avant travaux (vérification d'absence de tension)"},
+        {"key": "verifier_disponibilite_modules", "label": "Vérifier le nombre de modules/rangées disponibles au tableau pour les nouveaux circuits"},
+        {"key": "reperer_volumes_salle_de_bain", "label": "Repérer les volumes de sécurité 0/1/2 en cas d'intervention en salle de bain"},
+        {"key": "reunir_epi_outillage", "label": "Réunir les EPI (gants isolants, VAT, outillage isolé) et le matériel nécessaire"}
+      ],
+      "execution_checklist": [
+        {"key": "continuite_terre_verifiee", "label": "Continuité de la terre vérifiée sur tous les circuits"},
+        {"key": "differentiels_testes", "label": "Fonctionnement des dispositifs différentiels (DDR) testé par bouton test"},
+        {"key": "type_differentiel_adapte", "label": "Type de différentiel adapté aux circuits protégés (Type A obligatoire pour plaque induction, VMC, borne IRVE)"},
+        {"key": "sections_cables_conformes", "label": "Sections de câbles conformes au calibre du disjoncteur associé (1,5mm²/16A éclairage, 2,5mm²/20A prises, 6mm²/32A cuisson)"},
+        {"key": "volumes_salle_de_bain_respectes", "label": "Volumes de sécurité 0/1/2 et indices de protection IP respectés en salle de bain"},
+        {"key": "nombre_prises_conforme", "label": "Nombre de prises et points lumineux par pièce conforme aux minimas NF C15-100"},
+        {"key": "repartition_circuits_equilibree", "label": "Répartition des circuits équilibrée sur les phases (installation triphasée)"},
+        {"key": "etiquetage_circuits_realise", "label": "Étiquetage et repérage des circuits au tableau réalisés"},
+        {"key": "serrage_connexions_verifie", "label": "Serrage de toutes les connexions et bornes vérifié"},
+        {"key": "essai_fonctionnel_final", "label": "Essai fonctionnel de l'ensemble des circuits et équipements avant remise au client"}
+      ],
+      "non_conformite_causes": [
+        {"key": "absence_liaison_equipotentielle", "label": "Absence ou défaut de liaison équipotentielle supplémentaire en salle de bain"},
+        {"key": "differentiel_absent_inadapte", "label": "Différentiel absent ou inadapté (Type AC au lieu de Type A) ou non testé"},
+        {"key": "section_cable_sous_dimensionnee", "label": "Section de câble sous-dimensionnée par rapport au calibre du disjoncteur"},
+        {"key": "non_respect_volumes_sdb", "label": "Appareillage non protégé installé dans un volume de sécurité de salle de bain (0, 1 ou 2)"},
+        {"key": "terre_absente_ou_defaillante", "label": "Prise de terre absente, défaillante ou résistance trop élevée"},
+        {"key": "nombre_prises_insuffisant", "label": "Nombre de prises ou de points lumineux inférieur aux minimas normatifs par pièce"},
+        {"key": "tableau_surcharge", "label": "Tableau électrique surchargé, sans réserve de modules ou de rangées"},
+        {"key": "cablage_non_repere", "label": "Câblage non repéré, absence de schéma unifilaire de l'installation"},
+        {"key": "connexions_mal_serrees", "label": "Connexions mal serrées entraînant un échauffement (point chaud)"},
+        {"key": "erreur_dimensionnement_disjoncteur_branchement", "label": "Erreur de dimensionnement du disjoncteur de branchement par rapport à la puissance souscrite"}
+      ],
+      "indicateurs": [
+        {"key": "delai_moyen_metre_intervention", "label": "Délai moyen métré → intervention", "unit": "jours"},
+        {"key": "taux_non_conformite_consuel", "label": "Taux de non-conformité au contrôle Consuel / autocontrôle", "unit": "%"},
+        {"key": "taux_sav_post_intervention", "label": "Taux de SAV post-intervention", "unit": "%"},
+        {"key": "duree_moyenne_intervention_tableau", "label": "Durée moyenne d'intervention par tableau", "unit": "heures"}
+      ],
       "options": {
         "couleurs": {
           "appareillage": ["Blanc", "Noir", "Alu", "Anthracite"],
@@ -988,6 +1070,7 @@
       }
     },
     "chauffage_climatisation_ventilation": {
+      "metierVersion": 1,
       "label": "Chauffage – Climatisation – Ventilation",
       "categories": {
         "climatisation": {
@@ -1175,12 +1258,12 @@
         "pompes_a_chaleur": {
           "render": "list",
           "fields": [
-            {"key": "emplacementUE", "label": "Emplacement de l'unité extérieure", "type": "dropdown", "choices": ["Jardin/sol", "Terrasse", "Façade"]},
-            {"key": "degagementUE", "label": "Dégagement libre autour de l'unité", "type": "number", "unit": "cm"},
-            {"key": "distanceUEInterieure", "label": "Distance unité extérieure - unité intérieure/ballon", "type": "number", "unit": "m"},
-            {"key": "distanceVoisinage", "label": "Distance à la limite de propriété/voisinage (acoustique)", "type": "number", "unit": "m"},
-            {"key": "natureSol", "label": "Nature du sol de pose", "type": "dropdown", "choices": ["Dalle béton à couler", "Existante", "Plots anti-vibratiles"]},
-            {"key": "emetteursExistants", "label": "Émetteurs existants compatibles", "type": "dropdown", "choices": ["Radiateurs eau chaude", "Plancher chauffant", "Aucun - à créer"]}
+            {"key": "emplacementUE", "label": "Emplacement de l'unité extérieure", "type": "dropdown", "choices": ["Jardin/sol", "Terrasse", "Façade"], "required": true},
+            {"key": "degagementUE", "label": "Dégagement libre autour de l'unité", "type": "number", "unit": "cm", "required": true, "min": 30, "max": 300},
+            {"key": "distanceUEInterieure", "label": "Distance unité extérieure - unité intérieure/ballon", "type": "number", "unit": "m", "required": true, "min": 0.5, "max": 30},
+            {"key": "distanceVoisinage", "label": "Distance à la limite de propriété/voisinage (acoustique)", "type": "number", "unit": "m", "required": true, "min": 1, "max": 50},
+            {"key": "natureSol", "label": "Nature du sol de pose", "type": "dropdown", "choices": ["Dalle béton à couler", "Existante", "Plots anti-vibratiles"], "required": true},
+            {"key": "emetteursExistants", "label": "Émetteurs existants compatibles", "type": "dropdown", "choices": ["Radiateurs eau chaude", "Plancher chauffant", "Aucun - à créer"], "required": true}
           ]
         },
         "chauffage": {
@@ -1214,6 +1297,47 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_bilan_thermique", "label": "Réaliser ou vérifier le bilan thermique du logement (déperditions, besoins de chauffage/rafraîchissement)"},
+        {"key": "verif_emplacement_ue", "label": "Valider l'emplacement de l'unité extérieure (dégagement, distance voisinage, accès maintenance)"},
+        {"key": "verif_compatibilite_emetteurs", "label": "Vérifier la compatibilité des émetteurs existants (radiateurs, plancher chauffant) avec la température de départ de la PAC"},
+        {"key": "verif_alimentation_electrique_dediee", "label": "Vérifier la disponibilité et le dimensionnement d'une alimentation électrique dédiée"},
+        {"key": "verif_evacuation_condensats", "label": "Vérifier le tracé et la pente d'évacuation des condensats"},
+        {"key": "verif_attestation_capacite_fluides", "label": "Vérifier la validité de l'attestation de capacité de manipulation des fluides frigorigènes de l'intervenant"},
+        {"key": "verif_etat_conduit_fumee", "label": "Vérifier l'état du conduit de fumée existant ou prévoir un diagnostic/tubage (chaudière, poêle)"},
+        {"key": "reunir_materiel_tirage_vide", "label": "Réunir le matériel de tirage au vide, de pesée de charge et les EPI, protéger le chantier"}
+      ],
+      "execution_checklist": [
+        {"key": "dimensionnement_puissance_verifie", "label": "Puissance de l'appareil vérifiée conforme au bilan thermique (ni sous- ni surdimensionnée)"},
+        {"key": "degagement_ue_respecte", "label": "Dégagements autour de l'unité extérieure respectés (flux d'air, accès entretien)"},
+        {"key": "fixation_plots_antivibratiles", "label": "Fixation de l'unité extérieure sur plots anti-vibratiles / support stable"},
+        {"key": "tirage_vide_verifie", "label": "Tirage au vide du circuit frigorifique réalisé et dépression maintenue vérifiée"},
+        {"key": "essai_etancheite_realise", "label": "Essai d'étanchéité du circuit frigorifique réalisé avant mise en service"},
+        {"key": "charge_fluide_pesee", "label": "Charge de fluide frigorigène complémentaire pesée et conforme à la longueur de liaison"},
+        {"key": "raccordement_electrique_conforme", "label": "Raccordement électrique conforme et protection dédiée en place"},
+        {"key": "evacuation_condensats_fonctionnelle", "label": "Évacuation des condensats testée et fonctionnelle (absence de stagnation)"},
+        {"key": "reglage_debits_vmc_par_piece", "label": "Réglage des débits de VMC par pièce conforme aux débits réglementaires"},
+        {"key": "mise_en_service_parametrage", "label": "Mise en service effectuée avec paramétrage des consignes et test devant le client"},
+        {"key": "documents_remis_client", "label": "Notice, attestation fluides et carnet d'entretien remis au client"}
+      ],
+      "non_conformite_causes": [
+        {"key": "sous_dimensionnement_puissance", "label": "Sous-dimensionnement de la puissance par rapport aux déperditions réelles"},
+        {"key": "degagement_ue_insuffisant", "label": "Dégagement insuffisant autour de l'unité extérieure (recirculation d'air, perte de performance)"},
+        {"key": "defaut_tirage_vide", "label": "Tirage au vide insuffisant ou omis (présence d'humidité/air résiduel dans le circuit)"},
+        {"key": "fuite_frigorifique", "label": "Fuite de fluide frigorigène sur les raccords ou brasures"},
+        {"key": "emetteurs_incompatibles", "label": "Émetteurs de chauffage incompatibles avec la basse température de départ de la PAC"},
+        {"key": "nuisance_sonore_voisinage", "label": "Nuisance sonore de l'unité extérieure dépassant l'émergence admissible en limite de propriété"},
+        {"key": "evacuation_condensats_defaillante", "label": "Évacuation des condensats mal positionnée ou obstruée"},
+        {"key": "debits_vmc_non_conformes", "label": "Débits de VMC non conformes aux valeurs réglementaires par pièce (arrêté du 24 mars 1982)"},
+        {"key": "defaut_etancheite_reseau_gaines", "label": "Défaut d'étanchéité du réseau de gaines de ventilation"},
+        {"key": "absence_attestation_capacite", "label": "Intervention sur circuit frigorifique sans attestation de capacité fluides frigorigènes valide"}
+      ],
+      "indicateurs": [
+        {"key": "delai_moyen_etude_pose", "label": "Délai moyen étude thermique → mise en service", "unit": "jours"},
+        {"key": "taux_sav_annee1", "label": "Taux de SAV/pannes la première année", "unit": "%"},
+        {"key": "taux_non_conformite_essai_etancheite", "label": "Taux de non-conformité à l'essai d'étanchéité/tirage au vide", "unit": "%"},
+        {"key": "taux_conformite_debits_vmc", "label": "Taux de conformité des débits VMC mesurés vs réglementaires", "unit": "%"}
+      ],
       "options": {
         "couleurs": {
           "standard": ["Blanc", "Anthracite", "Noir", "Inox"],
@@ -1233,6 +1357,7 @@
       }
     },
     "plomberie_sanitaire": {
+      "metierVersion": 1,
       "label": "Plomberie – Sanitaire",
       "categories": {
         "alimentation_eau": {
@@ -1486,14 +1611,14 @@
         "chauffe_eau": {
           "render": "list",
           "fields": [
-            {"key": "emplacementPrevu", "label": "Emplacement prévu", "type": "dropdown", "choices": ["Salle de bain", "Cellier-buanderie", "Cuisine", "Extérieur abrité"]},
-            {"key": "volumeDisponible", "label": "Volume disponible autour de l'appareil (L x P x H)", "type": "text"},
-            {"key": "distancePointsEau", "label": "Distance aux points d'eau les plus éloignés", "type": "number", "unit": "m"},
-            {"key": "distanceBaignoire", "label": "Distance à la baignoire/douche (volume 3, mini 60cm)", "type": "number", "unit": "cm"},
+            {"key": "emplacementPrevu", "label": "Emplacement prévu", "type": "dropdown", "choices": ["Salle de bain", "Cellier-buanderie", "Cuisine", "Extérieur abrité"], "required": true},
+            {"key": "volumeDisponible", "label": "Volume disponible autour de l'appareil (L x P x H)", "type": "text", "required": true},
+            {"key": "distancePointsEau", "label": "Distance aux points d'eau les plus éloignés", "type": "number", "unit": "m", "min": 0, "max": 30},
+            {"key": "distanceBaignoire", "label": "Distance à la baignoire/douche (volume 3, mini 60cm)", "type": "number", "unit": "cm", "required": true, "min": 0, "max": 500},
             {"key": "ancienPresent", "label": "Ancien chauffe-eau présent", "type": "boolean"},
-            {"key": "volumeAncien", "label": "Volume de l'ancien appareil", "type": "number", "unit": "L"},
+            {"key": "volumeAncien", "label": "Volume de l'ancien appareil", "type": "number", "unit": "L", "min": 50, "max": 300},
             {"key": "evacuationCondensats", "label": "Évacuation des condensats disponible (si thermodynamique)", "type": "dropdown", "choices": ["Oui existante", "Non à créer", "Non applicable"]},
-            {"key": "alimentationDediee", "label": "Alimentation électrique dédiée disponible", "type": "boolean"},
+            {"key": "alimentationDediee", "label": "Alimentation électrique dédiée disponible", "type": "boolean", "required": true},
             {"key": "accesManutention", "label": "Accès pour manutention de l'appareil", "type": "dropdown", "choices": ["Facile", "Escalier étroit", "Portes à démonter"]}
           ]
         },
@@ -1549,6 +1674,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_pression_debit_reseau", "label": "Vérifier la pression et le débit disponibles au point d'alimentation avant travaux (contrôle manométrique)"},
+        {"key": "verif_materiau_diametre_existant", "label": "Vérifier le diamètre et la nature du matériau des canalisations existantes (PER, cuivre, plomb à signaler)"},
+        {"key": "reperer_vanne_arret_general", "label": "Repérer la vanne d'arrêt général et organiser la coupure d'eau avant intervention"},
+        {"key": "verif_pente_evacuation_existante", "label": "Vérifier la pente et le diamètre des évacuations existantes jusqu'à la colonne de chute ou le réseau"},
+        {"key": "verif_ventilation_primaire_reseau", "label": "Vérifier la présence d'une ventilation primaire du réseau d'évacuation (colonne de chute prolongée hors toiture)"},
+        {"key": "reunir_outillage_raccords_epi", "label": "Réunir l'outillage adapté au matériau (presse à sertir, cintreuse, chalumeau), les raccords conformes et les EPI"},
+        {"key": "verif_accessibilite_reseaux_encastres", "label": "Vérifier l'accessibilité des réseaux encastrés (gaines techniques, trappes de visite) avant ouverture des supports"},
+        {"key": "proteger_chantier_zones_humides", "label": "Protéger le chantier et les zones humides (bâchage, protection des sols, appareils et équipements existants)"}
+      ],
+      "execution_checklist": [
+        {"key": "essai_pression_etancheite_reseau", "label": "Essai de pression et d'étanchéité du réseau eau réalisé (10 bar pendant 30 minutes, absence de chute de pression)"},
+        {"key": "rincage_reseau_avant_mise_service", "label": "Rinçage du réseau effectué avant mise en service (élimination des résidus)"},
+        {"key": "pente_evacuation_conforme", "label": "Pente d'évacuation conforme (1 à 3 cm/m selon DTU 60.11) et absence de contre-pente"},
+        {"key": "essai_ecoulement_evacuation_eau", "label": "Essai d'écoulement à l'eau de chaque évacuation réalisé, absence de fuite aux raccords"},
+        {"key": "raccordements_etancheite_controlee", "label": "Étanchéité de tous les raccordements contrôlée visuellement (absence de suintement)"},
+        {"key": "groupe_securite_nf_en_1487_installe", "label": "Groupe de sécurité conforme NF EN 1487 installé et purgé sur chauffe-eau à accumulation"},
+        {"key": "protection_antiretour_posee", "label": "Clapet anti-retour ou disconnecteur posé si requis pour protéger le réseau d'eau potable"},
+        {"key": "fixation_colliers_entraxe_conforme", "label": "Fixation des canalisations par colliers à entraxe conforme, dilatation prise en compte"},
+        {"key": "isolation_tubes_ecs_posee", "label": "Isolation thermique posée sur les tubes ECS et sur les tronçons en volume non chauffé"},
+        {"key": "volumes_securite_electriques_respectes", "label": "Distances de sécurité électriques respectées (volumes 0/1/2 NF C 15-100) pour tout appareil en salle de bain"}
+      ],
+      "non_conformite_causes": [
+        {"key": "absence_essai_pression", "label": "Absence ou non-réalisation de l'essai de pression/étanchéité du réseau"},
+        {"key": "pente_evacuation_insuffisante", "label": "Pente d'évacuation insuffisante ou contre-pente créant des zones de stagnation"},
+        {"key": "absence_groupe_securite_conforme", "label": "Absence de groupe de sécurité ou groupe non conforme NF EN 1487 sur chauffe-eau à accumulation"},
+        {"key": "absence_disconnecteur_reseau_sensible", "label": "Absence de disconnecteur sur un réseau exposé à un risque de retour d'eau non potable"},
+        {"key": "corrosion_galvanique_materiaux_incompatibles", "label": "Mélange de matériaux incompatibles générant une corrosion galvanique (cuivre/acier sans raccord diélectrique)"},
+        {"key": "circuit_electrique_non_dedie_chauffe_eau", "label": "Circuit électrique non dédié ou disjoncteur non conforme pour le chauffe-eau (NF C 15-100)"},
+        {"key": "non_respect_volumes_securite_sdb", "label": "Non-respect des volumes de sécurité électrique en salle de bain (NF C 15-100)"},
+        {"key": "siphon_absent_ou_desamorce", "label": "Siphon absent, défectueux ou désamorcé (retour d'odeurs)"},
+        {"key": "diametre_canalisation_sous_dimensionne", "label": "Diamètre de canalisation sous-dimensionné au regard des débits (DTU 60.11)"},
+        {"key": "isolation_tubes_absente_gel", "label": "Absence d'isolation des tubes exposés au gel ou générant de la condensation"}
+      ],
+      "indicateurs": [
+        {"key": "delai_moyen_metre_intervention", "label": "Délai moyen métré → intervention", "unit": "jours"},
+        {"key": "taux_essais_pression_conformes", "label": "Taux d'essais de pression conformes au premier contrôle", "unit": "%"},
+        {"key": "taux_sav_fuites_post_intervention", "label": "Taux de SAV pour fuite dans les 3 mois suivant l'intervention", "unit": "%"},
+        {"key": "taux_non_conformite_autocontrole", "label": "Taux de non-conformité à l'autocontrôle", "unit": "%"}
+      ],
       "options": {
         "marques": ["GROHE", "Hansgrohe", "Jacob Delafon", "Geberit", "Ideal Standard"],
         "materiaux_tuyaux": ["PER", "Multicouche", "Cuivre", "PVC"],
@@ -1558,6 +1723,7 @@
       }
     },
     "peinture_revetements": {
+      "metierVersion": 1,
       "label": "Peinture – Revêtements",
       "categories": {
         "peinture_interieure": {
@@ -1769,14 +1935,14 @@
         "peinture_interieure": {
           "render": "list",
           "fields": [
-            {"key": "surfaceReelle", "label": "Surface développée à peindre (mur + plafond séparés)", "type": "number", "unit": "m²"},
-            {"key": "hauteurSousPlafond", "label": "Hauteur sous plafond", "type": "number", "unit": "m"},
-            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Bon état", "Fissures", "Tâches/auréoles", "Moisissures"]},
-            {"key": "natureSupport", "label": "Nature du support actuel", "type": "dropdown", "choices": ["Peinture", "Papier peint à déposer", "Enduit brut", "Placo neuf"]},
+            {"key": "surfaceReelle", "label": "Surface développée à peindre (mur + plafond séparés)", "type": "number", "unit": "m²", "required": true, "min": 1, "max": 500},
+            {"key": "hauteurSousPlafond", "label": "Hauteur sous plafond", "type": "number", "unit": "m", "required": true, "min": 2, "max": 8},
+            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Bon état", "Fissures", "Tâches/auréoles", "Moisissures"], "required": true},
+            {"key": "natureSupport", "label": "Nature du support actuel", "type": "dropdown", "choices": ["Peinture", "Papier peint à déposer", "Enduit brut", "Placo neuf"], "required": true},
             {"key": "nbCouches", "label": "Nombre de couches nécessaire estimé", "type": "dropdown", "choices": ["1", "2", "3"]},
             {"key": "reprises", "label": "Reprises à prévoir", "type": "dropdown", "choices": ["Rebouchage ponctuel", "Ratissage complet", "Aucune"]},
             {"key": "elementsAProteger", "label": "Éléments à protéger/déposer", "type": "text"},
-            {"key": "traceHumidite", "label": "Odeur d'humidité ou trace de moisissure", "type": "boolean"}
+            {"key": "traceHumidite", "label": "Odeur d'humidité ou trace de moisissure", "type": "boolean", "required": true}
           ]
         },
         "peinture_exterieure": {
@@ -1826,6 +1992,47 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_support_sec_propre", "label": "Vérifier que le support est propre, sec et dépoussiéré avant toute application"},
+        {"key": "reboucher_fissures_trous", "label": "Reboucher les trous et fissures à l'enduit adapté au support"},
+        {"key": "poncer_egrener_support", "label": "Poncer et égrener le support entre les couches et après rebouchage"},
+        {"key": "appliquer_impression_sous_couche", "label": "Appliquer une couche d'impression ou sous-couche adaptée à la nature du support"},
+        {"key": "proteger_sols_mobilier", "label": "Protéger les sols, mobiliers et huisseries (bâches, films, adhésifs de masquage)"},
+        {"key": "verif_hygrometrie_support", "label": "Vérifier le taux d'hygrométrie du support avant pose des revêtements de sol"},
+        {"key": "deposer_ancien_revetement", "label": "Déposer l'ancien revêtement (papier peint, sol) et remettre le support en état"},
+        {"key": "verif_planeite_support", "label": "Vérifier la planéité du support et prévoir un ragréage si nécessaire"}
+      ],
+      "execution_checklist": [
+        {"key": "nb_couches_conforme", "label": "Nombre de couches appliqué conforme au système préconisé (au minimum 2 couches croisées en peinture)"},
+        {"key": "temps_sechage_respecte", "label": "Temps de séchage entre couches respecté avant application de la couche suivante"},
+        {"key": "couches_croisees", "label": "Sens d'application croisé entre la première et la deuxième couche"},
+        {"key": "raccords_reprises_invisibles", "label": "Raccords et reprises invisibles, aspect uniforme sans surépaisseur"},
+        {"key": "aretes_angles_nets", "label": "Arêtes, angles et cueillies nets et rectilignes"},
+        {"key": "absence_coulures_cloques", "label": "Absence de coulures, cloques et marques de rouleau/pinceau"},
+        {"key": "opacite_recouvrement_uniforme", "label": "Opacité et recouvrement uniformes, absence de fond visible"},
+        {"key": "raccord_motif_papier_peint", "label": "Raccord des motifs de papier peint respecté entre les lés, joints invisibles"},
+        {"key": "planeite_affleurement_sol", "label": "Planéité et affleurement des joints/lames de sol conformes, absence de tuilage"},
+        {"key": "nettoyage_fin_chantier", "label": "Nettoyage complet du chantier et dépose des protections en fin de travaux"}
+      ],
+      "non_conformite_causes": [
+        {"key": "cloquage_support_humide", "label": "Cloquage par défaut d'adhérence ou support humide au moment de l'application"},
+        {"key": "farinage_sous_dosage", "label": "Farinage ou poudroiement du feuil par sous-dosage ou mauvaise cohésion du produit"},
+        {"key": "fond_fantome_tache_remontante", "label": "Fond fantôme ou tâche remontant à travers la peinture faute d'isolation du support"},
+        {"key": "faiencage_craquelures", "label": "Faïençage ou craquelures liés à un séchage trop rapide ou une sous-couche inadaptée"},
+        {"key": "decollement_papier_peint", "label": "Décollement du papier peint par encollage insuffisant ou support non préparé"},
+        {"key": "defaut_raccord_motif", "label": "Défaut de raccord de motif entre lés de papier peint"},
+        {"key": "tuilage_parquet_hygrometrie", "label": "Tuilage ou soulèvement du parquet lié à une hygrométrie du support non conforme"},
+        {"key": "cloquage_sol_pvc_humidite", "label": "Cloquage du revêtement de sol PVC par remontées d'humidité du support"},
+        {"key": "decollement_resine_preparation_insuffisante", "label": "Décollement de la résine par préparation mécanique du support insuffisante (ponçage/grenaillage)"},
+        {"key": "classement_upec_non_adapte", "label": "Classement UPEC du revêtement de sol non adapté à l'usage et au trafic du local"},
+        {"key": "differences_teinte_reprises", "label": "Différences de teinte ou traces de reprise par application non homogène"}
+      ],
+      "indicateurs": [
+        {"key": "rendement_pose_m2_jour", "label": "Rendement moyen posé par jour", "unit": "m²/jour"},
+        {"key": "taux_sav_post_chantier", "label": "Taux de SAV post-chantier", "unit": "%"},
+        {"key": "consommation_moyenne_peinture", "label": "Consommation moyenne de peinture", "unit": "m²/L"},
+        {"key": "taux_non_conformite_autocontrole", "label": "Taux de non-conformité à l'autocontrôle", "unit": "%"}
+      ],
       "options": {
         "couleurs_peinture": [
           "Blanc",
@@ -1853,6 +2060,7 @@
       }
     },
     "carrelage_maconnerie_fine": {
+      "metierVersion": 1,
       "label": "Carrelage – Maçonnerie fine",
       "categories": {
         "carrelage_sols": {
@@ -2044,13 +2252,13 @@
         "carrelage_sols": {
           "render": "list",
           "fields": [
-            {"key": "surfaceReelle", "label": "Surface au sol", "type": "number", "unit": "m²"},
-            {"key": "natureSupport", "label": "Nature du support existant", "type": "dropdown", "choices": ["Chape", "Ancien carrelage", "Béton brut", "Plancher bois"]},
-            {"key": "planeite", "label": "Planéité mesurée à la règle de 2m", "type": "dropdown", "choices": ["Conforme ≤2mm", "Non conforme - ragréage nécessaire"]},
+            {"key": "surfaceReelle", "label": "Surface au sol", "type": "number", "unit": "m²", "required": true, "min": 1, "max": 400},
+            {"key": "natureSupport", "label": "Nature du support existant", "type": "dropdown", "choices": ["Chape", "Ancien carrelage", "Béton brut", "Plancher bois"], "required": true},
+            {"key": "planeite", "label": "Planéité mesurée à la règle de 2m", "type": "dropdown", "choices": ["Conforme ≤2mm", "Non conforme - ragréage nécessaire"], "required": true},
             {"key": "typePose", "label": "Type de pose souhaité", "type": "dropdown", "choices": ["Droite", "Diagonale (+10-15%)", "Décalée/chevron (+10%)"]},
             {"key": "portesARaboter", "label": "Présence de portes à raboter après surépaisseur", "type": "boolean"},
             {"key": "deposeAncien", "label": "Dépose ancien revêtement nécessaire", "type": "boolean"},
-            {"key": "plancherChauffant", "label": "Présence de plancher chauffant", "type": "boolean"}
+            {"key": "plancherChauffant", "label": "Présence de plancher chauffant", "type": "boolean", "required": true}
           ]
         },
         "carrelage_murs": {
@@ -2098,6 +2306,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_planeite_support", "label": "Vérifier la planéité du support à la règle de 2 m (écart maximal de 3 mm, hors tolérance propre du matériau)"},
+        {"key": "ragreage_si_necessaire", "label": "Réaliser un ragréage de planéité si le support ne respecte pas la tolérance admissible"},
+        {"key": "controle_hygrometrie_chape", "label": "Contrôler le taux d'humidité de la chape avant pose (bombe à carbure ou hygromètre), notamment sur chape liquide anhydrite"},
+        {"key": "respect_delai_sechage_chape", "label": "Respecter le délai de séchage de la chape avant intervention (règle usuelle : environ 1 semaine par cm d'épaisseur pour une chape traditionnelle)"},
+        {"key": "realiser_calepinage", "label": "Réaliser le calepinage pour définir l'implantation des joints et limiter les chutes de découpe"},
+        {"key": "reperer_joints_fractionnement", "label": "Repérer et reporter l'emplacement des joints de fractionnement de la structure (au minimum tous les 40 m² et 8 m linéaires, NF DTU 26.2)"},
+        {"key": "prevoir_etancheite_spec", "label": "Prévoir la mise en œuvre du système d'étanchéité sous carrelage (SPEC) en zone humide (douche, pourtour baignoire) selon NF DTU 52.2"},
+        {"key": "verifier_compatibilite_colle", "label": "Vérifier la compatibilité mortier-colle / support / format de carreau (classe C1, C2, déformable S1) avant commande"}
+      ],
+      "execution_checklist": [
+        {"key": "planeite_verifiee_regle", "label": "Planéité du support vérifiée à la règle de 2 m avant démarrage de la pose (écart ≤3 mm)"},
+        {"key": "double_encollage_grand_format", "label": "Double encollage réalisé pour les formats ≥1200 cm² et dès 500 cm² selon l'absorption d'eau du carreau/du support (NF DTU 52.2)"},
+        {"key": "temps_ouvert_colle_respecte", "label": "Temps ouvert du mortier-colle respecté (peigne non filmé au moment de la pose)"},
+        {"key": "joints_fractionnement_respectes", "label": "Joints de fractionnement de la structure reportés jusqu'au revêtement fini"},
+        {"key": "joints_peripheriques_dilatation", "label": "Joints périphériques de dilatation posés en pourtour de pièce et au droit des huisseries (largeur ≥5 mm)"},
+        {"key": "largeur_joints_carrelage_conforme", "label": "Largeur des joints entre carreaux conforme au calepinage (croisillons calibrés)"},
+        {"key": "alignement_joints_verifie", "label": "Alignement des joints vérifié à la règle de 2 m (écart ≤2 mm) et sur grande longueur (≤1 mm/m)"},
+        {"key": "pente_evacuation_zones_humides", "label": "Pente d'écoulement vers l'évacuation respectée en douche à l'italienne et zones extérieures (≥1,5%)"},
+        {"key": "desaffleurement_conforme", "label": "Désaffleurement entre carreaux adjacents conforme à la tolérance DTU (0,5 mm + 1/10e de la largeur du joint, plafonné à 1,5 mm)"},
+        {"key": "nettoyage_avant_jointoiement", "label": "Nettoyage des joints avant jointoiement (excédent de colle, poussière)"}
+      ],
+      "non_conformite_causes": [
+        {"key": "decollement_carreaux", "label": "Décollement de carreaux (défaut d'encollage, absence de double encollage sur grand format)"},
+        {"key": "fissuration_carrelage", "label": "Fissuration du carrelage (absence de joint de fractionnement au droit d'un joint de structure)"},
+        {"key": "defaut_planeite_support", "label": "Défaut de planéité du support non traité avant pose"},
+        {"key": "chape_pas_assez_seche", "label": "Pose sur chape insuffisamment sèche (taux d'humidité résiduel excessif)"},
+        {"key": "efflorescence_remontees_humidite", "label": "Efflorescences ou remontées d'humidité liées à une étanchéité SPEC absente ou défaillante"},
+        {"key": "sonorite_creuse_carreaux", "label": "Sonorité creuse au toucher (vide sous carreau lié à un encollage insuffisant)"},
+        {"key": "joints_irreguliers", "label": "Joints irréguliers en largeur ou mal alignés"},
+        {"key": "flache_defaut_pente", "label": "Flaches ou défaut de pente favorisant la stagnation d'eau en zone humide ou extérieure"},
+        {"key": "casse_ebrechure_carreaux", "label": "Casse ou ébréchure de carreaux lors du transport, du stockage ou de la découpe"},
+        {"key": "erreur_teinte_calibre_lot", "label": "Différence de teinte ou de calibre entre lots de fabrication (calibrage non respecté)"}
+      ],
+      "indicateurs": [
+        {"key": "taux_decollement_sav", "label": "Taux de décollement / SAV post-pose", "unit": "%"},
+        {"key": "delai_moyen_metre_pose", "label": "Délai moyen métré → pose", "unit": "jours"},
+        {"key": "taux_non_conformite_autocontrole", "label": "Taux de non-conformité à l'autocontrôle", "unit": "%"},
+        {"key": "consommation_moyenne_colle", "label": "Consommation moyenne de mortier-colle", "unit": "kg/m²"}
+      ],
       "options": {
         "colles": [
           "Colle C1",
@@ -2126,6 +2374,7 @@
       }
     },
     "cuisine_amenagement_interieur": {
+      "metierVersion": 1,
       "label": "Cuisine – Aménagement intérieur",
       "categories": {
         "cuisine_complete": {
@@ -2417,11 +2666,11 @@
         "plans_de_travail": {
           "render": "list",
           "fields": [
-            {"key": "longueurTroncons", "label": "Longueur exacte le long des meubles posés (par tronçon)", "type": "text"},
-            {"key": "debordFacade", "label": "Débord en façade souhaité", "type": "number", "unit": "mm"},
-            {"key": "refEvier", "label": "Référence exacte évier et mitigeur pour découpe", "type": "text"},
-            {"key": "refPlaque", "label": "Référence exacte plaque de cuisson pour découpe", "type": "text"},
-            {"key": "espaceLateral", "label": "Espace latéral disponible autour de la plaque", "type": "number", "unit": "mm"},
+            {"key": "longueurTroncons", "label": "Longueur exacte le long des meubles posés (par tronçon)", "type": "text", "required": true},
+            {"key": "debordFacade", "label": "Débord en façade souhaité", "type": "number", "unit": "mm", "min": 0, "max": 40},
+            {"key": "refEvier", "label": "Référence exacte évier et mitigeur pour découpe", "type": "text", "required": true},
+            {"key": "refPlaque", "label": "Référence exacte plaque de cuisson pour découpe", "type": "text", "required": true},
+            {"key": "espaceLateral", "label": "Espace latéral disponible autour de la plaque", "type": "number", "unit": "mm", "min": 50, "max": 600},
             {"key": "angleJonction", "label": "Présence d'angle nécessitant jonction", "type": "dropdown", "choices": ["Aucun", "Onglet", "Éclisse"]},
             {"key": "finitionChant", "label": "Type de finition de chant souhaité", "type": "dropdown", "choices": ["Chanfrein", "Droit", "Arrondi", "Biseauté"]}
           ]
@@ -2463,6 +2712,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_dimensionsPiece_multiPoints", "label": "Relever les dimensions de la pièce en plusieurs points (largeur, longueur, diagonales, hauteur sous plafond)"},
+        {"key": "verif_aplomb_planeite_murs", "label": "Vérifier l'aplomb et la planéité des murs destinés à recevoir les caissons hauts et bas"},
+        {"key": "verif_reseaux_existants", "label": "Repérer précisément les arrivées eau/évacuation et la position des réseaux électriques existants"},
+        {"key": "verif_conformite_c15_100", "label": "Vérifier la conformité de l'installation électrique existante à la norme NF C15-100 (circuit dédié plan de travail, nombre de prises, prise hotte à 1,80 m)"},
+        {"key": "verif_ventilation_hotte", "label": "Vérifier la présence et le dimensionnement du conduit de ventilation/évacuation hotte"},
+        {"key": "verif_niveau_sol", "label": "Contrôler le niveau du sol fini et anticiper les cales de mise à niveau des caissons"},
+        {"key": "reunir_references_electromenager", "label": "Réunir les références et fiches techniques des électroménagers à intégrer (cotes de niche selon NF EN 1116)"},
+        {"key": "proteger_chantier_acces", "label": "Prévoir la protection des sols et accès, et vérifier les conditions de livraison/manutention des caissons"}
+      ],
+      "execution_checklist": [
+        {"key": "aplomb_caissons_verifie", "label": "Aplomb et niveau des caissons bas vérifiés avant fixation définitive"},
+        {"key": "alignement_facades", "label": "Alignement et jeux réguliers des façades entre elles vérifiés"},
+        {"key": "jeu_fonctionnement_tiroirs_portes", "label": "Jeux de fonctionnement des tiroirs et portes conformes (ouverture/fermeture sans frottement, soft-close opérationnel)"},
+        {"key": "fixation_meubles_hauts", "label": "Fixation des meubles hauts contrôlée (chevilles adaptées au support, charge admissible respectée)"},
+        {"key": "jonctions_plan_travail", "label": "Jonctions du plan de travail réalisées avec joint étanche et affleurement des niveaux"},
+        {"key": "decoupes_conformes", "label": "Découpes évier/plaque conformes aux gabarits fournis par le fabricant"},
+        {"key": "raccordements_electromenager_conformes", "label": "Raccordements électriques et hydrauliques de l'électroménager conformes et testés (four, plaque, hotte, lave-vaisselle, réfrigérateur)"},
+        {"key": "etancheite_evier_credence", "label": "Étanchéité assurée au niveau de l'évier et de la jonction plan de travail/crédence (joint silicone)"},
+        {"key": "fonctionnement_hotte_evacuation", "label": "Fonctionnement de la hotte et de son évacuation vérifiés (absence de refoulement, débit conforme)"},
+        {"key": "nettoyage_reglages_finaux", "label": "Réglages finaux des charnières/tiroirs effectués et nettoyage du chantier réalisé"}
+      ],
+      "non_conformite_causes": [
+        {"key": "erreur_metre_dimensionsPiece", "label": "Erreur de métré sur les dimensions de la pièce ou des niches électroménager"},
+        {"key": "support_hors_aplomb", "label": "Support hors aplomb non compensé, générant un désalignement des façades"},
+        {"key": "jeu_facades_irregulier", "label": "Jeux entre façades irréguliers ou non conformes"},
+        {"key": "decoupe_erronee", "label": "Découpe erronée du plan de travail (évier, plaque) par rapport au gabarit réel de l'appareil"},
+        {"key": "absence_prise_dediee", "label": "Absence de prise dédiée ou circuit non conforme NF C15-100 pour un électroménager"},
+        {"key": "incompatibilite_dimensionsNiche", "label": "Incompatibilité entre dimensions de la niche et l'appareil livré (non-conformité aux cotes NF EN 1116)"},
+        {"key": "defaut_etancheite_evier", "label": "Défaut d'étanchéité au raccordement évier ou à la jonction crédence/plan de travail"},
+        {"key": "ventilation_hotte_insuffisante", "label": "Ventilation/évacuation hotte insuffisante ou mal raccordée"},
+        {"key": "quincaillerie_defaillante", "label": "Quincaillerie défaillante (charnières, coulisses) provoquant l'affaissement d'une porte ou d'un tiroir"},
+        {"key": "produit_endommage_livraison", "label": "Produit endommagé à la livraison ou en cours de pose"}
+      ],
+      "indicateurs": [
+        {"key": "delai_moyen_metre_pose", "label": "Délai moyen métré → pose", "unit": "jours"},
+        {"key": "taux_casse_livraison", "label": "Taux de casse/dommage à la livraison", "unit": "%"},
+        {"key": "taux_non_conformite_autocontrole", "label": "Taux de non-conformité à l'autocontrôle", "unit": "%"},
+        {"key": "taux_sav_post_pose", "label": "Taux de SAV post-pose", "unit": "%"}
+      ],
       "options": {
         "couleurs_generales": [
           "Blanc",
@@ -2489,6 +2778,7 @@
       }
     },
     "salle_de_bain_etancheite": {
+      "metierVersion": 1,
       "label": "Salle de bain – Étanchéité",
       "categories": {
         "receveurs": {
@@ -2764,12 +3054,12 @@
         "etancheite": {
           "render": "list",
           "fields": [
-            {"key": "surfaceMurs", "label": "Surface murs à traiter", "type": "number", "unit": "m²"},
-            {"key": "surfaceSol", "label": "Surface sol à traiter", "type": "number", "unit": "m²"},
-            {"key": "natureSupport", "label": "Nature du support", "type": "dropdown", "choices": ["Placo hydro", "Carreau de plâtre", "Béton", "BA13"]},
-            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Sain", "Fissuré", "Traces d'humidité"]},
-            {"key": "nbAngles", "label": "Nombre d'angles à traiter", "type": "number"},
-            {"key": "nbTraversees", "label": "Nombre de traversées à renforcer (bonde, robinetterie)", "type": "number"},
+            {"key": "surfaceMurs", "label": "Surface murs à traiter", "type": "number", "unit": "m²", "required": true, "min": 0.5, "max": 30},
+            {"key": "surfaceSol", "label": "Surface sol à traiter", "type": "number", "unit": "m²", "required": true, "min": 0.5, "max": 15},
+            {"key": "natureSupport", "label": "Nature du support", "type": "dropdown", "choices": ["Placo hydro", "Carreau de plâtre", "Béton", "BA13"], "required": true},
+            {"key": "etatSupport", "label": "État du support", "type": "dropdown", "choices": ["Sain", "Fissuré", "Traces d'humidité"], "required": true},
+            {"key": "nbAngles", "label": "Nombre d'angles à traiter", "type": "number", "min": 0, "max": 12},
+            {"key": "nbTraversees", "label": "Nombre de traversées à renforcer (bonde, robinetterie)", "type": "number", "required": true, "min": 1, "max": 8},
             {"key": "ancienRevetement", "label": "Ancien revêtement à déposer avant étanchéité", "type": "boolean"}
           ]
         },
@@ -2822,6 +3112,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_pente_support_receveur", "label": "Vérifier la pente du support de la douche à l'italienne vers l'évacuation (siphon ou caniveau) avant pose de l'étanchéité"},
+        {"key": "verif_classement_local_ebplus", "label": "Vérifier le classement du local selon le Cahier CSTB 3567 (zone EB+ en projection d'eau) pour choisir le procédé adapté (SPEC ou SEL)"},
+        {"key": "verif_etat_support_sain_sec", "label": "Vérifier que le support (chape, placo hydro, béton) est sain, sec, dépoussiéré et exempt de fissure avant application"},
+        {"key": "traiter_points_singuliers_angles", "label": "Traiter les points singuliers (angles, jonction sol/mur, traversées de bonde et robinetterie) avant application du SPEC/SEL en grande surface"},
+        {"key": "verif_compatibilite_bonde_siphon", "label": "Vérifier la compatibilité du système d'étanchéité avec le type de bonde/siphon (platine de raccordement adaptée)"},
+        {"key": "reunir_produits_meme_systeme_atec", "label": "Réunir les produits et accessoires du même système sous Avis Technique (résine, bandes d'angle, manchettes) sans mélanger les procédés"},
+        {"key": "prevoir_releves_peripheriques", "label": "Prévoir les relevés d'étanchéité en plinthe (minimum 10 cm au-dessus du sol fini, ou extension horizontale d'1 m si relevé impossible)"},
+        {"key": "verif_volumes_electriques_c15100", "label": "Vérifier les volumes de sécurité électrique NF C15-100 (0, 1, 2) autour de la zone de douche avant intervention des autres corps d'état"}
+      ],
+      "execution_checklist": [
+        {"key": "spec_sel_applique_toute_surface", "label": "SPEC ou SEL appliqué sur toute la surface sol et murs prévue, en deux couches croisées si système liquide"},
+        {"key": "bandes_angles_posees", "label": "Bandes d'étanchéité posées à tous les angles (sol/mur et mur/mur) avec recouvrement conforme à l'Avis Technique"},
+        {"key": "manchettes_traversees_posees", "label": "Manchettes et renforts posés sur toutes les traversées (bonde, robinetterie, évacuation)"},
+        {"key": "releves_plinthe_conformes", "label": "Relevés d'étanchéité en plinthe conformes (10 cm minimum ou extension horizontale 1 m)"},
+        {"key": "raccordement_bonde_etanche", "label": "Raccordement étanche entre la membrane et la platine de la bonde/du siphon vérifié"},
+        {"key": "pente_sol_verifiee", "label": "Pente du sol vers l'évacuation vérifiée (absence de flaque résiduelle après test à l'eau)"},
+        {"key": "test_mise_en_eau_realise", "label": "Test de mise en eau réalisé avant pose du carrelage (bouchage de l'évacuation 24h)"},
+        {"key": "sechage_respecte_avant_carrelage", "label": "Temps de séchage du système d'étanchéité respecté avant pose du carrelage, selon fiche technique produit"},
+        {"key": "double_joint_realise", "label": "Double joint silicone réalisé aux points singuliers (jonctions receveur/paroi, angles) : un par le plombier, un en finition par le carreleur"},
+        {"key": "volumes_electriques_respectes", "label": "Volumes de sécurité électrique NF C15-100 respectés pour tout appareillage installé à proximité de la douche"}
+      ],
+      "non_conformite_causes": [
+        {"key": "absence_etancheite_sous_carrelage", "label": "Absence ou insuffisance d'étanchéité sous carrelage (le carrelage seul ne constitue pas une barrière à l'eau)"},
+        {"key": "defaut_pente_sol", "label": "Défaut ou absence de pente du sol vers l'évacuation entraînant une stagnation d'eau"},
+        {"key": "releves_peripheriques_insuffisants", "label": "Relevés d'étanchéité en plinthe insuffisants ou absents aux jonctions sol/mur"},
+        {"key": "angles_traversees_non_renforces", "label": "Angles et traversées (bonde, robinetterie) non renforcés par bandes ou manchettes dédiées"},
+        {"key": "raccordement_bonde_defaillant", "label": "Raccordement défaillant entre la membrane d'étanchéité et la bonde/le siphon"},
+        {"key": "melange_produits_systemes_incompatibles", "label": "Mélange de produits de systèmes différents non compatibles, hors Avis Technique du procédé"},
+        {"key": "joint_silicone_degrade", "label": "Joint silicone dégradé, décollé ou non renouvelé en périphérie du receveur/de la paroi"},
+        {"key": "non_respect_volumes_electriques", "label": "Non-respect des volumes de sécurité électrique NF C15-100 en zone douche"},
+        {"key": "support_humide_lors_application", "label": "Application de l'étanchéité sur un support humide ou insuffisamment stabilisé"},
+        {"key": "absence_test_eau_avant_carrelage", "label": "Absence de test de mise en eau avant la pose du carrelage"}
+      ],
+      "indicateurs": [
+        {"key": "taux_sinistres_infiltration", "label": "Taux de sinistres liés à une infiltration post-livraison", "unit": "%"},
+        {"key": "delai_moyen_etancheite_carrelage", "label": "Délai moyen entre pose de l'étanchéité et pose du carrelage", "unit": "jours"},
+        {"key": "taux_non_conformite_autocontrole", "label": "Taux de non-conformité à l'autocontrôle avant carrelage", "unit": "%"},
+        {"key": "taux_reprise_sav_etancheite", "label": "Taux de reprise SAV lié à un défaut d'étanchéité", "unit": "%"}
+      ],
       "options": {
         "marques": [
           "Jacob Delafon",
@@ -2848,6 +3178,7 @@
       }
     },
     "sols_exterieurs_amenagements": {
+      "metierVersion": 1,
       "label": "Sols extérieurs – Aménagements",
       "categories": {
         "resine_sol": {
@@ -3103,13 +3434,13 @@
         "dallage_exterieur": {
           "render": "list",
           "fields": [
-            {"key": "surfaceReelle", "label": "Surface réelle à daller", "type": "number", "unit": "m²"},
-            {"key": "natureSol", "label": "Nature du sol en place", "type": "dropdown", "choices": ["Terre", "Ancien dallage", "Béton existant"]},
-            {"key": "penteTerrain", "label": "Pente actuelle du terrain", "type": "number", "unit": "%"},
-            {"key": "natureSousSol", "label": "Nature du sous-sol", "type": "dropdown", "choices": ["Argileux", "Sableux", "Rocheux"]},
-            {"key": "reseauEnterre", "label": "Présence réseau enterré à proximité", "type": "boolean"},
+            {"key": "surfaceReelle", "label": "Surface réelle à daller", "type": "number", "unit": "m²", "required": true, "min": 1, "max": 2000},
+            {"key": "natureSol", "label": "Nature du sol en place", "type": "dropdown", "choices": ["Terre", "Ancien dallage", "Béton existant"], "required": true},
+            {"key": "penteTerrain", "label": "Pente actuelle du terrain", "type": "number", "unit": "%", "required": true, "min": 0, "max": 15},
+            {"key": "natureSousSol", "label": "Nature du sous-sol", "type": "dropdown", "choices": ["Argileux", "Sableux", "Rocheux"], "required": true},
+            {"key": "reseauEnterre", "label": "Présence réseau enterré à proximité", "type": "boolean", "required": true},
             {"key": "accesEngin", "label": "Accès engin de chantier (mini-pelle) possible", "type": "boolean"},
-            {"key": "niveauRaccord", "label": "Niveau de raccord au seuil bâtiment", "type": "number", "unit": "cm"}
+            {"key": "niveauRaccord", "label": "Niveau de raccord au seuil bâtiment", "type": "number", "unit": "cm", "min": 0, "max": 20}
           ]
         },
         "terrasses_bois": {
@@ -3134,6 +3465,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "decaissement_terrain", "label": "Décaissement du terrain sur l'épaisseur nécessaire (terre végétale, gravats, souches)"},
+        {"key": "verif_nature_portance_sol", "label": "Vérification de la nature et de la portance du sous-sol (sondage, essai simple)"},
+        {"key": "reperage_reseaux_enterres", "label": "Repérage des réseaux enterrés existants avant terrassement (DICT)"},
+        {"key": "creation_forme_pente", "label": "Mise en œuvre de la forme de pente d'évacuation vers un point bas (pente minimale 1,5 %)"},
+        {"key": "compactage_fond_forme", "label": "Compactage du fond de forme (plaque vibrante, référence 95 % de l'Optimum Proctor Modifié)"},
+        {"key": "pose_couche_forme_drainante", "label": "Mise en place d'une couche de forme granulaire drainante (grave compactée, épaisseur ≥ 10 cm)"},
+        {"key": "pose_geotextile_separation", "label": "Pose d'un géotextile de séparation anticontaminant entre sol support et couche de forme"},
+        {"key": "calepinage_joints_fractionnement", "label": "Implantation et calepinage des joints de fractionnement avant exécution"}
+      ],
+      "execution_checklist": [
+        {"key": "pente_ecoulement_conforme", "label": "Pente d'écoulement mesurée conforme (généralement 1,5 à 2 %) vers l'exutoire"},
+        {"key": "test_eau_absence_flaque", "label": "Test à l'eau réalisé : absence de flaque après ruissellement"},
+        {"key": "joints_fractionnement_respectes", "label": "Joints de fractionnement respectés (espacement ≤ 25 fois l'épaisseur, maximum 6 m, ou tous les 240 m² pour un dallage béton)"},
+        {"key": "largeur_joints_dilatation_conforme", "label": "Largeur des joints de dilatation conforme (minimum 3 à 5 mm)"},
+        {"key": "planeite_controlee_regle_2m", "label": "Planéité contrôlée à la règle de 2 m (tolérance ≤ 3 mm)"},
+        {"key": "couche_drainante_desolidarisation_posee", "label": "Couche de désolidarisation drainante posée sous le revêtement"},
+        {"key": "jeu_peripherique_degagement", "label": "Jeu périphérique dégagé le long des murs et seuils (minimum 5 mm)"},
+        {"key": "raccord_seuil_batiment_conforme", "label": "Raccordement propre au seuil du bâtiment (niveau correct, absence de contre-pente)"},
+        {"key": "evacuation_eaux_pluviales_fonctionnelle", "label": "Évacuation des eaux pluviales fonctionnelle (caniveau, regard, point de collecte)"},
+        {"key": "stabilite_elements_verifiee", "label": "Stabilité des éléments posés vérifiée (absence de bascule ou de jeu au passage)"}
+      ],
+      "non_conformite_causes": [
+        {"key": "retention_eau_flaques", "label": "Rétention d'eau / flaques stagnantes (pente insuffisante ou contre-pente)"},
+        {"key": "fissuration_absence_joints", "label": "Fissuration par absence ou mauvais espacement des joints de fractionnement"},
+        {"key": "tassement_differentiel_support", "label": "Tassement différentiel du support (compactage insuffisant du fond de forme)"},
+        {"key": "defaut_portance_sol_non_detecte", "label": "Défaut de portance du sol non détecté (sol argileux, remblai non contrôlé)"},
+        {"key": "absence_couche_drainante", "label": "Absence de couche drainante sous le revêtement"},
+        {"key": "percement_carreaux_exterieur", "label": "Percement de carreaux en pose extérieure (non conforme au DTU 52.1)"},
+        {"key": "desolidarisation_revetement", "label": "Décollement / désolidarisation du revêtement (défaut de couche de désolidarisation)"},
+        {"key": "contre_pente_raccord_seuil", "label": "Contre-pente au raccord du seuil bâtiment provoquant des infiltrations"},
+        {"key": "endommagement_reseau_enterre", "label": "Endommagement d'un réseau enterré non repéré avant terrassement"},
+        {"key": "remontees_humidite_capillarite", "label": "Remontées d'humidité par capillarité (absence de géotextile ou de film anticapillaire)"}
+      ],
+      "indicateurs": [
+        {"key": "delai_moyen_metre_execution", "label": "Délai moyen métré → exécution", "unit": "jours"},
+        {"key": "taux_non_conformite_pente_reception", "label": "Taux de non-conformité de pente/évacuation à la réception", "unit": "%"},
+        {"key": "taux_sav_retention_eau", "label": "Taux de SAV pour rétention d'eau / flaques post-chantier", "unit": "%"},
+        {"key": "taux_reprise_fissuration_tassement", "label": "Taux de reprise pour fissuration ou tassement", "unit": "%"}
+      ],
       "options": {
         "marques": [
           "Weber",
@@ -3159,6 +3530,7 @@
       }
     },
     "vitrerie_miroiterie": {
+      "metierVersion": 1,
       "label": "Vitrerie – Miroiterie",
       "categories": {
         "remplacement_vitrage": {
@@ -3428,12 +3800,12 @@
         "remplacement_vitrage": {
           "render": "list",
           "fields": [
-            {"key": "largeurFeuillure", "label": "Largeur feuillure (mesurée en 3 points, retenir la plus petite)", "type": "number", "unit": "mm"},
-            {"key": "hauteurFeuillure", "label": "Hauteur feuillure (mesurée en 3 points, retenir la plus petite)", "type": "number", "unit": "mm"},
-            {"key": "profondeurFeuillure", "label": "Profondeur de feuillure (détermine l'épaisseur possible)", "type": "number", "unit": "mm"},
-            {"key": "epaisseurActuelle", "label": "Épaisseur vitrage actuel constatée", "type": "number", "unit": "mm"},
-            {"key": "typeMaintien", "label": "Type de maintien existant", "type": "dropdown", "choices": ["Parcloses", "Mastic traditionnel", "Silicone"]},
-            {"key": "etatChassis", "label": "État du châssis", "type": "dropdown", "choices": ["Bon", "À reprendre", "À remplacer"]},
+            {"key": "largeurFeuillure", "label": "Largeur feuillure (mesurée en 3 points, retenir la plus petite)", "type": "number", "unit": "mm", "required": true, "min": 100, "max": 3000},
+            {"key": "hauteurFeuillure", "label": "Hauteur feuillure (mesurée en 3 points, retenir la plus petite)", "type": "number", "unit": "mm", "required": true, "min": 100, "max": 2500},
+            {"key": "profondeurFeuillure", "label": "Profondeur de feuillure (détermine l'épaisseur possible)", "type": "number", "unit": "mm", "required": true, "min": 10, "max": 40},
+            {"key": "epaisseurActuelle", "label": "Épaisseur vitrage actuel constatée", "type": "number", "unit": "mm", "min": 3, "max": 60},
+            {"key": "typeMaintien", "label": "Type de maintien existant", "type": "dropdown", "choices": ["Parcloses", "Mastic traditionnel", "Silicone"], "required": true},
+            {"key": "etatChassis", "label": "État du châssis", "type": "dropdown", "choices": ["Bon", "À reprendre", "À remplacer"], "required": true},
             {"key": "necessiteNacelle", "label": "Nécessité nacelle/échafaudage pour accès", "type": "boolean"}
           ]
         },
@@ -3488,6 +3860,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_dimensions_feuillure", "label": "Vérifier les dimensions de la feuillure en 3 points (largeur et hauteur), retenir la cote la plus petite"},
+        {"key": "verif_equerrage_chassis", "label": "Vérifier l'équerrage du châssis ou du dormant (diagonales égales)"},
+        {"key": "verif_profondeur_feuillure", "label": "Vérifier la profondeur de feuillure disponible pour déterminer l'épaisseur de vitrage admissible"},
+        {"key": "choisir_type_verre_selon_zone_risque", "label": "Déterminer le type de verre requis selon la zone à risque (garde-corps, allège basse, local recevant du public) conformément au NF DTU 39 P5 et à la NF P01-012"},
+        {"key": "verif_etat_support_calage", "label": "Vérifier l'état du support et prévoir les cales de pose (assise et périphérie) adaptées au poids du vitrage"},
+        {"key": "reunir_materiel_epi", "label": "Réunir le matériel de manutention (ventouses, chevalet), les EPI (gants anti-coupure, lunettes) et le mastic ou joint adapté"},
+        {"key": "verif_acces_manutention", "label": "Vérifier les conditions d'accès et de manutention (largeur des passages, moyens de levage pour les grands formats)"},
+        {"key": "controler_vitrage_livre", "label": "Contrôler à réception la conformité du vitrage livré (marquage CE, épaisseur, découpe) avec le bon de commande"}
+      ],
+      "execution_checklist": [
+        {"key": "jeu_peripherique_respecte", "label": "Jeu périphérique respecté conformément au NF DTU 39 (jeu latéral et en about)"},
+        {"key": "cales_assise_reparties", "label": "Cales d'assise posées aux points d'appui réglementaires et cales périphériques correctement réparties"},
+        {"key": "etancheite_mastic_joint_realisee", "label": "Étanchéité réalisée au mastic ou au joint silicone sur tout le pourtour du vitrage"},
+        {"key": "parcloses_correctement_fixees", "label": "Parcloses correctement fixées, côté intérieur pour les exigences anti-effraction"},
+        {"key": "etiquette_certification_visible", "label": "Étiquette de certification (marquage CE, classe de résistance NF EN 12600 / NF EN 356) visible et conservée jusqu'à réception"},
+        {"key": "absence_contact_verre_metal", "label": "Absence de contact direct verre/métal (cales et profilés d'appui correctement en place)"},
+        {"key": "type_verre_conforme_zone_risque", "label": "Type de verre posé conforme à la zone à risque identifiée (feuilleté en zone de chute, trempé ou feuilleté en garde-corps selon NF DTU 39 P5)"},
+        {"key": "fonctionnement_ouvrant_verifie", "label": "Fonctionnement vérifié le cas échéant (porte de douche, porte de verrière)"},
+        {"key": "proprete_vitrage_finale", "label": "Propreté du vitrage et des profilés vérifiée avant livraison au client"},
+        {"key": "nettoyage_evacuation_dechets", "label": "Nettoyage du poste de travail et évacuation des débris de verre en filière dédiée"}
+      ],
+      "non_conformite_causes": [
+        {"key": "casse_transport_manutention", "label": "Casse au transport ou à la manutention"},
+        {"key": "mauvais_type_verre_zone_risque", "label": "Mauvais type de verre posé au regard de la zone à risque (absence de vitrage de sécurité en garde-corps ou zone accessible)"},
+        {"key": "defaut_etancheite_joint", "label": "Défaut d'étanchéité au joint (infiltration, mastic mal appliqué)"},
+        {"key": "jeu_peripherique_non_respecte", "label": "Jeu périphérique non respecté (contrainte thermique, casse différée)"},
+        {"key": "profondeur_feuillure_insuffisante", "label": "Profondeur de feuillure insuffisante pour l'épaisseur du vitrage posé"},
+        {"key": "erreur_dimension_decoupe", "label": "Erreur de dimension à la découpe (feuillure trop juste ou trop large)"},
+        {"key": "defaut_calage", "label": "Défaut de calage (absence ou mauvaise répartition des cales)"},
+        {"key": "rayures_micro_chocs_pose", "label": "Rayures ou micro-chocs occasionnés lors de la pose"},
+        {"key": "absence_marquage_certification", "label": "Absence de marquage de certification exigé sur un vitrage de sécurité (contrôle réglementaire NF EN 12600 / NF EN 356)"},
+        {"key": "erreur_metre_commande", "label": "Erreur de métré ou de commande (référence, épaisseur, teinte)"}
+      ],
+      "indicateurs": [
+        {"key": "taux_casse_transport_pose", "label": "Taux de casse au transport/à la pose", "unit": "%"},
+        {"key": "delai_moyen_metre_pose", "label": "Délai moyen métré → pose", "unit": "jours"},
+        {"key": "taux_non_conformite_controle", "label": "Taux de non-conformité au contrôle réception/autocontrôle", "unit": "%"},
+        {"key": "taux_sav_post_pose", "label": "Taux de SAV post-pose (casse différée, défaut d'étanchéité)", "unit": "%"}
+      ],
       "options": {
         "verre_couleurs": ["Clair", "Extra-clair", "Bronze", "Gris", "Dépoli"],
         "traitements": ["Anticalcaire", "Hydrofuge", "Anti-rayure"],
@@ -3500,6 +3912,7 @@
       }
     },
     "automatismes_portails": {
+      "metierVersion": 1,
       "label": "Automatismes – Portails",
       "categories": {
         "portails": {
@@ -3768,12 +4181,12 @@
         "motorisations": {
           "render": "list",
           "fields": [
-            {"key": "alimentationDisponible", "label": "Alimentation électrique disponible à proximité", "type": "boolean"},
-            {"key": "typeAlimentation", "label": "Type d'alimentation prévu", "type": "dropdown", "choices": ["230V existant", "24V", "Tranchée à prévoir", "Solaire"]},
+            {"key": "alimentationDisponible", "label": "Alimentation électrique disponible à proximité", "type": "boolean", "required": true},
+            {"key": "typeAlimentation", "label": "Type d'alimentation prévu", "type": "dropdown", "choices": ["230V existant", "24V", "Tranchée à prévoir", "Solaire"], "required": true},
             {"key": "fourreauExistant", "label": "Présence d'un fourreau enterré existant", "type": "boolean"},
-            {"key": "distanceCoffret", "label": "Distance portail / coffret électrique", "type": "number", "unit": "ml"},
-            {"key": "poidsEstime", "label": "Poids estimé du portail", "type": "number", "unit": "kg"},
-            {"key": "frequenceUtilisation", "label": "Fréquence d'utilisation prévue", "type": "dropdown", "choices": ["Usage particulier", "Usage intensif"]}
+            {"key": "distanceCoffret", "label": "Distance portail / coffret électrique", "type": "number", "unit": "ml", "min": 0, "max": 100},
+            {"key": "poidsEstime", "label": "Poids estimé du portail", "type": "number", "unit": "kg", "required": true, "min": 30, "max": 1500},
+            {"key": "frequenceUtilisation", "label": "Fréquence d'utilisation prévue", "type": "dropdown", "choices": ["Usage particulier", "Usage intensif"], "required": true}
           ]
         },
         "portillons": {
@@ -3816,6 +4229,46 @@
           ]
         }
       },
+      "preparation_steps": [
+        {"key": "verif_solidite_piliers", "label": "Vérifier la solidité et la stabilité des piliers/supports avant fixation des vérins ou bras articulés"},
+        {"key": "calcul_force_necessaire", "label": "Calculer la force nécessaire de la motorisation selon le poids du portail, sa prise au vent et la fréquence d'utilisation (NF EN 12453)"},
+        {"key": "verif_alimentation_electrique", "label": "Vérifier la disponibilité et la conformité de l'alimentation électrique (circuit dédié NF C 15-100)"},
+        {"key": "verif_fourreau_tranchee", "label": "Vérifier la présence ou prévoir la création d'un fourreau enterré pour le câblage entre piliers"},
+        {"key": "verif_planeite_course", "label": "Vérifier la planéité du sol et l'absence d'obstacle sur la course du portail (coulissant)"},
+        {"key": "verif_fonctionnement_manuel", "label": "Vérifier le jeu et le bon fonctionnement manuel du portail avant motorisation"},
+        {"key": "reunir_materiel_securite", "label": "Réunir le matériel de fixation, les EPI et les dispositifs de sécurité (photocellules, feu clignotant, bord sensible)"},
+        {"key": "analyse_risques_zone", "label": "Réaliser l'analyse des risques de la zone de mouvement (présence de piétons, enfants, tiers) selon NF EN 12453"}
+      ],
+      "execution_checklist": [
+        {"key": "forces_fermeture_conformes", "label": "Forces de fermeture mesurées conformes aux seuils NF EN 12453 (400 N dynamique max / 150 N statique max)"},
+        {"key": "photocellules_fonctionnelles", "label": "Cellules photoélectriques installées, alignées et fonctionnelles"},
+        {"key": "arret_urgence_teste", "label": "Dispositif d'arrêt d'urgence / débrayage manuel testé"},
+        {"key": "feu_clignotant_fonctionnel", "label": "Feu clignotant de signalisation fonctionnel et visible"},
+        {"key": "fin_course_reglees", "label": "Fins de course (ouverture/fermeture) réglées et vérifiées"},
+        {"key": "fixations_moteur_conformes", "label": "Fixations du moteur/vérins conformes aux préconisations du fabricant"},
+        {"key": "cablage_protege", "label": "Câblage électrique protégé (fourreau/gaine) et raccordement sur circuit dédié avec différentiel 30 mA"},
+        {"key": "programmation_telecommandes", "label": "Télécommandes/badges/digicode programmés et testés"},
+        {"key": "marquage_ce_notice", "label": "Marquage CE apposé et notice d'instructions remise au client (déclaration de conformité)"},
+        {"key": "essai_cycles_complets", "label": "Essai de plusieurs cycles complets d'ouverture/fermeture sans à-coups ni bruit anormal"}
+      ],
+      "non_conformite_causes": [
+        {"key": "absence_dispositif_securite", "label": "Absence de dispositif de sécurité anti-écrasement (photocellules ou bord sensible)"},
+        {"key": "force_poussee_excessive", "label": "Force de poussée/traction supérieure aux seuils NF EN 12453"},
+        {"key": "defaut_fixation_piliers", "label": "Défaut de fixation ou de solidité des piliers/supports"},
+        {"key": "sous_dimensionnement_moteur", "label": "Sous-dimensionnement de la motorisation par rapport au poids ou à la prise au vent du portail"},
+        {"key": "absence_deverrouillage_manuel", "label": "Absence ou dysfonctionnement du système de déverrouillage manuel de secours"},
+        {"key": "cablage_non_protege", "label": "Câblage électrique non protégé ou non enterré sous fourreau"},
+        {"key": "absence_marquage_ce", "label": "Absence de marquage CE ou de déclaration de conformité remise au client"},
+        {"key": "reglage_fin_course_incorrect", "label": "Réglage incorrect des fins de course entraînant un choc ou un désalignement du vantail"},
+        {"key": "denivele_sol_non_pris_en_compte", "label": "Dénivelé ou irrégularité du sol non pris en compte gênant la course du portail"},
+        {"key": "defaut_alimentation_electrique", "label": "Défaut ou absence d'alimentation électrique dédiée conforme NF C 15-100"}
+      ],
+      "indicateurs": [
+        {"key": "delai_moyen_metre_pose", "label": "Délai moyen métré → pose", "unit": "jours"},
+        {"key": "taux_conformite_forces_mesurees", "label": "Taux de conformité des forces mesurées à la mise en service", "unit": "%"},
+        {"key": "taux_sav_post_installation", "label": "Taux de SAV post-installation", "unit": "%"},
+        {"key": "taux_intervention_defaut_alimentation", "label": "Taux d'intervention pour défaut d'alimentation électrique", "unit": "%"}
+      ],
       "options": {
         "marques_generales": [
           "Somfy",
