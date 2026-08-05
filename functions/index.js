@@ -28,6 +28,7 @@ const {
   aggregateDevisStatus, aggregateUnion, aggregateEarliest,
   LOT_TERMINAL_STATUSES, NON_CONFORMITE_CAUSES,
 } = require("./devisWorkflow");
+const {recordKpiTransition} = require("./kpiStats");
 
 // Phase 5 (temps passé) : les 6 événements horodatés reconnus par
 // logTimeEntry, dans l'ordre attendu d'une journée de pose.
@@ -543,6 +544,10 @@ exports.transitionDevisStatus = onCall(
       // porte sur un lot — voir devisWorkflow.js:notifyTransition.
       let notifyAfter = null;
       let lotContext = null;
+      // Phase 6 (KPIs) : calculés dans la transaction (current.updatedAt
+      // déjà en main), utilisés après le commit pour recordKpiTransition.
+      let kpiDelayMs = null;
+      let kpiReturnCountBefore = 0;
 
       await db.runTransaction(async (tx) => {
         // ── Lectures (toutes avant la moindre écriture, exigé par
@@ -649,6 +654,20 @@ exports.transitionDevisStatus = onCall(
           updatedAt: now,
           ...extraFields,
         };
+
+        // Phase 6 (KPIs) : délai depuis l'entrée dans fromStatus, pour les
+        // agrégats de délais moyens — `current.updatedAt` est déjà en main,
+        // aucune lecture supplémentaire nécessaire.
+        kpiDelayMs = current.updatedAt ?
+          now.toMillis() - current.updatedAt.toMillis() : null;
+        kpiReturnCountBefore = current.returnCount || 0;
+        // Retour au poseur (Phase 5) : incrémente le compteur porté par le
+        // devis/lot lui-même, relu tel quel à la prochaine clôture pour
+        // distinguer "clôturé au premier passage" de "clôturé après retour"
+        // (Phase 6), sans lecture d'historique.
+        if (fromStatus === "À clôturer" && newStatus === "En pose") {
+          updatePayload.returnCount = kpiReturnCountBefore + 1;
+        }
         // Les dates transitent en ISO string (le SDK cloud_functions ne
         // sait pas sérialiser un Timestamp Firestore) : reconverties ici en
         // Timestamp pour rester compatibles avec tous les écrans qui les
@@ -823,6 +842,18 @@ exports.transitionDevisStatus = onCall(
         );
       } catch (e) {
         logger.error("transitionDevisStatus notify error:", e);
+      }
+
+      try {
+        await recordKpiTransition(workspaceId, {
+          fromStatus,
+          newStatus,
+          delayMs: kpiDelayMs,
+          extraFields,
+          returnCount: kpiReturnCountBefore,
+        });
+      } catch (e) {
+        logger.error("transitionDevisStatus kpi error:", e);
       }
 
       return {ok: true};

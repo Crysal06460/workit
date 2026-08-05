@@ -1,8 +1,7 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-05 (suite) — Phase 5 (expérience terrain) codée : rapport poseur unifié,
-non-conformité structurée, circuit de validation (Valider/Retourner/SAV), pointage temps passé, écrans poseur et
-commercial rendus lot-aware. Non déployée, non testée en direct (prévu sur Mac, comme les Phases 3 et 4).
+**Dernière mise à jour :** 2026-08-05 (suite) — Phase 6 (tableau de bord KPIs) codée : agrégats incrémentaux
+côté serveur + nouvel onglet admin. Non déployée, non testée en direct (prévu sur Mac, comme les Phases 3 à 5).
 
 ## 📍 État actuel du projet — À LIRE EN PREMIER avant de reprendre
 
@@ -14,33 +13,98 @@ commercial rendus lot-aware. Non déployée, non testée en direct (prévu sur M
 | 2 — Dictionnaire métier étendu + moteur de documents | ✅ Contenu sourcé fait pour les 12 métiers. ⚠️ Un seul métier (menuiserie, pilote) a été testé en direct de bout en bout — les 11 autres sont codés/analyzés mais **jamais vérifiés dans l'app réelle** (tentative bloquée le 05/08, voir plus bas). 6 des 9 modèles de documents de la roadmap restent à créer (le moteur les supporte déjà). |
 | 3 — Chantiers multi-lots | 🟡 Socle + écran métreur codés le 05/08 (`2925da9`). **PAS déployé, PAS testé en direct.** |
 | 4 — Planner v2 | 🟡 Planner rendu lot-aware + dépendances/conflits/congés/matériel, codé le 05/08 (suite). **PAS déployé, PAS testé en direct.** |
-| 5 — Expérience terrain | 🟡 **Codé aujourd'hui (05/08, suite) : voir détail plus bas.** `flutter analyze`/`npm run lint` 0 erreur. **PAS déployé, PAS testé en direct.** |
-| 6 — Tableau de bord dirigeant (KPIs) | Pas commencée. |
+| 5 — Expérience terrain | 🟡 Rapport poseur unifié, circuit de validation, pointage, causes structurées — codé le 05/08 (suite). **PAS déployé, PAS testé en direct.** |
+| 6 — Tableau de bord dirigeant (KPIs) | 🟡 **Codé aujourd'hui (05/08, suite) : voir détail plus bas.** `flutter analyze`/`npm run lint`/dry-run règles 0 erreur. **PAS déployé, PAS testé en direct.** |
 | 7 — Validation des 12 métiers & lancement | Pas commencée (phase produit, pas dev). |
 
+**Toute la chaîne technique (Phases 0 à 6) est maintenant codée.** Il ne reste que la Phase 7 (validation métier,
+pas du dev) — mais **rien au-delà de la Phase 2 n'a été déployé ni testé en direct**. Le déploiement groupé et
+le test réel sont désormais le vrai goulot d'étranglement du projet, pas l'écriture de code.
+
 ### Ce qui doit être fait AVANT ou PENDANT la prochaine session
-1. **Décider du déploiement groupé Phases 3 + 4 + 5** (`firebase deploy --only functions,firestore:rules`) — les
-   trois phases touchent le même modèle de données (lots) et n'ont jamais pu être testées en direct l'une sans
-   l'autre. Rien n'est déployé sur `workit-1daa1` — le code en prod est encore au commit `257bf18` (Phase 2
-   uniquement).
-2. **Test en direct complet à faire sur le Mac** (comme convenu le 05/08) : scénario détaillé dans la section
-   dédiée plus bas.
+1. **Décider du déploiement groupé Phases 3 à 6** (`firebase deploy --only functions,firestore:rules`) — toutes
+   touchent le même modèle de données (lots, statuts) et n'ont jamais pu être testées en direct. Rien n'est
+   déployé sur `workit-1daa1` — le code en prod est encore au commit `257bf18` (Phase 2 uniquement). C'est
+   désormais le point de blocage principal du projet.
+2. **Test en direct complet à faire sur le Mac** (comme convenu le 05/08) : scénarios détaillés dans les
+   sections dédiées plus bas (une par phase).
 3. Le test en direct des 11 métiers Phase 2 reste aussi à faire (sans automatisation Chrome, bug rencontré le
    05/08).
-4. **Point d'architecture à trancher tôt dans une prochaine session Phase 5** : `admin_dashboard_tab.dart` a été
-   corrigé pour ne plus perdre les chantiers en statut `SAV`/`À clôturer` de ses compteurs, mais n'a **pas**
-   reçu les boutons d'action Valider/Retourner/SAV (décision de scope assumée cette session, voir plus bas) — à
-   étendre si Christophe veut que les admins valident aussi, pas seulement les commerciaux.
+4. `admin_dashboard_tab.dart` n'a toujours pas les boutons d'action Valider/Retourner/SAV (Phase 5, scope
+   assumé) — à étendre si Christophe veut que les admins valident aussi, pas seulement les commerciaux.
 
 ### Repères utiles pour reprendre vite
-- Plan détaillé de la Phase 5 (approuvé) : `~/.claude/plans/wiggly-crafting-stroustrup.md` (réutilisé pour les
-  Phases 4 et 5 successivement — ne contient que le plan de la Phase 5 actuellement). Plan Phase 3 :
+- Plan détaillé de la Phase 6 (approuvé) : `~/.claude/plans/wiggly-crafting-stroustrup.md` (réutilisé pour les
+  Phases 4, 5 et 6 successivement — ne contient que le plan de la Phase 6 actuellement). Plan Phase 3 :
   `~/.claude/plans/swift-snacking-dove.md`.
 - Environnement de test : comptes `commercial@workit-test.fr` / `metreur@workit-test.fr` / `poseur@workit-test.fr`
   (mdp `Workit2026!`), workspace "Ambiance Alu" (id `1Tz93YBgwnrd08ORABaZ`).
 - Sur ce PC Windows : `flutter run -d web-server --web-port=8765 --web-hostname=localhost` puis piloter depuis
   l'extension Claude for Chrome (PAS `-d chrome`, fenêtre isolée non pilotable) — mais l'automatisation Chrome
   s'est montrée peu fiable le 05/08, Christophe a préféré basculer sur le Mac en pilotage manuel pour tester.
+- `firebase login` refait sur ce poste le 05/08 (suite) — session CLI Firebase à nouveau valide, dry-run des
+  règles utilisable directement sans reconnexion.
+
+---
+
+## 🆕 Session 2026-08-05 (suite) — Phase 6 : tableau de bord dirigeant (KPIs)
+
+Christophe a demandé d'attaquer la Phase 6, dernière phase technique avant la Phase 7 (validation métier).
+Contrairement aux Phases 4 et 5, pas de limitation "lot-awareness" à lever ici — la Phase 6 est purement
+additive (agrégation de ce que `transitionDevisStatus` sait déjà). Passage par un plan avant codage vu la
+taille (nouveau sous-système d'agrégation + nouvel écran), voir `~/.claude/plans/wiggly-crafting-stroustrup.md`.
+
+### Décision de conception clé
+Plutôt qu'un nouveau trigger Firestore sur `statusHistory` (roadmap le suggérait), l'agrégation se fait
+**directement dans `transitionDevisStatus`**, en best-effort après le commit de la transaction (même pattern
+que `notifyTransition`, déjà en place) : la fonction connaît déjà `fromStatus`/`newStatus`/`extraFields`, et
+`current.updatedAt` (déjà lu dans la transaction) donne le délai de la transition sans lecture supplémentaire.
+Un seul document `workspaces/{id}/stats/kpis` est mis à jour par `FieldValue.increment()` — même pattern que
+`workspaces/{id}/usage/aiAnalysis` (quota IA, Phase 0), déjà en lecture seule côté client.
+
+### Implémenté
+- **`functions/kpiStats.js`** (nouveau) : `recordKpiTransition()` — incréments groupés sur `stats/kpis` :
+  compteur+durée totale par paire de transition (`transitions.{from}__{to}`), clôtures au premier passage vs
+  après retour, taux de paiement à la clôture, compteur SAV, causes de non-conformité (Phase 5).
+- **`functions/index.js`** : `transitionDevisStatus` calcule `delayMs` (`now - current.updatedAt`) et lit
+  `current.returnCount` avant d'écrire ; incrémente `returnCount` sur le devis/lot à chaque retour au poseur
+  (`À clôturer → En pose`) — relu tel quel à la prochaine clôture pour savoir si elle vient après un retour ;
+  appelle `recordKpiTransition` en best-effort après le commit, à côté de `notifyTransition`.
+- **`firestore.rules`** : nouvelle sous-collection `stats/{statsId}`, calquée exactement sur `usage/` (Phase 0) —
+  lecture membres du workspace, écriture serveur uniquement.
+- **`lib/screens/admin_kpis_tab.dart`** (nouveau) : délais moyens par transition (triés par fréquence), taux de
+  clôture au premier passage / taux de SAV / taux de paiement (barres de progression simples, pas de nouvelle
+  dépendance de graphiques — aucune lib de charts dans le projet), causes de non-conformité (barres
+  proportionnelles), chantiers bloqués depuis plus de 7 jours et charge par équipe aujourd'hui — ces deux
+  derniers calculés en direct (comme `AdminDashboardTab` le fait déjà pour ses propres compteurs) plutôt
+  qu'agrégés, car ils dépendent du temps qui passe et non d'une écriture.
+- **`lib/screens/admin_home_screen.dart`** : 5ᵉ onglet "KPIs" (`TabController(length: 5)`, tabs rendus
+  `isScrollable` pour éviter le débordement).
+
+### Choix de scope assumé
+Pas de ventilation "performance par métier / équipe / agence" (la roadmap conditionne elle-même l'agence à "si
+ajoutée plus tard") — resté au niveau global du workspace pour tenir la taille "M" annoncée par la roadmap.
+Documenté comme suite possible plutôt que construit cette session.
+
+### Vérifications faites cette session
+- `npm run lint` (functions) : 0 erreur. `node -c index.js`/`node -c kpiStats.js` : syntaxe validée.
+- `flutter analyze` : 0 erreur, 144 issues (143 avant, +1 — une seule dépréciation `withOpacity` supplémentaire,
+  même famille que celles déjà tolérées ailleurs).
+- `firebase deploy --only firestore:rules --dry-run` : règles compilées avec succès (session Firebase
+  ré-authentifiée par Christophe plus tôt dans la session).
+
+### ⚠️ Pas fait cette session
+- **Pas déployé, pas testé en direct** — comme les Phases 3 à 5, en attente d'un déploiement groupé décidé avec
+  Christophe. `stats/kpis` ne contiendra aucune donnée réelle tant que des transitions n'auront pas eu lieu en
+  prod après déploiement — impossible à tester avant.
+
+### Reste à faire (prochaine session)
+1. **Décider du déploiement groupé Phases 3 à 6** — désormais le vrai point de blocage du projet (voir en tête
+   de journal).
+2. Tester en direct sur le Mac : dérouler un cycle complet devis→clôture pour peupler `stats/kpis`, vérifier
+   que l'onglet KPIs affiche des délais/taux cohérents avec l'historique réel.
+3. Phase 7 (validation des 12 métiers & lancement) — phase produit, pas de dev à proprement parler : matrice de
+   maturité par métier, tests terrain avec un pro référent + dossiers réels par métier.
 
 ---
 

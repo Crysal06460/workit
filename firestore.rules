@@ -241,6 +241,19 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // ── Sous-collection stats/ (Phase 6, tableau de bord KPIs) ──────────
+      // Document unique `kpis`, agrégats incrémentaux écrits par
+      // transitionDevisStatus (Admin SDK, contourne ces règles) — même
+      // principe que usage/ ci-dessus : lecture seule côté client.
+
+      match /stats/{statsId} {
+        allow read: if isAuth() && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+          myWorkspaceId() == workspaceId
+        );
+        allow write: if false;
+      }
+
       // ── Sous-collection auditLogs/ (journal immuable) ───────────────────
 
       match /auditLogs/{logId} {

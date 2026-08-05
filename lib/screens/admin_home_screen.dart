@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/theme/app_colors.dart';
 import 'admin_company_tab.dart';
 import 'admin_dashboard_tab.dart';
+import 'admin_kpis_tab.dart';
 import 'admin_team_tab.dart';
 import 'planner_screen.dart';
 import 'sign_in_screen.dart';
@@ -26,7 +27,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     if (widget.workspaceId != null) {
       _workspaceId = widget.workspaceId;
       _loading = false;
@@ -97,8 +98,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
               indicatorWeight: 3,
               labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
               tabs: const [
                 Tab(text: 'Tableau de bord', icon: Icon(Icons.dashboard_outlined, size: 20)),
+                Tab(text: 'KPIs', icon: Icon(Icons.insights_outlined, size: 20)),
                 Tab(text: 'Planner', icon: Icon(Icons.view_column_outlined, size: 20)),
                 Tab(text: 'Équipe', icon: Icon(Icons.group_outlined, size: 20)),
                 Tab(text: 'Entreprise', icon: Icon(Icons.business_outlined, size: 20)),
@@ -111,6 +115,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
         controller: _tabController,
         children: [
           AdminDashboardTab(workspaceId: _workspaceId!),
+          AdminKpisTab(workspaceId: _workspaceId!),
           PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleAdmin),
           AdminTeamTab(workspaceId: _workspaceId!),
           AdminCompanyTab(workspaceId: _workspaceId!),
