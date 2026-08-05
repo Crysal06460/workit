@@ -1,37 +1,49 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-05 (suite) — Phase 6 (tableau de bord KPIs) codée : agrégats incrémentaux
-côté serveur + nouvel onglet admin. Non déployée, non testée en direct (prévu sur Mac, comme les Phases 3 à 5).
+**Dernière mise à jour :** 2026-08-05 (suite) — **Phases 3 à 6 déployées en prod sur `workit-1daa1`**
+(`firebase deploy --only functions,firestore:rules`, à la demande explicite de Christophe). Backend en ligne,
+mais **aucun test en direct effectué après ce déploiement** — voir avertissement ci-dessous.
 
 ## 📍 État actuel du projet — À LIRE EN PREMIER avant de reprendre
+
+### ⚠️ Déploiement du 05/08 (suite) — backend en prod, app cliente pas encore revérifiée
+`firebase deploy --only functions,firestore:rules` exécuté avec succès : 3 nouvelles Cloud Functions créées
+(`setLotDependencies`, `updateLotPlanningFields`, `logTimeEntry`), 5 mises à jour (`transitionDevisStatus`,
+`provisionAccounts`, `analyzeDevis`, `onDevisStatusChange`, `onChantierMessageCreated`), règles Firestore
+publiées. **Seul le backend a été déployé — pas de build/déploiement de l'app Flutter elle-même.** Point
+d'attention pour la prochaine session : si des comptes réels (pas seulement les comptes de test) utilisent
+activement l'app en ce moment sur d'anciens builds, ils vont désormais taper sur le nouveau moteur de
+transitions (garde-fou lots, À clôturer devenu pivot, statut SAV) — à surveiller/communiquer si pertinent.
+Avertissements non bloquants du déploiement : runtime Node.js 20 déprécié (décommissionné 2026-10-30, à migrer
+avant cette date) et `firebase-functions` en version obsolète (`npm install --save firebase-functions@latest`
+recommandé) — aucun des deux n'empêche le fonctionnement actuel.
 
 ### Où en est chaque phase de la roadmap (`roadmap_plateforme_multimetier.md`, 8 phases : 0 à 7)
 | Phase | Statut |
 |---|---|
 | 0 — Sécurité et comptes | ✅ Terminée et déployée en prod |
 | 1 — Moteur de workflow générique + historique | ✅ Terminée, déployée, testée en direct |
-| 2 — Dictionnaire métier étendu + moteur de documents | ✅ Contenu sourcé fait pour les 12 métiers. ⚠️ Un seul métier (menuiserie, pilote) a été testé en direct de bout en bout — les 11 autres sont codés/analyzés mais **jamais vérifiés dans l'app réelle** (tentative bloquée le 05/08, voir plus bas). 6 des 9 modèles de documents de la roadmap restent à créer (le moteur les supporte déjà). |
-| 3 — Chantiers multi-lots | 🟡 Socle + écran métreur codés le 05/08 (`2925da9`). **PAS déployé, PAS testé en direct.** |
-| 4 — Planner v2 | 🟡 Planner rendu lot-aware + dépendances/conflits/congés/matériel, codé le 05/08 (suite). **PAS déployé, PAS testé en direct.** |
-| 5 — Expérience terrain | 🟡 Rapport poseur unifié, circuit de validation, pointage, causes structurées — codé le 05/08 (suite). **PAS déployé, PAS testé en direct.** |
-| 6 — Tableau de bord dirigeant (KPIs) | 🟡 **Codé aujourd'hui (05/08, suite) : voir détail plus bas.** `flutter analyze`/`npm run lint`/dry-run règles 0 erreur. **PAS déployé, PAS testé en direct.** |
+| 2 — Dictionnaire métier étendu + moteur de documents | ✅ Contenu sourcé fait pour les 12 métiers, déployé. ⚠️ Un seul métier (menuiserie, pilote) a été testé en direct de bout en bout — les 11 autres sont codés/analyzés mais **jamais vérifiés dans l'app réelle** (tentative bloquée le 05/08, voir plus bas). 6 des 9 modèles de documents de la roadmap restent à créer (le moteur les supporte déjà). |
+| 3 — Chantiers multi-lots | 🟢 Codée le 05/08 (`2925da9`), **déployée en prod** ce 05/08 (suite). **Pas encore testée en direct.** |
+| 4 — Planner v2 | 🟢 Codée le 05/08 (suite), **déployée en prod**. **Pas encore testée en direct.** |
+| 5 — Expérience terrain | 🟢 Codée le 05/08 (suite), **déployée en prod**. **Pas encore testée en direct.** |
+| 6 — Tableau de bord dirigeant (KPIs) | 🟢 Codée le 05/08 (suite), **déployée en prod**. `stats/kpis` sera vide tant qu'aucune transition n'aura eu lieu après ce déploiement. **Pas encore testée en direct.** |
 | 7 — Validation des 12 métiers & lancement | Pas commencée (phase produit, pas dev). |
 
-**Toute la chaîne technique (Phases 0 à 6) est maintenant codée.** Il ne reste que la Phase 7 (validation métier,
-pas du dev) — mais **rien au-delà de la Phase 2 n'a été déployé ni testé en direct**. Le déploiement groupé et
-le test réel sont désormais le vrai goulot d'étranglement du projet, pas l'écriture de code.
+**Toute la chaîne technique (Phases 0 à 6) est maintenant codée ET déployée.** Il ne reste que la Phase 7
+(validation métier, pas du dev). **Le test en direct de bout en bout (Phases 3 à 6, sur le Mac) est désormais
+la priorité n°1** — rien de tout ce travail n'a encore été vérifié dans l'app réelle.
 
 ### Ce qui doit être fait AVANT ou PENDANT la prochaine session
-1. **Décider du déploiement groupé Phases 3 à 6** (`firebase deploy --only functions,firestore:rules`) — toutes
-   touchent le même modèle de données (lots, statuts) et n'ont jamais pu être testées en direct. Rien n'est
-   déployé sur `workit-1daa1` — le code en prod est encore au commit `257bf18` (Phase 2 uniquement). C'est
-   désormais le point de blocage principal du projet.
-2. **Test en direct complet à faire sur le Mac** (comme convenu le 05/08) : scénarios détaillés dans les
-   sections dédiées plus bas (une par phase).
-3. Le test en direct des 11 métiers Phase 2 reste aussi à faire (sans automatisation Chrome, bug rencontré le
+1. **Tester en direct sur le Mac, en priorité** : cycle complet devis multi-métier → métré (lots créés) →
+   Planner (glisser-déposer par lot, dépendances, congés) → poseur (rapport + pointage) → commercial (Valider/
+   Retourner/SAV) → onglet KPIs admin (vérifier que les compteurs se peuplent). Scénarios détaillés dans les
+   sections de session dédiées plus bas (une par phase).
+2. Le test en direct des 11 métiers Phase 2 reste aussi à faire (sans automatisation Chrome, bug rencontré le
    05/08).
-4. `admin_dashboard_tab.dart` n'a toujours pas les boutons d'action Valider/Retourner/SAV (Phase 5, scope
+3. `admin_dashboard_tab.dart` n'a toujours pas les boutons d'action Valider/Retourner/SAV (Phase 5, scope
    assumé) — à étendre si Christophe veut que les admins valident aussi, pas seulement les commerciaux.
+4. Migrer le runtime Cloud Functions Node.js 20 avant le 2026-10-30 (décommissionnement annoncé par Firebase).
 
 ### Repères utiles pour reprendre vite
 - Plan détaillé de la Phase 6 (approuvé) : `~/.claude/plans/wiggly-crafting-stroustrup.md` (réutilisé pour les
