@@ -1,7 +1,38 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-05 — Phase 2 étendue aux 11 autres métiers (dictionnaire sourcé), même
-rigueur que le pilote `menuiserie_aluminium`
+**Dernière mise à jour :** 2026-08-05 — Phase 2 étendue aux 11 autres métiers (dictionnaire sourcé) + tentative
+de test en direct interrompue par un bug Flutter (voir section dédiée)
+
+## ⚠️ Session 2026-08-05 (suite) — Tentative de test en direct d'un des 11 nouveaux métiers, bloquée
+
+Christophe a demandé de tester en direct un des nouveaux métiers (plomberie/chauffe-eau choisi). `flutter run
+-d web-server --web-port=8765 --web-hostname=localhost` lancé, connexion réussie (`commercial@workit-test.fr`,
+workspace "Ambiance Alu"), remplissage du formulaire "Nouveau devis" étape Client OK.
+
+**Bloqué à l'étape "Chantier" → "Éléments"** : le bouton "Suivant" a cessé de répondre de façon reproductible
+après plusieurs clics, sur 3 tentatives fraîches (page rechargée à chaque fois). Cause identifiée dans les logs
+console : une vraie exception du framework Flutter, pas liée à nos changements Phase 2 —
+`Assertion failed: file:///.../material/dropdown.dart:1480:12 — _dropdownRoute == null is not true`, déclenchée
+par une touche Espace atteignant un `DropdownButton` pendant l'ouverture de sa route (probablement provoqué par
+l'automatisation navigateur elle-même — un clic de "flush" utilisé pour contourner un lag de rendu a fini par
+atterrir sur un dropdown). Après ce crash, la navigation du stepper reste bloquée pour le reste de la session
+même après rechargement.
+
+Repéré aussi un bug d'affichage bénin sans rapport : le champ "Nom" du formulaire client n'affiche pas toujours
+le texte tapé à l'écran alors qu'il est bien enregistré (confirmé par la validation qui laisse passer à l'étape
+suivante) — pur problème de rendu canvas, pas de perte de données.
+
+**Décision avec Christophe** : on arrête le test en direct pour cette session plutôt que de continuer à
+insister. Le serveur `localhost:8765` a été laissé tournant en arrière-plan sur ce poste au cas où il voudrait
+reprendre la main lui-même dans Chrome.
+
+### Reste à faire (prochaine session)
+- Retester un des 11 nouveaux métiers en direct — probablement plus simple avec `flutter run -d chrome`
+  (fenêtre isolée, moins de risque de collision entre l'automatisation et le rendu) ou en pilotant soi-même.
+- Si le bug `dropdown.dart:1480` se reproduit en usage normal (pas juste via automatisation), le signaler comme
+  bug Flutter à surveiller — mais pas de preuve à ce stade que ça arrive en usage humain normal.
+
+---
 
 ## ✅ Session 2026-08-05 — Phase 2 : contenu métier étendu aux 11 métiers restants
 
