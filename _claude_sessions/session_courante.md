@@ -3,6 +3,48 @@
 **Dernière mise à jour :** 2026-08-05 — Phase 3 (chantiers multi-lots) codée : socle Cloud Functions/Firestore +
 écran métreur, non déployée (attend feu vert) ni testée en direct (prévu sur Mac)
 
+## 📍 État actuel du projet — À LIRE EN PREMIER avant de reprendre
+
+**On reprend à 14h (2026-08-05) pour attaquer la Phase 4** une fois les limites d'usage réinitialisées.
+
+### Où en est chaque phase de la roadmap (`roadmap_plateforme_multimetier.md`, 8 phases : 0 à 7)
+| Phase | Statut |
+|---|---|
+| 0 — Sécurité et comptes | ✅ Terminée et déployée en prod |
+| 1 — Moteur de workflow générique + historique | ✅ Terminée, déployée, testée en direct |
+| 2 — Dictionnaire métier étendu + moteur de documents | ✅ Contenu sourcé fait pour les 12 métiers. ⚠️ Un seul métier (menuiserie, pilote) a été testé en direct de bout en bout — les 11 autres sont codés/analyzés mais **jamais vérifiés dans l'app réelle** (tentative bloquée le 05/08, voir plus bas). 6 des 9 modèles de documents de la roadmap restent à créer (le moteur les supporte déjà). |
+| 3 — Chantiers multi-lots | 🟡 **Socle + écran métreur codés aujourd'hui (05/08), committés et poussés (`2925da9`). PAS déployé, PAS testé en direct.** Scope volontairement réduit : Planner/poseur/commercial/dashboard non touchés — limitation assumée documentée plus bas. |
+| 4 — Planner v2 | ⏳ **Prochaine étape, prévue 14h aujourd'hui.** Dépend de la Phase 3 (dépendances entre lots) — la roadmap le dit elle-même. |
+| 5 — Expérience terrain (temps, non-conformité, validation) | Pas commencée. |
+| 6 — Tableau de bord dirigeant (KPIs) | Pas commencée. |
+| 7 — Validation des 12 métiers & lancement | Pas commencée (phase produit, pas dev). |
+
+### Ce qui doit être fait AVANT ou PENDANT la Phase 4, à ne pas perdre de vue
+1. **Décider si on déploie la Phase 3** (`firebase deploy --only functions,firestore:rules`) avant d'attaquer la
+   Phase 4, ou si la Phase 4 se code d'abord et que tout se déploie/teste ensemble. Rien n'est déployé pour
+   l'instant sur `workit-1daa1` — le code en prod aujourd'hui est encore au commit `257bf18` (Phase 2 uniquement).
+2. **Phase 4 dépend explicitement de la Phase 3** (roadmap : *"Affichage des dépendances entre lots dans la
+   grille... a besoin des lots multi-métier"*) — or Planner (`planner_screen.dart`) n'a **aucune notion de lot**
+   pour l'instant (hors scope Phase 3 de ce 05/08). Point à trancher en premier en attaquant la Phase 4 : est-ce
+   qu'on commence par donner à Planner la notion de lot (lever la limitation assumée de la Phase 3) avant de
+   construire les nouvelles fonctionnalités Phase 4 (dépendances visuelles, conflits de ressources, congés) ?
+   Sans ça, la Phase 4 telle que décrite dans la roadmap n'a pas de base solide.
+3. Le test en direct de la Phase 3 (scénario détaillé plus bas) et des 11 métiers Phase 2 restent à faire — sur
+   le Mac, décidé le 05/08, sans automatisation Chrome (bug rencontré ce jour-là, détail plus bas).
+
+### Repères utiles pour reprendre vite
+- Plan détaillé de la Phase 3 (approuvé) : `~/.claude/plans/swift-snacking-dove.md`.
+- Dernier commit poussé : `2925da9` (Phase 3, ce 05/08). Rien en attente localement, `git status` propre au
+  moment de cette sauvegarde.
+- Environnement de test : comptes `commercial@workit-test.fr` / `metreur@workit-test.fr` / `poseur@workit-test.fr`
+  (mdp `Workit2026!`), workspace "Ambiance Alu" (id `1Tz93YBgwnrd08ORABaZ`).
+- Sur ce PC Windows : `flutter run -d web-server --web-port=8765 --web-hostname=localhost` puis piloter depuis
+  l'extension Claude for Chrome (PAS `-d chrome`, fenêtre isolée non pilotable) — mais l'automatisation Chrome
+  s'est montrée peu fiable le 05/08 (voir section dédiée), Christophe a préféré basculer sur le Mac en pilotage
+  manuel pour tester.
+
+---
+
 ## 🆕 Session 2026-08-05 (suite) — Phase 3 : chantiers multi-lots (socle + écran métreur), codée mais non déployée
 
 Christophe a demandé d'attaquer la Phase 3 de la roadmap (`roadmap_plateforme_multimetier.md`). Vu la taille XL
