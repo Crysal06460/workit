@@ -1,22 +1,27 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-05 (suite) — **Phases 3 à 6 déployées en prod sur `workit-1daa1`**
-(`firebase deploy --only functions,firestore:rules`, à la demande explicite de Christophe). Backend en ligne,
-mais **aucun test en direct effectué après ce déploiement** — voir avertissement ci-dessous.
+**Dernière mise à jour :** 2026-08-05 (suite) — **Déploiement complet (`firebase deploy`, functions +
+firestore rules + index) confirmé sur `workit-1daa1`**, à la demande explicite de Christophe : projet encore en
+phase de développement, aucun vrai utilisateur, uniquement des comptes de test — le point de prudence soulevé
+plus tôt (comptes réels sur d'anciens builds) ne s'applique pas. **Christophe teste ce soir sur le Mac, Phase 7
+prévue demain.**
 
 ## 📍 État actuel du projet — À LIRE EN PREMIER avant de reprendre
 
 ### ⚠️ Déploiement du 05/08 (suite) — backend en prod, app cliente pas encore revérifiée
-`firebase deploy --only functions,firestore:rules` exécuté avec succès : 3 nouvelles Cloud Functions créées
-(`setLotDependencies`, `updateLotPlanningFields`, `logTimeEntry`), 5 mises à jour (`transitionDevisStatus`,
-`provisionAccounts`, `analyzeDevis`, `onDevisStatusChange`, `onChantierMessageCreated`), règles Firestore
-publiées. **Seul le backend a été déployé — pas de build/déploiement de l'app Flutter elle-même.** Point
-d'attention pour la prochaine session : si des comptes réels (pas seulement les comptes de test) utilisent
-activement l'app en ce moment sur d'anciens builds, ils vont désormais taper sur le nouveau moteur de
-transitions (garde-fou lots, À clôturer devenu pivot, statut SAV) — à surveiller/communiquer si pertinent.
-Avertissements non bloquants du déploiement : runtime Node.js 20 déprécié (décommissionné 2026-10-30, à migrer
-avant cette date) et `firebase-functions` en version obsolète (`npm install --save firebase-functions@latest`
-recommandé) — aucun des deux n'empêche le fonctionnement actuel.
+Deux passes de déploiement : `firebase deploy --only functions,firestore:rules` puis `firebase deploy` complet
+(sans restriction, pour couvrir aussi `firestore.indexes.json`) — la seconde a confirmé que tout était déjà à
+jour (8/8 fonctions "Skipped (No changes detected)", règles déjà à jour, index déployés). 3 nouvelles Cloud
+Functions créées (`setLotDependencies`, `updateLotPlanningFields`, `logTimeEntry`), 5 mises à jour
+(`transitionDevisStatus`, `provisionAccounts`, `analyzeDevis`, `onDevisStatusChange`,
+`onChantierMessageCreated`). **Seul le backend a été déployé — pas de build/déploiement de l'app Flutter
+elle-même** (pas d'hébergement configuré dans `firebase.json` de toute façon, seulement Functions/Firestore).
+Le nouveau moteur de transitions (garde-fou lots, `À clôturer` devenu pivot, statut SAV) est désormais actif en
+prod, mais sans conséquence puisque seuls des comptes de test l'utilisent pour l'instant — à garder en tête
+comme point de vigilance le jour où de vrais utilisateurs seront en jeu. Avertissements non bloquants du
+déploiement : runtime Node.js 20 déprécié (décommissionné 2026-10-30, à migrer avant cette date) et
+`firebase-functions` en version obsolète (`npm install --save firebase-functions@latest` recommandé) — aucun
+des deux n'empêche le fonctionnement actuel.
 
 ### Où en est chaque phase de la roadmap (`roadmap_plateforme_multimetier.md`, 8 phases : 0 à 7)
 | Phase | Statut |
@@ -31,19 +36,23 @@ recommandé) — aucun des deux n'empêche le fonctionnement actuel.
 | 7 — Validation des 12 métiers & lancement | Pas commencée (phase produit, pas dev). |
 
 **Toute la chaîne technique (Phases 0 à 6) est maintenant codée ET déployée.** Il ne reste que la Phase 7
-(validation métier, pas du dev). **Le test en direct de bout en bout (Phases 3 à 6, sur le Mac) est désormais
-la priorité n°1** — rien de tout ce travail n'a encore été vérifié dans l'app réelle.
+(validation métier, pas du dev). **Plan pour la suite, décidé avec Christophe le 05/08 (soir)** : test en direct
+sur le Mac ce soir, Phase 7 attaquée demain.
 
 ### Ce qui doit être fait AVANT ou PENDANT la prochaine session
-1. **Tester en direct sur le Mac, en priorité** : cycle complet devis multi-métier → métré (lots créés) →
-   Planner (glisser-déposer par lot, dépendances, congés) → poseur (rapport + pointage) → commercial (Valider/
-   Retourner/SAV) → onglet KPIs admin (vérifier que les compteurs se peuplent). Scénarios détaillés dans les
-   sections de session dédiées plus bas (une par phase).
-2. Le test en direct des 11 métiers Phase 2 reste aussi à faire (sans automatisation Chrome, bug rencontré le
+1. **Christophe teste en direct sur le Mac ce soir (05/08)** : cycle complet devis multi-métier → métré (lots
+   créés) → Planner (glisser-déposer par lot, dépendances, congés) → poseur (rapport + pointage) → commercial
+   (Valider/Retourner/SAV) → onglet KPIs admin (vérifier que les compteurs se peuplent). Scénarios détaillés
+   dans les sections de session dédiées plus bas (une par phase). **Lire le résultat de ces tests en tout
+   premier en reprenant** (probablement noté par Christophe ou une session Mac).
+2. **Phase 7 prévue demain** (06/08) — lire `roadmap_plateforme_multimetier.md` (détail Phase 7 : matrice de
+   maturité par métier, tests terrain avec un pro référent + 3-5 dossiers réels par métier, gate de lancement)
+   avant de commencer.
+3. Le test en direct des 11 métiers Phase 2 reste aussi à faire (sans automatisation Chrome, bug rencontré le
    05/08).
-3. `admin_dashboard_tab.dart` n'a toujours pas les boutons d'action Valider/Retourner/SAV (Phase 5, scope
+4. `admin_dashboard_tab.dart` n'a toujours pas les boutons d'action Valider/Retourner/SAV (Phase 5, scope
    assumé) — à étendre si Christophe veut que les admins valident aussi, pas seulement les commerciaux.
-4. Migrer le runtime Cloud Functions Node.js 20 avant le 2026-10-30 (décommissionnement annoncé par Firebase).
+5. Migrer le runtime Cloud Functions Node.js 20 avant le 2026-10-30 (décommissionnement annoncé par Firebase).
 
 ### Repères utiles pour reprendre vite
 - Plan détaillé de la Phase 6 (approuvé) : `~/.claude/plans/wiggly-crafting-stroustrup.md` (réutilisé pour les
