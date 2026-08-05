@@ -37,6 +37,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
     if (s == 'À commander' || s == 'Commande en cours') return AppColors.purple;
     if (s == 'À planifier' || s == 'En pose') return AppColors.primary;
     if (s == 'À clôturer') return AppColors.amber;
+    if (s == 'SAV') return AppColors.danger;
     if (s == 'Terminé' || s == 'Clôturé') return AppColors.success;
     return AppColors.grey300;
   }
@@ -380,7 +381,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
         final termines = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
           final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
-          return s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé';
+          return s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé' || s == 'SAV';
         }).length;
 
         final recent = docs.take(20).toList();

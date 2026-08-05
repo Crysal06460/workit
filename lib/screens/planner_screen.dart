@@ -24,7 +24,9 @@ const double _kBacklogWidth = 260;
 
 // Miroir Dart de LOT_TERMINAL_STATUSES (functions/devisWorkflow.js) — un lot
 // dont dépend un autre doit être dans un de ces statuts pour ne plus bloquer.
-const Set<String> _kLotTerminalStatuses = {'Terminé', 'À clôturer'};
+// Phase 5 : À clôturer n'est plus terminal (devenu le statut pivot "rapport
+// soumis, en attente de validation"), SAV ajouté à sa place.
+const Set<String> _kLotTerminalStatuses = {'Terminé', 'SAV'};
 
 const List<String> _kAbsenceReasons = ['Congé', 'Maladie', 'Formation', 'Absence partielle'];
 

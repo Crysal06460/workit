@@ -83,12 +83,44 @@ const TRANSITIONS = {
         "teamId", "poseDate", "poseurIds", "poseurNames", "updated",
       ],
       dateFields: ["poseDate"]},
-    {to: "Terminé", roles: ["poseur", "admin"], requirePoseurAssigned: true,
-      extraFields: ["rapportFin", "paiementEffectue"]},
+    // Phase 5 — soumission unifiée du rapport poseur (fin propre ou
+    // problème) : plus de statut final direct, tout passe par À clôturer
+    // qui devient un statut pivot "en attente de validation" (voir plus
+    // bas). `rapportType` indique à l'écran de validation quel rapport
+    // afficher.
     {to: "À clôturer", roles: ["poseur", "admin"], requirePoseurAssigned: true,
-      extraFields: ["rapportProbleme", "paiementEffectue"]},
+      extraFields: [
+        "rapportType", "rapportFin", "rapportProbleme", "paiementEffectue",
+      ]},
+  ],
+  // Phase 5 — circuit de validation : le responsable (commercial/admin)
+  // examine le rapport soumis par le poseur et choisit une issue. Jamais
+  // accessible au poseur (contrairement à avant, où À clôturer/Terminé
+  // étaient déjà définitifs dès sa propre soumission).
+  "À clôturer": [
+    {to: "Terminé", roles: ["commercial", "admin"],
+      extraFields: ["validationComment"]},
+    {to: "En pose", roles: ["commercial", "admin"],
+      extraFields: ["retourCommentaire"]},
+    {to: "SAV", roles: ["commercial", "admin"],
+      extraFields: ["savReason"]},
   ],
 };
+
+// Phase 5 — causes de non-conformité structurées (liste fermée, roadmap
+// Phase 5). Le champ libre `commentaire` reste optionnel en complément.
+const NON_CONFORMITE_CAUSES = [
+  "Erreur de métré",
+  "Erreur de commande",
+  "Produit manquant/endommagé",
+  "Défaut fournisseur",
+  "Erreur de pose",
+  "Support non conforme",
+  "Oubli matériel",
+  "Absence client",
+  "Intempéries",
+  "Autre",
+];
 
 /**
  * Cherche l'entrée de config correspondant à la transition demandée.
@@ -103,9 +135,10 @@ function findTransition(currentStatus, newStatus) {
 }
 
 // ─── Phase 3 (multi-lots) : agrégation du statut/champs des lots vers le
-// devis parent, pour que les écrans qui ne connaissent pas encore la notion
-// de lot (Planner, écran poseur, écran commercial, dashboard admin)
-// continuent de lire des champs devis-level cohérents. ──────────────────────
+// devis parent, pour que les écrans qui ne manipulent que le devis dans son
+// ensemble (commercial, dashboard admin — Planner et écran poseur sont
+// devenus lot-aware en Phases 4/5) continuent de lire des champs devis-level
+// cohérents. ─────────────────────────────────────────────────────────────
 
 // Un lot ne naît qu'au passage en "À commander" (voir functions/index.js) :
 // pas besoin de couvrir les statuts antérieurs ici.
@@ -114,16 +147,22 @@ const LOT_STATUS_ORDER = {
   "Commande en cours": 0,
   "À planifier": 1,
   "En pose": 2,
-  "Terminé": 3,
+  // Phase 5 : À clôturer n'est plus terminal, c'est le statut pivot "rapport
+  // soumis, en attente de validation par le responsable" — plus avancé que
+  // En pose mais pas encore définitif.
   "À clôturer": 3,
+  "Terminé": 4,
+  "SAV": 4,
 };
-const LOT_TERMINAL_STATUSES = new Set(["Terminé", "À clôturer"]);
+// Phase 5 : À clôturer retiré (devenu un statut pivot, pas terminal — un lot
+// en attente de validation ne doit plus débloquer les lots qui en dépendent).
+// SAV ajouté comme second état terminal possible, à côté de Terminé.
+const LOT_TERMINAL_STATUSES = new Set(["Terminé", "SAV"]);
 
 /**
  * Statut agrégé du devis à partir des statuts de ses lots : le moins avancé,
- * sauf si tous les lots sont à un statut terminal (Terminé/À clôturer), auquel
- * cas le devis passe lui-même Terminé (ou À clôturer si au moins un lot a un
- * problème signalé).
+ * sauf si tous les lots sont à un statut terminal (Terminé/SAV), auquel cas
+ * le devis passe lui-même Terminé (ou SAV si au moins un lot est en SAV).
  * @param {Object[]} lotDataList Données brutes (pas des DocumentSnapshot) de
  *   chaque lot — le lot en cours de transition doit y figurer avec son
  *   NOUVEAU statut (voir functions/index.js, qui fusionne current+updatePayload
@@ -135,7 +174,7 @@ function aggregateDevisStatus(lotDataList) {
   const statuses = lotDataList.map((d) => d.status || INITIAL_STATUS);
   if (statuses.length === 0) return INITIAL_STATUS;
   if (statuses.every((s) => LOT_TERMINAL_STATUSES.has(s))) {
-    return statuses.includes("À clôturer") ? "À clôturer" : "Terminé";
+    return statuses.includes("SAV") ? "SAV" : "Terminé";
   }
   let least = statuses[0];
   let leastOrder = LOT_STATUS_ORDER[least] || 0;
@@ -316,22 +355,58 @@ async function notifyTransition(db, newStatus, after, ctx, lotContext = null) {
       return;
     }
 
+    // Phase 5 : À clôturer est désormais le statut pivot "rapport soumis,
+    // en attente de validation par le responsable" (plus un état final direct
+    // du poseur) — la notification informe qu'une action est attendue,
+    // distincte selon qu'il s'agit d'un rapport de fin propre ou d'un
+    // problème signalé (avec sa cause structurée, Phase 5).
     case "À clôturer": {
       const metreurTokens = after.metreurId ?
         await getTokenByUid(after.metreurId) : [];
       const adminTokens = await getTokensByRole(workspaceId, "admin");
       const tokens = [...commercialTokens, ...metreurTokens, ...adminTokens];
-      const raison = (after.rapportProbleme &&
-        after.rapportProbleme.raison) || null;
-      const title = "⚠️ Chantier pas terminé";
-      const body = raison ?
-        `Chantier ${client} pas terminé car ${raison}` :
-        `Chantier ${client} pas terminé`;
+      const isProbleme = after.rapportType === "probleme";
+      const cause = (after.rapportProbleme &&
+        after.rapportProbleme.cause) || null;
+      const title = isProbleme ?
+        "⚠️ Problème signalé — à valider" : "✅ Rapport de fin — à valider";
+      const body = isProbleme && cause ?
+        `Chantier ${client} : ${cause}. Validation requise.` :
+        `Chantier ${client} : rapport du poseur à valider.`;
       await Promise.all([
         sendNotification(tokens, title, body, {...baseData, type: "status"}),
         ...["commercial", "metreur", "admin"].map((targetRole) =>
           writeInAppNotification(db, {
             workspaceId, devisId, targetRole, type: "status_a_cloturer",
+            title, body,
+          })),
+      ]);
+      return;
+    }
+
+    // Phase 5 : issue possible de la validation, à côté de Terminé — le
+    // chantier (ou le lot) nécessite une intervention après-vente.
+    case "SAV": {
+      const poseurIds = Array.isArray(after.poseurIds) ? after.poseurIds : [];
+      const metreurTokens = after.metreurId ?
+        await getTokenByUid(after.metreurId) : [];
+      const adminTokens = await getTokensByRole(workspaceId, "admin");
+      const poseurTokenArrays = await Promise.all(
+          poseurIds.map((id) => getTokenByUid(id)));
+      const tokens = [
+        ...commercialTokens, ...metreurTokens, ...adminTokens,
+        ...poseurTokenArrays.flat(),
+      ];
+      const savReason = after.savReason || null;
+      const title = "🔧 Chantier passé en SAV";
+      const body = savReason ?
+        `Chantier ${client} : SAV — ${savReason}` :
+        `Chantier ${client} : SAV créé`;
+      await Promise.all([
+        sendNotification(tokens, title, body, {...baseData, type: "status"}),
+        ...["commercial", "metreur", "admin"].map((targetRole) =>
+          writeInAppNotification(db, {
+            workspaceId, devisId, targetRole, type: "status_sav",
             title, body,
           })),
       ]);
@@ -352,4 +427,5 @@ module.exports = {
   aggregateUnion,
   aggregateEarliest,
   LOT_TERMINAL_STATUSES,
+  NON_CONFORMITE_CAUSES,
 };

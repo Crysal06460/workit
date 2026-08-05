@@ -93,14 +93,17 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
       final historique = <_ChantierData>[];
 
       for (final doc in snap.docs) {
-        final data = _ChantierData.fromMap(doc.id, doc.data());
-        final status = data.metreurStatus ?? '';
-        if (status == 'En pose') {
-          aFaire.add(data);
-        } else if (status == 'À clôturer' ||
-            status == 'Terminé' ||
-            status == 'Clôturé') {
-          historique.add(data);
+        for (final data
+            in _ChantierData.expandForPoseur(doc.id, doc.data(), _userId!)) {
+          final status = data.metreurStatus ?? '';
+          if (status == 'En pose') {
+            aFaire.add(data);
+          } else if (status == 'À clôturer' ||
+              status == 'Terminé' ||
+              status == 'Clôturé' ||
+              status == 'SAV') {
+            historique.add(data);
+          }
         }
       }
 
@@ -343,8 +346,12 @@ class _ChantierCard extends StatelessWidget {
         return Colors.greenAccent;
       case 'Clôturé':
         return Colors.tealAccent;
+      // Phase 5 : À clôturer = rapport soumis, en attente de validation par
+      // le responsable (plus un état définitif du poseur).
       case 'À clôturer':
         return Colors.orangeAccent;
+      case 'SAV':
+        return Colors.deepOrangeAccent;
       case 'En pose':
       default:
         return _poseurAccent;
@@ -358,7 +365,9 @@ class _ChantierCard extends StatelessWidget {
       case 'Clôturé':
         return 'Clôturé';
       case 'À clôturer':
-        return 'À clôturer';
+        return 'En attente de validation';
+      case 'SAV':
+        return 'SAV';
       case 'En pose':
       default:
         return 'En pose';
@@ -404,15 +413,37 @@ class _ChantierCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              // Client name
+              // Client name (+ lot, si chantier multi-métier — Phase 3/5)
               Text(
-                data.clientDisplay,
+                data.lotId != null
+                    ? '${data.lotLabel} — ${data.clientDisplay}'
+                    : data.clientDisplay,
                 style: const TextStyle(
                   color: AppColors.grey900,
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
                 ),
               ),
+              if (data.retourCommentaire?.isNotEmpty == true) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(Icons.reply, size: 13, color: Colors.orangeAccent),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Retourné : ${data.retourCommentaire}',
+                        style: const TextStyle(
+                            color: Colors.orangeAccent,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 4),
               // Address
               if (data.address?.isNotEmpty == true) ...[
@@ -491,7 +522,10 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
 
   bool get _isReadOnly {
     final s = widget.data.metreurStatus;
-    return s == 'Terminé' || s == 'Clôturé';
+    // Phase 5 : À clôturer et SAV signifient que le poseur a déjà soumis son
+    // rapport (ou que le responsable a créé un SAV) — plus rien à faire ici
+    // tant que le responsable n'a pas statué.
+    return s == 'Terminé' || s == 'Clôturé' || s == 'À clôturer' || s == 'SAV';
   }
 
   Future<void> _generateRapportAutocontrole() async {
@@ -562,6 +596,48 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ── Retour du responsable (Phase 5) ──────────────────
+                    if (data.retourCommentaire?.isNotEmpty == true) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.orangeAccent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: Colors.orangeAccent.withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.reply,
+                                color: Colors.orangeAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Retourné par le responsable',
+                                    style: TextStyle(
+                                        color: Colors.orangeAccent,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    data.retourCommentaire!,
+                                    style: const TextStyle(
+                                        color: AppColors.grey700, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     // ── Section 1 : Coordonnées client ───────────────────
                     _SectionTitle(
                       icon: Icons.person_outline,
@@ -739,6 +815,21 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                         ),
                       ),
 
+                    // ── Section 5 : Pointage (Phase 5, temps passé) ──────
+                    if (!_isReadOnly) ...[
+                      const SizedBox(height: 20),
+                      _SectionTitle(
+                        icon: Icons.timer_outlined,
+                        label: 'Pointage',
+                      ),
+                      const SizedBox(height: 10),
+                      _PointageSection(
+                        workspaceId: widget.workspaceId,
+                        devisId: data.id,
+                        lotId: data.lotId,
+                      ),
+                    ],
+
                     const SizedBox(height: 80), // espace pour les boutons
                   ],
                 ),
@@ -848,9 +939,12 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                 ),
                 child: Center(
                   child: Text(
-                    widget.data.metreurStatus == 'Clôturé'
-                        ? 'Chantier clôturé'
-                        : 'Chantier terminé — en attente de clôture',
+                    switch (widget.data.metreurStatus) {
+                      'Clôturé' => 'Chantier clôturé',
+                      'À clôturer' => 'Rapport soumis — en attente de validation',
+                      'SAV' => 'Chantier passé en SAV',
+                      _ => 'Chantier terminé',
+                    },
                     style: const TextStyle(
                         color: AppColors.grey400, fontSize: 13),
                   ),
@@ -873,6 +967,7 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
       builder: (_) => _RapportFinChantier(
         workspaceId: widget.workspaceId,
         devisId: widget.data.id,
+        lotId: widget.data.lotId,
         onDone: () {
           Navigator.of(context).pop(); // close bottom sheet
           Navigator.of(context).pop(); // back to list
@@ -893,6 +988,7 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
       builder: (_) => _RapportProbleme(
         workspaceId: widget.workspaceId,
         devisId: widget.data.id,
+        lotId: widget.data.lotId,
         onDone: () {
           Navigator.of(context).pop();
           Navigator.of(context).pop();
@@ -1115,11 +1211,13 @@ class _RapportFinChantier extends StatefulWidget {
   const _RapportFinChantier({
     required this.workspaceId,
     required this.devisId,
+    this.lotId,
     required this.onDone,
   });
 
   final String workspaceId;
   final String devisId;
+  final String? lotId;
   final VoidCallback onDone;
 
   @override
@@ -1197,8 +1295,12 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
       await DevisService.updateStatus(
         workspaceId: widget.workspaceId,
         devisId: widget.devisId,
-        newStatus: 'Terminé',
+        lotId: widget.lotId,
+        // Phase 5 : plus de statut final direct — le rapport passe par
+        // À clôturer, statut pivot en attente de validation du responsable.
+        newStatus: 'À clôturer',
         extraFields: {
+          'rapportType': 'fin',
           'rapportFin': {
             'date': _dateFin.toIso8601String(),
             'photoUrls': photoUrls,
@@ -1512,15 +1614,32 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
 // ════════════════════════════════════════════════════════════════════════════
 // _RapportProbleme (bottom sheet)
 // ════════════════════════════════════════════════════════════════════════════
+// Phase 5 : liste fermée des causes de non-conformité (roadmap), miroir
+// Dart de NON_CONFORMITE_CAUSES (functions/devisWorkflow.js).
+const List<String> _kNonConformiteCauses = [
+  'Erreur de métré',
+  'Erreur de commande',
+  'Produit manquant/endommagé',
+  'Défaut fournisseur',
+  'Erreur de pose',
+  'Support non conforme',
+  'Oubli matériel',
+  'Absence client',
+  'Intempéries',
+  'Autre',
+];
+
 class _RapportProbleme extends StatefulWidget {
   const _RapportProbleme({
     required this.workspaceId,
     required this.devisId,
+    this.lotId,
     required this.onDone,
   });
 
   final String workspaceId;
   final String devisId;
+  final String? lotId;
   final VoidCallback onDone;
 
   @override
@@ -1528,35 +1647,33 @@ class _RapportProbleme extends StatefulWidget {
 }
 
 class _RapportProblemeState extends State<_RapportProbleme> {
-  final _raisonCtrl = TextEditingController();
+  String? _cause;
+  final _commentaireCtrl = TextEditingController();
   bool _reglementEffectue = false;
   bool _loading = false;
 
   @override
-  void initState() {
-    super.initState();
-    _raisonCtrl.addListener(() => setState(() {}));
-  }
-
-  @override
   void dispose() {
-    _raisonCtrl.dispose();
+    _commentaireCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _signaler() async {
-    if (_loading) return;
-    final raison = _raisonCtrl.text.trim();
-    if (raison.isEmpty) return;
+    if (_loading || _cause == null) return;
     setState(() => _loading = true);
 
     try {
       await DevisService.updateStatus(
         workspaceId: widget.workspaceId,
         devisId: widget.devisId,
+        lotId: widget.lotId,
         newStatus: 'À clôturer',
         extraFields: {
-          'rapportProbleme': {'raison': raison},
+          'rapportType': 'probleme',
+          'rapportProbleme': {
+            'cause': _cause,
+            'commentaire': _commentaireCtrl.text.trim(),
+          },
           'paiementEffectue': _reglementEffectue,
         },
       );
@@ -1614,11 +1731,40 @@ class _RapportProblemeState extends State<_RapportProbleme> {
             ),
             const SizedBox(height: 20),
 
+            const Text(
+              'Cause',
+              style: TextStyle(color: AppColors.grey500, fontSize: 13),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.grey50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.grey100),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _cause,
+                  isExpanded: true,
+                  hint: const Text('Choisir une cause',
+                      style: TextStyle(color: Colors.white38)),
+                  dropdownColor: _poseurCard,
+                  style: const TextStyle(color: AppColors.grey900),
+                  items: _kNonConformiteCauses
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: (v) => setState(() => _cause = v),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
             _ProblemeField(
-              controller: _raisonCtrl,
-              label: 'Raison',
+              controller: _commentaireCtrl,
+              label: 'Commentaire (optionnel)',
               hint:
-                  'Pourquoi le chantier n\'est pas terminé ? (manque de matériel, problème sur place, dimensions non conformes...)',
+                  'Détails complémentaires (manque de matériel, problème sur place, dimensions non conformes...)',
             ),
             const SizedBox(height: 16),
 
@@ -1661,9 +1807,7 @@ class _RapportProblemeState extends State<_RapportProbleme> {
                       borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
-                onPressed: (_loading || _raisonCtrl.text.trim().isEmpty)
-                    ? null
-                    : _signaler,
+                onPressed: (_loading || _cause == null) ? null : _signaler,
                 icon: _loading
                     ? const SizedBox(
                         width: 18,
@@ -1798,6 +1942,227 @@ class _GlassCard extends StatelessWidget {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// _PointageSection (Phase 5, temps passé) — événements horodatés d'une
+// journée de pose, lus en direct via timeEntries (devis ou lot selon lotId).
+// ════════════════════════════════════════════════════════════════════════════
+const Map<String, String> _kTimeEntryLabels = {
+  'depart_depot': 'Départ dépôt',
+  'arrivee_chantier': 'Arrivée chantier',
+  'debut_intervention': 'Début intervention',
+  'pause': 'Pause',
+  'reprise': 'Reprise',
+  'fin': 'Fin',
+};
+const List<String> _kTimeEntryOrder = [
+  'depart_depot', 'arrivee_chantier', 'debut_intervention', 'pause', 'reprise', 'fin',
+];
+
+class _PointageSection extends StatefulWidget {
+  const _PointageSection({
+    required this.workspaceId,
+    required this.devisId,
+    this.lotId,
+  });
+
+  final String workspaceId;
+  final String devisId;
+  final String? lotId;
+
+  @override
+  State<_PointageSection> createState() => _PointageSectionState();
+}
+
+class _PointageSectionState extends State<_PointageSection> {
+  bool _logging = false;
+  int _collaborateurs = 1;
+  final _commentaireCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentaireCtrl.dispose();
+    super.dispose();
+  }
+
+  CollectionReference<Map<String, dynamic>> get _entriesRef {
+    final devisRef = FirebaseFirestore.instance
+        .collection('workspaces')
+        .doc(widget.workspaceId)
+        .collection('devis')
+        .doc(widget.devisId);
+    final target =
+        widget.lotId != null ? devisRef.collection('lots').doc(widget.lotId!) : devisRef;
+    return target.collection('timeEntries');
+  }
+
+  Future<void> _log(String type) async {
+    if (_logging) return;
+    setState(() => _logging = true);
+    try {
+      await DevisService.logTimeEntry(
+        workspaceId: widget.workspaceId,
+        devisId: widget.devisId,
+        lotId: widget.lotId,
+        type: type,
+        collaborateurs: type == 'debut_intervention' ? _collaborateurs : null,
+        commentaire: type == 'fin' && _commentaireCtrl.text.trim().isNotEmpty
+            ? _commentaireCtrl.text.trim()
+            : null,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('Erreur de pointage : $e'),
+              backgroundColor: Colors.red),
+        );
+      }
+    }
+    if (mounted) setState(() => _logging = false);
+  }
+
+  Duration? _diff(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+      String fromType,
+      String toType) {
+    DateTime? from;
+    DateTime? to;
+    for (final d in docs) {
+      final data = d.data();
+      final at = data['at'];
+      if (at is! Timestamp) continue;
+      if (data['type'] == fromType && from == null) from = at.toDate();
+      if (data['type'] == toType) to = at.toDate();
+    }
+    if (from == null || to == null) return null;
+    return to.difference(from);
+  }
+
+  String _fmtDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    return '${h}h${m.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _entriesRef.orderBy('at').snapshots(),
+      builder: (context, snap) {
+        final today = DateTime.now();
+        final todayDocs = (snap.data?.docs ?? []).where((d) {
+          final at = d.data()['at'];
+          if (at is! Timestamp) return false;
+          final dt = at.toDate();
+          return dt.year == today.year &&
+              dt.month == today.month &&
+              dt.day == today.day;
+        }).toList();
+
+        final trajet = _diff(todayDocs, 'depart_depot', 'arrivee_chantier');
+        final travail = _diff(todayDocs, 'debut_intervention', 'fin');
+
+        return _GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _kTimeEntryOrder.map((type) {
+                  return OutlinedButton(
+                    onPressed: _logging ? null : () => _log(type),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _poseurAccent,
+                      side: BorderSide(color: _poseurAccent.withOpacity(0.5)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: Text(_kTimeEntryLabels[type]!,
+                        style: const TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w700)),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Text('Collaborateurs (au début)',
+                      style: TextStyle(color: AppColors.grey500, fontSize: 12)),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _collaborateurs > 1
+                        ? () => setState(() => _collaborateurs--)
+                        : null,
+                    icon: const Icon(Icons.remove_circle_outline, size: 20),
+                  ),
+                  Text('$_collaborateurs',
+                      style: const TextStyle(fontWeight: FontWeight.w700)),
+                  IconButton(
+                    onPressed: () => setState(() => _collaborateurs++),
+                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _commentaireCtrl,
+                style: const TextStyle(color: AppColors.grey900, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Commentaire (joint au pointage "Fin")',
+                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                  filled: true,
+                  fillColor: AppColors.grey100,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              if (todayDocs.isNotEmpty) ...[
+                const Divider(height: 24, color: AppColors.grey100),
+                if (trajet != null)
+                  _InfoLine(
+                    icon: Icons.directions_car_outlined,
+                    label: 'Trajet (aujourd\'hui)',
+                    value: _fmtDuration(trajet),
+                  ),
+                if (travail != null)
+                  _InfoLine(
+                    icon: Icons.build_outlined,
+                    label: 'Travail (aujourd\'hui)',
+                    value: _fmtDuration(travail),
+                  ),
+                const SizedBox(height: 4),
+                ...todayDocs.reversed.take(6).map((d) {
+                  final data = d.data();
+                  final at = data['at'];
+                  final type = data['type']?.toString() ?? '';
+                  final dt = at is Timestamp ? at.toDate() : null;
+                  final timeStr = dt == null
+                      ? ''
+                      : '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '$timeStr — ${_kTimeEntryLabels[type] ?? type}',
+                      style: const TextStyle(color: AppColors.grey500, fontSize: 12),
+                    ),
+                  );
+                }),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _InfoLine extends StatelessWidget {
   const _InfoLine({
     required this.icon,
@@ -1927,6 +2292,8 @@ class _TabPill extends StatelessWidget {
 class _ChantierData {
   const _ChantierData({
     required this.id,
+    this.lotId,
+    this.lotLabel,
     this.metreurStatus,
     this.client,
     this.address,
@@ -1934,12 +2301,19 @@ class _ChantierData {
     this.category,
     this.poseDate,
     this.poseurNames,
+    this.retourCommentaire,
     this.summary = const [],
     this.attachments = const [],
     this.draft,
   });
 
   final String id;
+  // Phase 5 : non-null quand cette unité représente un lot (chantier
+  // multi-métier, Phase 3) plutôt que le devis entier — voir
+  // [expandForPoseur]. lotLabel est le libellé métier du lot (ex.
+  // "Plomberie"), utilisé pour distinguer plusieurs cartes d'un même devis.
+  final String? lotId;
+  final String? lotLabel;
   final String? metreurStatus;
   final String? client;
   final String? address;
@@ -1947,6 +2321,9 @@ class _ChantierData {
   final String? category;
   final DateTime? poseDate;
   final String? poseurNames;
+  // Phase 5 : commentaire du responsable quand ce chantier/lot a été
+  // retourné au poseur (À clôturer → En pose) — à afficher en évidence.
+  final String? retourCommentaire;
   final List<_SummaryEntry> summary;
   final List<_AttachmentEntry> attachments;
   final _DraftData? draft;
@@ -2013,10 +2390,61 @@ class _ChantierData {
       category: map['category']?.toString(),
       poseDate: poseDate,
       poseurNames: map['poseurNames']?.toString(),
+      retourCommentaire: map['retourCommentaire']?.toString(),
       summary: summary,
       attachments: attachments,
       draft: draft,
     );
+  }
+
+  _ChantierData _withLot(Map<String, dynamic> lot) {
+    DateTime? lotPoseDate = poseDate;
+    final pd = lot['poseDate'];
+    if (pd is Timestamp) lotPoseDate = pd.toDate();
+
+    return _ChantierData(
+      id: id,
+      lotId: lot['lotId']?.toString(),
+      lotLabel: lot['label']?.toString().isNotEmpty == true
+          ? lot['label'].toString()
+          : lot['lotId']?.toString(),
+      metreurStatus: lot['status']?.toString(),
+      client: client,
+      address: address,
+      phone: phone,
+      category: category,
+      poseDate: lotPoseDate,
+      poseurNames:
+          lot['poseurNames']?.toString().isNotEmpty == true ? lot['poseurNames'].toString() : poseurNames,
+      retourCommentaire: lot['retourCommentaire']?.toString(),
+      summary: summary,
+      attachments: attachments,
+      draft: draft,
+    );
+  }
+
+  // Phase 5 : un devis multi-lots (Phase 3) produit une unité par lot où ce
+  // poseur figure — un poseur affecté à un seul lot d'un chantier
+  // multi-métier ne doit voir que ce lot, pas les autres. Un devis sans lot
+  // produit une seule unité (comportement identique à avant la Phase 5).
+  static List<_ChantierData> expandForPoseur(
+      String id, Map<String, dynamic> map, String myUid) {
+    final base = _ChantierData.fromMap(id, map);
+    final lotsSummary = (map['lotsSummary'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    if (lotsSummary.isEmpty) return [base];
+
+    final units = <_ChantierData>[];
+    for (final lot in lotsSummary) {
+      final poseurIds = (lot['poseurIds'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList();
+      if (poseurIds.contains(myUid)) {
+        units.add(base._withLot(lot));
+      }
+    }
+    return units;
   }
 }
 

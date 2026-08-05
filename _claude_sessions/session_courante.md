@@ -1,7 +1,8 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-05 (suite) — Phase 4 (Planner v2) codée : Planner rendu lot-aware + dépendances/
-congés/matériel/historique, non déployée, non testée en direct (prévu sur Mac, comme la Phase 3)
+**Dernière mise à jour :** 2026-08-05 (suite) — Phase 5 (expérience terrain) codée : rapport poseur unifié,
+non-conformité structurée, circuit de validation (Valider/Retourner/SAV), pointage temps passé, écrans poseur et
+commercial rendus lot-aware. Non déployée, non testée en direct (prévu sur Mac, comme les Phases 3 et 4).
 
 ## 📍 État actuel du projet — À LIRE EN PREMIER avant de reprendre
 
@@ -12,31 +13,130 @@ congés/matériel/historique, non déployée, non testée en direct (prévu sur 
 | 1 — Moteur de workflow générique + historique | ✅ Terminée, déployée, testée en direct |
 | 2 — Dictionnaire métier étendu + moteur de documents | ✅ Contenu sourcé fait pour les 12 métiers. ⚠️ Un seul métier (menuiserie, pilote) a été testé en direct de bout en bout — les 11 autres sont codés/analyzés mais **jamais vérifiés dans l'app réelle** (tentative bloquée le 05/08, voir plus bas). 6 des 9 modèles de documents de la roadmap restent à créer (le moteur les supporte déjà). |
 | 3 — Chantiers multi-lots | 🟡 Socle + écran métreur codés le 05/08 (`2925da9`). **PAS déployé, PAS testé en direct.** |
-| 4 — Planner v2 | 🟡 **Codé aujourd'hui (05/08, suite) : Planner rendu lot-aware (levée de la limitation Phase 3) + les 4 items roadmap (dépendances, conflits de ressources, congés, matériel).** `flutter analyze`/`npm run lint` 0 erreur. **PAS déployé, PAS testé en direct** (dépend du même backend non déployé que la Phase 3). |
-| 5 — Expérience terrain (temps, non-conformité, validation) | Pas commencée. |
+| 4 — Planner v2 | 🟡 Planner rendu lot-aware + dépendances/conflits/congés/matériel, codé le 05/08 (suite). **PAS déployé, PAS testé en direct.** |
+| 5 — Expérience terrain | 🟡 **Codé aujourd'hui (05/08, suite) : voir détail plus bas.** `flutter analyze`/`npm run lint` 0 erreur. **PAS déployé, PAS testé en direct.** |
 | 6 — Tableau de bord dirigeant (KPIs) | Pas commencée. |
 | 7 — Validation des 12 métiers & lancement | Pas commencée (phase produit, pas dev). |
 
 ### Ce qui doit être fait AVANT ou PENDANT la prochaine session
-1. **Décider du déploiement groupé Phase 3 + Phase 4** (`firebase deploy --only functions,firestore:rules`) — les
-   deux phases touchent le même modèle de données (lots) et n'ont jamais pu être testées en direct l'une sans
-   l'autre puisque le Planner ne sait manipuler des lots que depuis cette session. Rien n'est déployé sur
-   `workit-1daa1` — le code en prod est encore au commit `257bf18` (Phase 2 uniquement).
-2. **Test en direct complet à faire sur le Mac** (comme convenu le 05/08 pour la Phase 3) : scénario détaillé
-   dans la section dédiée plus bas — glisser-déposer un lot, vérifier le badge de dépendance, tester un conflit
-   de ressources (deux lots du même devis, même équipe, même jour), ajouter une absence, éditer le matériel
-   requis, consulter l'historique.
+1. **Décider du déploiement groupé Phases 3 + 4 + 5** (`firebase deploy --only functions,firestore:rules`) — les
+   trois phases touchent le même modèle de données (lots) et n'ont jamais pu être testées en direct l'une sans
+   l'autre. Rien n'est déployé sur `workit-1daa1` — le code en prod est encore au commit `257bf18` (Phase 2
+   uniquement).
+2. **Test en direct complet à faire sur le Mac** (comme convenu le 05/08) : scénario détaillé dans la section
+   dédiée plus bas.
 3. Le test en direct des 11 métiers Phase 2 reste aussi à faire (sans automatisation Chrome, bug rencontré le
    05/08).
+4. **Point d'architecture à trancher tôt dans une prochaine session Phase 5** : `admin_dashboard_tab.dart` a été
+   corrigé pour ne plus perdre les chantiers en statut `SAV`/`À clôturer` de ses compteurs, mais n'a **pas**
+   reçu les boutons d'action Valider/Retourner/SAV (décision de scope assumée cette session, voir plus bas) — à
+   étendre si Christophe veut que les admins valident aussi, pas seulement les commerciaux.
 
 ### Repères utiles pour reprendre vite
-- Plan détaillé de la Phase 4 (approuvé) : `~/.claude/plans/wiggly-crafting-stroustrup.md`. Plan Phase 3 :
+- Plan détaillé de la Phase 5 (approuvé) : `~/.claude/plans/wiggly-crafting-stroustrup.md` (réutilisé pour les
+  Phases 4 et 5 successivement — ne contient que le plan de la Phase 5 actuellement). Plan Phase 3 :
   `~/.claude/plans/swift-snacking-dove.md`.
 - Environnement de test : comptes `commercial@workit-test.fr` / `metreur@workit-test.fr` / `poseur@workit-test.fr`
   (mdp `Workit2026!`), workspace "Ambiance Alu" (id `1Tz93YBgwnrd08ORABaZ`).
 - Sur ce PC Windows : `flutter run -d web-server --web-port=8765 --web-hostname=localhost` puis piloter depuis
   l'extension Claude for Chrome (PAS `-d chrome`, fenêtre isolée non pilotable) — mais l'automatisation Chrome
   s'est montrée peu fiable le 05/08, Christophe a préféré basculer sur le Mac en pilotage manuel pour tester.
+
+---
+
+## 🆕 Session 2026-08-05 (suite) — Phase 5 : expérience terrain (temps passé, non-conformité, circuit de validation)
+
+Christophe a demandé d'attaquer la Phase 5. Comme pour la Phase 4, question posée avant de coder (AskUserQuestion) :
+l'écran poseur (`poseurs_home_screen.dart`) n'avait toujours aucune notion de lot — dernière limitation assumée de
+la Phase 3, jamais levée — et la Phase 5 modifie précisément cet écran. **Christophe a choisi de lever cette
+limitation cette session aussi.** Passage par un plan détaillé avant codage (voir
+`~/.claude/plans/wiggly-crafting-stroustrup.md`).
+
+### Constat fait en explorant avant de planifier : le circuit de validation n'existait pas du tout
+`_valider()`/`_signaler()` (poseur) écrivaient directement `Terminé`/`À clôturer`, déjà traités comme définitifs
+partout — `À clôturer` n'avait aucune transition sortante, une impasse. Il a fallu redéfinir son sens : **`À
+clôturer` devient le statut pivot "rapport soumis, en attente de validation"** (plus un état terminal), et un
+nouveau statut **`SAV`** est introduit comme second état terminal à côté de `Terminé`. Comme rien n'est déployé,
+ce changement de sémantique ne casse aucune donnée réelle.
+
+### Implémenté
+- **`functions/devisWorkflow.js`** : `En pose` unifie ses deux anciennes sorties poseur (`→Terminé`/`→À clôturer`)
+  en une seule `→ À clôturer` (`rapportType: 'fin'|'probleme'`) ; nouvelle entrée `À clôturer` avec 3 transitions
+  responsable (`commercial`/`admin`) — `→Terminé` (valider), `→En pose` (retourner, `retourCommentaire`), `→SAV`
+  (`savReason`). `LOT_STATUS_ORDER`/`LOT_TERMINAL_STATUSES` mis à jour (À clôturer n'est plus terminal, SAV
+  ajouté) ; `aggregateDevisStatus` bascule sur SAV au lieu de À clôturer pour le cas "tous les lots terminaux" ;
+  `notifyTransition` : nouveaux cas À clôturer (rapport à valider, cause incluse si problème) et SAV. Nouvelle
+  constante exportée `NON_CONFORMITE_CAUSES` (10 valeurs fermées de la roadmap).
+- **`functions/index.js`** : validation serveur de `rapportProbleme.cause` (doit appartenir à la liste fermée) ;
+  nouvelle Cloud Function callable `logTimeEntry` (rôle poseur/admin + assignation, écrit
+  `devis/{id}/timeEntries` ou `devis/{id}/lots/{lotId}/timeEntries`) ; `lotsSummary` dénormalisée gagne
+  `retourCommentaire` (sinon l'écran poseur, qui ne lit que le devis, ne verrait jamais le retour du responsable
+  sur un lot sans lecture supplémentaire).
+- **`firestore.rules`** : nouvelle sous-collection `timeEntries` (devis et lots) — lecture membres workspace,
+  écriture serveur uniquement (comme `statusHistory`).
+- **`lib/services/devis_service.dart`** : nouvelle méthode `logTimeEntry()`.
+- **`lib/screens/poseurs_home_screen.dart`** (le plus gros morceau) : `_ChantierData` gagne `expandForPoseur()` —
+  un devis sans lot produit une unité (inchangé), un devis avec lots produit une unité par lot où CE poseur
+  figure dans `poseurIds` du lot (pas les autres lots du même devis) ; `_valider()`/`_signaler()` passent par
+  `lotId` + `rapportType` vers `À clôturer` ; sheet "Signaler un problème" gagne un sélecteur de cause (liste
+  fermée, obligatoire) et le champ texte devient un commentaire optionnel ; nouvelle section "Pointage"
+  (`_PointageSection`) sur les cartes actives — 6 boutons horodatés, stream `timeEntries` en direct, récap
+  trajet/travail du jour calculé côté client ; bandeau "Retourné par le responsable" si `retourCommentaire`
+  présent (sur la carte et en tête de la fiche détail).
+- **`lib/screens/commercial_home_screen.dart`** (changement ciblé) : `_QuoteItem` gagne `lotsSummary` ;
+  `_showChantierDetail`/`_ChantierDetailSheet` gagnent `workspaceId` (thread à travers 5 listes : NewQuotes/
+  Measuring/Scheduled/Validated×4/AllItems) ; nouveau `_ValidationBlock` — un bloc par lot en attente (ou un bloc
+  devis-level si pas de lots), lit le rapport directement sur le lot/devis (pas dénormalisé dans lotsSummary,
+  lecture à l'ouverture), 3 boutons Valider/Retourner (avec commentaire)/Créer un SAV (avec motif).
+
+### 🐛 Bugs de cohérence trouvés et corrigés en propageant le nouveau statut SAV
+En cherchant les autres endroits qui connaissaient l'ancien sens de `À clôturer` (terminal), plusieurs listes de
+statuts figées auraient silencieusement mal classé les chantiers `SAV` :
+- `planner_screen.dart` : `_kLotTerminalStatuses` (miroir Dart de `LOT_TERMINAL_STATUSES`) toujours à l'ancienne
+  valeur — corrigé, sinon les badges de dépendance du Planner (Phase 4) auraient affiché "bloqué" indéfiniment
+  pour un lot en réalité débloqué (SAV).
+- `metreur_home_screen.dart` : même bug dans `_blockingDependencyLabel` (dépendances entre lots, Phase 3) ; un
+  chantier `SAV` tombait aussi dans le bucket "nouvelles demandes" au lieu de "à clôturer" (`_onDevisSnapshot`,
+  `else` catch-all).
+- `commercial_home_screen.dart` : les chantiers `SAV` étaient absents du filtre "Terminés" (2 occurrences) —
+  invisibles dans les onglets tabulés (seulement visibles via "Toutes").
+- `admin_dashboard_tab.dart` : les chantiers `SAV` étaient absents du compteur "Terminés" du tableau de bord —
+  silencieusement exclus des stats.
+
+### Choix de scope assumé
+**Les boutons d'action de validation (Valider/Retourner/Créer un SAV) n'ont été ajoutés qu'à
+`commercial_home_screen.dart`**, pas à `admin_dashboard_tab.dart` (fiche détail séparée, pas de code partagé) —
+même type de réduction de scope que pour la Phase 3/4, assumée pour ne pas construire un 4ᵉ écran lot-aware dans
+la même session. `admin_dashboard_tab.dart` a quand même été corrigé pour ne plus perdre les chantiers SAV de ses
+compteurs (bug de cohérence ci-dessus), mais reste en lecture seule sur la validation.
+
+### Vérifications faites cette session
+- `npm run lint` (functions) : 0 erreur. `node -c index.js`/`node -c devisWorkflow.js` : syntaxe validée.
+- `flutter analyze` : 0 erreur, 143 issues (138 avant, +5 nettes — uniquement des dépréciations `withOpacity`,
+  même famille que celles déjà tolérées ailleurs dans le projet).
+- Pas de dry-run des règles Firestore cette fois (`firebase deploy --only firestore:rules --dry-run` a échoué :
+  authentification CLI expirée sur ce poste, `firebase login` à refaire) — vérification manuelle de la syntaxe
+  des blocs ajoutés à la place (accolades équilibrées, même structure que les blocs `statusHistory` existants).
+
+### ⚠️ Pas fait cette session (volontairement, cohérent avec les Phases 3 et 4)
+- **Pas déployé** — backend Phases 3+4+5 jamais déployé sur `workit-1daa1`.
+- **Pas testé en direct** — test réel prévu sur le Mac. Scénario suggéré : sur un devis multi-lots déjà métré,
+  côté poseur soumettre un rapport fin propre sur un lot (vérifier le pointage : Départ dépôt → Arrivée →
+  Début → Fin, collaborateurs, récap trajet/travail affiché) puis un rapport problème sur un autre lot (cause
+  obligatoire + commentaire optionnel) ; côté commercial, ouvrir le détail du chantier et vérifier que les 2
+  blocs de validation apparaissent (un par lot), tester les 3 boutons (Valider, Retourner avec commentaire —
+  vérifier le bandeau côté poseur —, Créer un SAV avec motif) ; vérifier que le badge de dépendance du Planner
+  (Phase 4) et de l'écran métreur (Phase 3) traitent bien `SAV` comme terminal pour débloquer les lots
+  dépendants.
+
+### Reste à faire (prochaine session)
+1. Déployer Phases 3+4+5 ensemble une fois Christophe d'accord, puis `firebase login` à refaire sur ce poste si
+   on reprend ici (session expirée, empêché le dry-run des règles cette fois).
+2. Tester en direct le scénario ci-dessus, sur le Mac.
+3. Étendre les boutons de validation à `admin_dashboard_tab.dart` si Christophe veut que les admins valident
+   aussi (scope cut assumé cette session).
+4. Phase 6 (tableau de bord KPIs) — pas commencée, dépend de `statusHistory` (Phase 1) et du temps/non-conformité
+   (Phase 5, maintenant codée).
 
 ---
 

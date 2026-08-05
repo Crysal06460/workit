@@ -26,8 +26,15 @@ const {
 const {
   findTransition, notifyTransition,
   aggregateDevisStatus, aggregateUnion, aggregateEarliest,
-  LOT_TERMINAL_STATUSES,
+  LOT_TERMINAL_STATUSES, NON_CONFORMITE_CAUSES,
 } = require("./devisWorkflow");
+
+// Phase 5 (temps passé) : les 6 événements horodatés reconnus par
+// logTimeEntry, dans l'ordre attendu d'une journée de pose.
+const TIME_ENTRY_TYPES = new Set([
+  "depart_depot", "arrivee_chantier", "debut_intervention",
+  "pause", "reprise", "fin",
+]);
 
 setGlobalOptions({
   region: "europe-west1",
@@ -493,6 +500,20 @@ exports.transitionDevisStatus = onCall(
         throw new Error("workspaceId, devisId et newStatus sont requis");
       }
 
+      // Phase 5 : la cause de non-conformité est une liste fermée — refus
+      // propre si le client envoie autre chose qu'une des 10 valeurs
+      // connues (le commentaire libre associé reste, lui, optionnel).
+      if (newStatus === "À clôturer" &&
+          extraFields.rapportType === "probleme") {
+        const cause = extraFields.rapportProbleme &&
+          extraFields.rapportProbleme.cause;
+        if (!cause || !NON_CONFORMITE_CAUSES.includes(cause)) {
+          throw new Error(
+              "Cause de non-conformité invalide ou manquante",
+          );
+        }
+      }
+
       const callerDoc = await db.collection("users").doc(callerUid).get();
       if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
       const callerData = callerDoc.data();
@@ -739,6 +760,11 @@ exports.transitionDevisStatus = onCall(
                 transitionedLotData.estimatedDurationDays || null,
               poseurCountRequired: transitionedLotData.poseurCountRequired || 1,
               materielRequis: transitionedLotData.materielRequis || "",
+              // Phase 5 : commentaire du responsable quand un lot est
+              // retourné au poseur (À clôturer → En pose) — dénormalisé ici
+              // pour que l'écran poseur (qui ne lit que le devis, pas les
+              // lots) puisse l'afficher sans lecture supplémentaire.
+              retourCommentaire: transitionedLotData.retourCommentaire || null,
             },
             ...Object.entries(siblingLotDataById).map(([id, d]) => ({
               lotId: id,
@@ -753,6 +779,7 @@ exports.transitionDevisStatus = onCall(
               estimatedDurationDays: d.estimatedDurationDays || null,
               poseurCountRequired: d.poseurCountRequired || 1,
               materielRequis: d.materielRequis || "",
+              retourCommentaire: d.retourCommentaire || null,
             })),
           ];
           devisUpdate = {
@@ -1003,6 +1030,95 @@ exports.updateLotPlanningFields = onCall(
         updatedAt: Timestamp.now(),
       });
       await patchLotSummary(devisRef, devisSnap, lotId, patch);
+
+      return {ok: true};
+    });
+
+/**
+ * Phase 5 (temps passé) : enregistre un événement horodaté de la journée de
+ * pose d'un poseur (départ dépôt, arrivée chantier, début, pause, reprise,
+ * fin). Passe par une Cloud Function (plutôt qu'une écriture client directe)
+ * pour rester cohérent avec le principe déjà établi du projet — vérifie que
+ * l'appelant est bien un poseur assigné (au devis ou au lot ciblé), écrit
+ * dans `devis/{devisId}/timeEntries` ou, si `lotId` est fourni,
+ * `devis/{devisId}/lots/{lotId}/timeEntries`. Écriture simple (pas de
+ * transaction) : un log d'événements n'a pas les mêmes exigences de
+ * cohérence qu'une transition de statut.
+ */
+exports.logTimeEntry = onCall(
+    {region: "europe-west1"},
+    async (request) => {
+      const callerUid = request.auth && request.auth.uid;
+      if (!callerUid) throw new Error("Non autorisé");
+
+      const data = request.data || {};
+      const workspaceId = data.workspaceId;
+      const devisId = data.devisId;
+      const lotId = data.lotId || null;
+      const type = data.type;
+      const collaborateurs = data.collaborateurs;
+      const commentaire = data.commentaire;
+
+      if (!workspaceId || !devisId || !type) {
+        throw new Error("workspaceId, devisId et type sont requis");
+      }
+      if (!TIME_ENTRY_TYPES.has(type)) {
+        throw new Error(`Type de pointage inconnu : ${type}`);
+      }
+
+      const callerDoc = await db.collection("users").doc(callerUid).get();
+      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      const callerData = callerDoc.data();
+      const callerRole = callerData.role;
+      const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
+      if (!["poseur", "admin"].includes(callerRole)) {
+        throw new Error(
+            `Non autorisé : le rôle ${callerRole} ne peut pas pointer`,
+        );
+      }
+
+      const workspaceDoc =
+        await db.collection("workspaces").doc(workspaceId).get();
+      if (!workspaceDoc.exists) {
+        throw new Error("Espace de travail introuvable");
+      }
+      const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
+      if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
+        throw new Error(
+            "Non autorisé : ce chantier n'appartient pas à votre espace " +
+            "de travail",
+        );
+      }
+
+      const devisRef = db.collection("workspaces").doc(workspaceId)
+          .collection("devis").doc(devisId);
+      const targetRef = lotId ? devisRef.collection("lots").doc(lotId) :
+        devisRef;
+      const targetSnap = await targetRef.get();
+      if (!targetSnap.exists) {
+        throw new Error(lotId ? "Lot introuvable" : "Chantier introuvable");
+      }
+      const poseurIds = targetSnap.data().poseurIds || [];
+      if (callerRole === "poseur" && !poseurIds.includes(callerUid)) {
+        throw new Error(
+            "Non autorisé : vous n'êtes pas assigné à ce chantier",
+        );
+      }
+
+      const entry = {
+        type,
+        at: Timestamp.now(),
+        uid: callerUid,
+        role: callerRole,
+      };
+      if (typeof collaborateurs === "number") {
+        entry.collaborateurs = collaborateurs;
+      }
+      if (typeof commentaire === "string" && commentaire.trim()) {
+        entry.commentaire = commentaire.trim();
+      }
+
+      await targetRef.collection("timeEntries").add(entry);
 
       return {ok: true};
     });

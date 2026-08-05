@@ -133,7 +133,10 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         toOrder.add(item);
       } else if (status == 'À planifier' || status == 'En pose') {
         toPlan.add(item);
-      } else if (status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé') {
+      } else if (status == 'À clôturer' ||
+          status == 'Terminé' ||
+          status == 'Clôturé' ||
+          status == 'SAV') {
         toClose.add(item);
       } else {
         newOnes.add(item);
@@ -1468,7 +1471,10 @@ class _MetCard extends StatelessWidget {
     }
     if (s == 'À commander' || s == 'Commande en cours') return AppColors.warning;
     if (s == 'À planifier' || s == 'En pose' || s == 'Chantier à planifier') return AppColors.primary;
-    if (s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé') return AppColors.success;
+    // Phase 5 : À clôturer = rapport soumis, en attente de validation par le
+    // responsable — plus un état terminal (Terminé/Clôturé/SAV le sont).
+    if (s == 'À clôturer') return AppColors.warning;
+    if (s == 'Terminé' || s == 'Clôturé' || s == 'SAV') return AppColors.success;
     return AppColors.warning;
   }
 
@@ -1488,7 +1494,8 @@ class _MetCard extends StatelessWidget {
     if (s == 'À commander') return 'Commander';
     if (s == 'Commande en cours') return 'Confirmer';
     if (s == 'À planifier' || s == 'En pose') return 'Planifier pose';
-    if (s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé') return 'Clôturer';
+    if (s == 'À clôturer') return 'En attente de validation';
+    if (s == 'Terminé' || s == 'Clôturé' || s == 'SAV') return 'Clôturer';
     return 'Accepter';
   }
 
@@ -2156,12 +2163,14 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
   // ─── Phase 3 (multi-lots) : actions par lot ────────────────────────────
 
   /// Libellé du premier lot bloquant parmi les dépendances de [lot] (pas
-  /// encore Terminé/À clôturer), ou null si aucune dépendance ne bloque.
+  /// encore Terminé/SAV — Phase 5 : À clôturer n'est plus terminal, c'est le
+  /// statut pivot "rapport soumis, en attente de validation"), ou null si
+  /// aucune dépendance ne bloque.
   String? _blockingDependencyLabel(_LotSummary lot) {
     for (final depId in lot.dependsOn) {
       final dep = _lots.where((l) => l.lotId == depId).toList();
       final depStatus = dep.isNotEmpty ? dep.first.status : null;
-      if (depStatus != 'Terminé' && depStatus != 'À clôturer') {
+      if (depStatus != 'Terminé' && depStatus != 'SAV') {
         return dep.isNotEmpty ? dep.first.label : depId;
       }
     }

@@ -159,6 +159,18 @@ service cloud.firestore {
           allow update, delete: if false;
         }
 
+        // ── Pointage (Phase 5, temps passé) — événements horodatés du ────
+        // poseur (départ dépôt, arrivée, début, pause, reprise, fin), écrits
+        // exclusivement par la Cloud Function logTimeEntry (même principe
+        // que statusHistory : log immuable, jamais de write client direct).
+        match /timeEntries/{entryId} {
+          allow read: if isAuth() && (
+            get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+            myWorkspaceId() == workspaceId
+          );
+          allow write: if false;
+        }
+
         // ── Lots (Phase 3, multi-lots) — un lot par métier distinct parmi ─
         // les produits du chantier, créés par transitionDevisStatus au
         // passage "À commander" (Admin SDK). Même principe que
@@ -174,6 +186,14 @@ service cloud.firestore {
           allow write: if false;
 
           match /statusHistory/{historyId} {
+            allow read: if isAuth() && (
+              get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+              myWorkspaceId() == workspaceId
+            );
+            allow write: if false;
+          }
+
+          match /timeEntries/{entryId} {
             allow read: if isAuth() && (
               get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
               myWorkspaceId() == workspaceId

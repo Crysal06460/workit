@@ -21,6 +21,7 @@ import 'sign_in_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/dynamic_dropdown_field.dart';
 import '../core/theme/app_colors.dart';
+import '../services/devis_service.dart';
 
 const Map<String, String> _metierOptions = {
   'menuiserie_aluminium': 'Menuiserie Extérieure & Fermeture',
@@ -213,7 +214,10 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                     final terminesItems = docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
                       final status = (data['status'] ?? data['metreurStatus']) as String?;
-                      return status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé';
+                      return status == 'À clôturer' ||
+                          status == 'Terminé' ||
+                          status == 'Clôturé' ||
+                          status == 'SAV';
                     }).toList();
 
                     // compter demo + firestore
@@ -410,7 +414,10 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                         ...docs.where((doc) {
                           final data = doc.data() as Map<String, dynamic>;
                           final status = (data['status'] ?? data['metreurStatus']) as String?;
-                          return status == 'À clôturer' || status == 'Terminé' || status == 'Clôturé';
+                          return status == 'À clôturer' ||
+                              status == 'Terminé' ||
+                              status == 'Clôturé' ||
+                              status == 'SAV';
                         }).map((doc) {
                           final data = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
                           data['id'] = doc.id;
@@ -428,9 +435,10 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                       ];
                       return TabBarView(
                         children: [
-                          _AllItemsList(items: allItems),
+                          _AllItemsList(items: allItems, workspaceId: _workspaceId!),
                           _NewQuotesList(
                             items: newItems,
+                            workspaceId: _workspaceId!,
                             onDelete: (item) {},
                             onEdit: (item) async {
                               await Navigator.of(context).push<_QuoteItem>(
@@ -440,11 +448,11 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                               );
                             },
                           ),
-                          _ScheduledList(items: scheduledItems),
-                          _ValidatedList(items: commandeItems),
-                          _ValidatedList(items: planifierItems),
-                          _ValidatedList(items: poseItems),
-                          _ValidatedList(items: terminesItems),
+                          _ScheduledList(items: scheduledItems, workspaceId: _workspaceId!),
+                          _ValidatedList(items: commandeItems, workspaceId: _workspaceId!),
+                          _ValidatedList(items: planifierItems, workspaceId: _workspaceId!),
+                          _ValidatedList(items: poseItems, workspaceId: _workspaceId!),
+                          _ValidatedList(items: terminesItems, workspaceId: _workspaceId!),
                         ],
                       );
                     },
@@ -635,8 +643,14 @@ class _AddQuoteButton extends StatelessWidget {
 }
 
 class _NewQuotesList extends StatelessWidget {
-  const _NewQuotesList({required this.items, required this.onDelete, required this.onEdit});
+  const _NewQuotesList({
+    required this.items,
+    required this.workspaceId,
+    required this.onDelete,
+    required this.onEdit,
+  });
   final List<_QuoteItem> items;
+  final String workspaceId;
   final ValueChanged<_QuoteItem> onDelete;
   final ValueChanged<_QuoteItem> onEdit;
 
@@ -663,7 +677,7 @@ class _NewQuotesList extends StatelessWidget {
           thumbnailUrl: item.uploadUrl,
           onEdit: () => onEdit(item),
           onDelete: () => onDelete(item),
-          onTap: () => _showChantierDetail(context, item),
+          onTap: () => _showChantierDetail(context, item, workspaceId),
         );
       },
     );
@@ -671,8 +685,9 @@ class _NewQuotesList extends StatelessWidget {
 }
 
 class _MeasuringList extends StatelessWidget {
-  const _MeasuringList({required this.items});
+  const _MeasuringList({required this.items, required this.workspaceId});
   final List<_QuoteItem> items;
+  final String workspaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -694,7 +709,7 @@ class _MeasuringList extends StatelessWidget {
           badgeColor: Colors.lightBlueAccent,
           statusValue: item.status ?? 'En cours',
           trailing: const Icon(Icons.straighten, color: AppColors.grey500),
-          onTap: () => _showChantierDetail(context, item),
+          onTap: () => _showChantierDetail(context, item, workspaceId),
         );
       },
     );
@@ -702,8 +717,9 @@ class _MeasuringList extends StatelessWidget {
 }
 
 class _ScheduledList extends StatelessWidget {
-  const _ScheduledList({required this.items});
+  const _ScheduledList({required this.items, required this.workspaceId});
   final List<_QuoteItem> items;
+  final String workspaceId;
 
   String _fmtDate(DateTime dt) {
     const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -734,7 +750,7 @@ class _ScheduledList extends StatelessWidget {
           badgeLabel: 'Devis prog.',
           badgeColor: AppColors.purple,
           statusValue: item.status ?? 'En cours',
-          onTap: () => _showChantierDetail(context, item),
+          onTap: () => _showChantierDetail(context, item, workspaceId),
         );
       },
     );
@@ -742,8 +758,9 @@ class _ScheduledList extends StatelessWidget {
 }
 
 class _ValidatedList extends StatelessWidget {
-  const _ValidatedList({required this.items});
+  const _ValidatedList({required this.items, required this.workspaceId});
   final List<_QuoteItem> items;
+  final String workspaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -762,6 +779,9 @@ class _ValidatedList extends StatelessWidget {
             : item.status == 'À commander' ? AppColors.warning
             : item.status == 'À planifier' ? AppColors.primary
             : item.status == 'En pose' ? AppColors.success
+            // Phase 5 : rapport soumis, en attente de validation.
+            : item.status == 'À clôturer' ? Colors.orangeAccent
+            : item.status == 'SAV' ? Colors.deepOrangeAccent
             : item.status == 'Terminé' || item.status == 'Clôturé' ? AppColors.grey500
             : _commercialAccent;
         return _QuoteCard(
@@ -770,10 +790,12 @@ class _ValidatedList extends StatelessWidget {
           meta: item.poseDate != null
               ? '📅 Pose le ${item.poseDate!.day}/${item.poseDate!.month}'
               : '${item.number} • ${item.date}',
-          badgeLabel: item.status ?? item.tag,
+          badgeLabel: item.status == 'À clôturer'
+              ? 'À valider'
+              : (item.status ?? item.tag),
           badgeColor: badgeColor,
           trailing: const Icon(Icons.chevron_right, color: AppColors.grey300),
-          onTap: () => _showChantierDetail(context, item),
+          onTap: () => _showChantierDetail(context, item, workspaceId),
         );
       },
     );
@@ -2830,8 +2852,9 @@ class _PillTab extends StatelessWidget {
 
 /// Tab "Tous" — affiche toutes les affaires sans filtre
 class _AllItemsList extends StatelessWidget {
-  const _AllItemsList({required this.items});
+  const _AllItemsList({required this.items, required this.workspaceId});
   final List<_QuoteItem> items;
+  final String workspaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -2862,8 +2885,12 @@ class _AllItemsList extends StatelessWidget {
             badge = 'En pose'; badgeColor = AppColors.success; break;
           case 'Terminé':
           case 'Clôturé':
-          case 'À clôturer':
             badge = 'Terminé'; badgeColor = AppColors.grey500; break;
+          // Phase 5 : rapport soumis, en attente de validation.
+          case 'À clôturer':
+            badge = 'À valider'; badgeColor = Colors.orangeAccent; break;
+          case 'SAV':
+            badge = 'SAV'; badgeColor = Colors.deepOrangeAccent; break;
           default:
             badge = item.status ?? ''; badgeColor = AppColors.grey400;
         }
@@ -2874,7 +2901,7 @@ class _AllItemsList extends StatelessWidget {
           badgeLabel: badge,
           badgeColor: badgeColor,
           statusValue: item.status,
-          onTap: () => _showChantierDetail(context, item),
+          onTap: () => _showChantierDetail(context, item, workspaceId),
         );
       },
     );
@@ -2919,6 +2946,7 @@ class _QuoteItem {
     this.meetingAt,
     this.metreurNote,
     this.metreurNoteName,
+    this.lotsSummary = const [],
   });
 
   final String client;
@@ -2944,6 +2972,9 @@ class _QuoteItem {
   final DateTime? meetingAt;
   final String? metreurNote;
   final String? metreurNoteName;
+  // Phase 3/5 : dénormalisation des lots d'un devis multi-métier (statut,
+  // rapport... par lot) — vide pour un devis sans lot.
+  final List<Map<String, dynamic>> lotsSummary;
 
   _QuoteItem copyWith({
     String? client,
@@ -3051,6 +3082,9 @@ class _QuoteItem {
           : null,
       metreurNote: map['metreurNote']?.toString(),
       metreurNoteName: map['metreurNoteName']?.toString(),
+      lotsSummary: (map['lotsSummary'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList(),
     );
   }
 }
@@ -3253,7 +3287,7 @@ class _QuoteCard extends StatelessWidget {
 
 // ─── Détail chantier ────────────────────────────────────────────────────────
 
-void _showChantierDetail(BuildContext context, _QuoteItem item) {
+void _showChantierDetail(BuildContext context, _QuoteItem item, String workspaceId) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -3261,13 +3295,14 @@ void _showChantierDetail(BuildContext context, _QuoteItem item) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (_) => _ChantierDetailSheet(item: item),
+    builder: (_) => _ChantierDetailSheet(item: item, workspaceId: workspaceId),
   );
 }
 
 class _ChantierDetailSheet extends StatelessWidget {
-  const _ChantierDetailSheet({required this.item});
+  const _ChantierDetailSheet({required this.item, required this.workspaceId});
   final _QuoteItem item;
+  final String workspaceId;
 
   @override
   Widget build(BuildContext context) {
@@ -3532,6 +3567,32 @@ class _ChantierDetailSheet extends StatelessWidget {
               ),
             ],
           ],
+
+          // ── Phase 5 : circuit de validation — un bloc par lot en attente
+          // (ou un bloc devis-level unique pour un chantier sans lot).
+          if (item.id != null) ...[
+            if (item.lotsSummary.isEmpty && status == 'À clôturer') ...[
+              const SizedBox(height: 16),
+              _ValidationBlock(
+                workspaceId: workspaceId,
+                devisId: item.id!,
+                lotId: null,
+                label: item.client,
+              ),
+            ],
+            for (final lot in item.lotsSummary)
+              if (lot['status'] == 'À clôturer') ...[
+                const SizedBox(height: 16),
+                _ValidationBlock(
+                  workspaceId: workspaceId,
+                  devisId: item.id!,
+                  lotId: lot['lotId']?.toString(),
+                  label: lot['label']?.toString().isNotEmpty == true
+                      ? lot['label'].toString()
+                      : (lot['lotId']?.toString() ?? ''),
+                ),
+              ],
+          ],
         ],
       ),
     );
@@ -3555,6 +3616,8 @@ class _ChantierDetailSheet extends StatelessWidget {
         return _commercialAccent;
       case 'À clôturer':
         return Colors.orangeAccent;
+      case 'SAV':
+        return Colors.deepOrangeAccent;
       default:
         return AppColors.grey400;
     }
@@ -3568,6 +3631,226 @@ class _ChantierDetailSheet extends StatelessWidget {
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     return '${dt.day} ${months[dt.month - 1]} ${dt.year} à ${h}h$m';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// _ValidationBlock (Phase 5) — circuit de validation : le responsable
+// (commercial/admin) examine le rapport soumis par le poseur (fin propre ou
+// problème signalé, lu directement sur le lot ou le devis, pas dénormalisé
+// dans lotsSummary) et choisit une issue : Valider (clôture), Retourner au
+// poseur (avec commentaire), ou Créer un SAV (avec motif).
+// ════════════════════════════════════════════════════════════════════════════
+class _ValidationBlock extends StatefulWidget {
+  const _ValidationBlock({
+    required this.workspaceId,
+    required this.devisId,
+    required this.lotId,
+    required this.label,
+  });
+
+  final String workspaceId;
+  final String devisId;
+  final String? lotId;
+  final String label;
+
+  @override
+  State<_ValidationBlock> createState() => _ValidationBlockState();
+}
+
+class _ValidationBlockState extends State<_ValidationBlock> {
+  bool _loading = false;
+
+  DocumentReference<Map<String, dynamic>> get _targetRef {
+    final devisRef = FirebaseFirestore.instance
+        .collection('workspaces')
+        .doc(widget.workspaceId)
+        .collection('devis')
+        .doc(widget.devisId);
+    return widget.lotId != null
+        ? devisRef.collection('lots').doc(widget.lotId!)
+        : devisRef;
+  }
+
+  Future<void> _act(String newStatus, Map<String, dynamic> extraFields) async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      await DevisService.updateStatus(
+        workspaceId: widget.workspaceId,
+        devisId: widget.devisId,
+        lotId: widget.lotId,
+        newStatus: newStatus,
+        extraFields: extraFields,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _promptAndAct({
+    required BuildContext context,
+    required String title,
+    required String hint,
+    required String newStatus,
+    required String extraFieldKey,
+  }) async {
+    final ctrl = TextEditingController();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: _commercialCard,
+        title: Text(title, style: const TextStyle(color: AppColors.grey900)),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 3,
+          autofocus: true,
+          style: const TextStyle(color: AppColors.grey900),
+          decoration: InputDecoration(hintText: hint),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(ctrl.text.trim()),
+            child: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+    if (value == null || value.isEmpty) return;
+    await _act(newStatus, {extraFieldKey: value});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: _targetRef.get(),
+      builder: (context, snap) {
+        final data = snap.data?.data();
+        final rapportType = data?['rapportType']?.toString();
+        final rapportProbleme = data?['rapportProbleme'] is Map
+            ? Map<String, dynamic>.from(data!['rapportProbleme'] as Map)
+            : null;
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.orangeAccent.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.orangeAccent.withOpacity(0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.pending_actions, color: Colors.orangeAccent, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${widget.label} — à valider',
+                      style: const TextStyle(
+                          color: Colors.orangeAccent,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (snap.connectionState != ConnectionState.done)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                )
+              else if (rapportType == 'probleme' && rapportProbleme != null) ...[
+                Text(
+                  'Cause : ${rapportProbleme['cause'] ?? '—'}',
+                  style: const TextStyle(
+                      color: AppColors.grey900,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13),
+                ),
+                if ((rapportProbleme['commentaire'] as String?)?.isNotEmpty == true)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      rapportProbleme['commentaire'] as String,
+                      style: const TextStyle(color: AppColors.grey700, fontSize: 13),
+                    ),
+                  ),
+              ] else
+                const Text(
+                  'Rapport de fin propre, aucun problème signalé.',
+                  style: TextStyle(color: AppColors.grey700, fontSize: 13),
+                ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _loading ? null : () => _act('Terminé', const {}),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: _commercialAccent, foregroundColor: Colors.black),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Valider'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () => _promptAndAct(
+                              context: context,
+                              title: 'Retourner au poseur',
+                              hint: 'Pourquoi renvoyer ce chantier ?',
+                              newStatus: 'En pose',
+                              extraFieldKey: 'retourCommentaire',
+                            ),
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orangeAccent,
+                        side: const BorderSide(color: Colors.orangeAccent)),
+                    icon: const Icon(Icons.reply, size: 16),
+                    label: const Text('Retourner'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _loading
+                        ? null
+                        : () => _promptAndAct(
+                              context: context,
+                              title: 'Créer un SAV',
+                              hint: 'Motif du SAV',
+                              newStatus: 'SAV',
+                              extraFieldKey: 'savReason',
+                            ),
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.deepOrangeAccent,
+                        side: const BorderSide(color: Colors.deepOrangeAccent)),
+                    icon: const Icon(Icons.build_circle_outlined, size: 16),
+                    label: const Text('Créer un SAV'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

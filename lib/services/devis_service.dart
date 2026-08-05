@@ -127,6 +127,32 @@ class DevisService {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // Enregistre un événement de pointage (Phase 5, temps passé) : départ
+  // dépôt, arrivée chantier, début intervention, pause, reprise, fin.
+  // Appelle la Cloud Function callable logTimeEntry (timeEntries en
+  // écriture serveur uniquement côté règles Firestore).
+  // ─────────────────────────────────────────────────────────────
+  static Future<void> logTimeEntry({
+    required String workspaceId,
+    required String devisId,
+    String? lotId,
+    required String type,
+    int? collaborateurs,
+    String? commentaire,
+  }) async {
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+        .httpsCallable('logTimeEntry');
+    await callable.call(<String, dynamic>{
+      'workspaceId': workspaceId,
+      'devisId': devisId,
+      if (lotId != null) 'lotId': lotId,
+      'type': type,
+      if (collaborateurs != null) 'collaborateurs': collaborateurs,
+      if (commentaire != null) 'commentaire': commentaire,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // Stream notifications non lues pour un rôle (badge bottom nav)
   // ─────────────────────────────────────────────────────────────
   static Stream<int> unreadCount({
