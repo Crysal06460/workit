@@ -114,9 +114,11 @@ compteurs (bug de cohérence ci-dessus), mais reste en lecture seule sur la vali
 - `npm run lint` (functions) : 0 erreur. `node -c index.js`/`node -c devisWorkflow.js` : syntaxe validée.
 - `flutter analyze` : 0 erreur, 143 issues (138 avant, +5 nettes — uniquement des dépréciations `withOpacity`,
   même famille que celles déjà tolérées ailleurs dans le projet).
-- Pas de dry-run des règles Firestore cette fois (`firebase deploy --only firestore:rules --dry-run` a échoué :
-  authentification CLI expirée sur ce poste, `firebase login` à refaire) — vérification manuelle de la syntaxe
-  des blocs ajoutés à la place (accolades équilibrées, même structure que les blocs `statusHistory` existants).
+- `firebase deploy --only firestore:rules --dry-run` : d'abord échoué (authentification CLI expirée sur ce
+  poste), contourné par une vérification manuelle de la syntaxe des blocs ajoutés (accolades équilibrées, même
+  structure que les blocs `statusHistory` existants) — puis **`firebase login` refait par Christophe et
+  dry-run relancé avec succès** (`cloud.firestore: rules file firestore.rules compiled successfully`),
+  confirmant que les nouveaux blocs `timeEntries` compilent correctement.
 
 ### ⚠️ Pas fait cette session (volontairement, cohérent avec les Phases 3 et 4)
 - **Pas déployé** — backend Phases 3+4+5 jamais déployé sur `workit-1daa1`.
