@@ -1,11 +1,9 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-05 — Phase 3 (chantiers multi-lots) codée : socle Cloud Functions/Firestore +
-écran métreur, non déployée (attend feu vert) ni testée en direct (prévu sur Mac)
+**Dernière mise à jour :** 2026-08-05 (suite) — Phase 4 (Planner v2) codée : Planner rendu lot-aware + dépendances/
+congés/matériel/historique, non déployée, non testée en direct (prévu sur Mac, comme la Phase 3)
 
 ## 📍 État actuel du projet — À LIRE EN PREMIER avant de reprendre
-
-**On reprend à 14h (2026-08-05) pour attaquer la Phase 4** une fois les limites d'usage réinitialisées.
 
 ### Où en est chaque phase de la roadmap (`roadmap_plateforme_multimetier.md`, 8 phases : 0 à 7)
 | Phase | Statut |
@@ -13,35 +11,123 @@
 | 0 — Sécurité et comptes | ✅ Terminée et déployée en prod |
 | 1 — Moteur de workflow générique + historique | ✅ Terminée, déployée, testée en direct |
 | 2 — Dictionnaire métier étendu + moteur de documents | ✅ Contenu sourcé fait pour les 12 métiers. ⚠️ Un seul métier (menuiserie, pilote) a été testé en direct de bout en bout — les 11 autres sont codés/analyzés mais **jamais vérifiés dans l'app réelle** (tentative bloquée le 05/08, voir plus bas). 6 des 9 modèles de documents de la roadmap restent à créer (le moteur les supporte déjà). |
-| 3 — Chantiers multi-lots | 🟡 **Socle + écran métreur codés aujourd'hui (05/08), committés et poussés (`2925da9`). PAS déployé, PAS testé en direct.** Scope volontairement réduit : Planner/poseur/commercial/dashboard non touchés — limitation assumée documentée plus bas. |
-| 4 — Planner v2 | ⏳ **Prochaine étape, prévue 14h aujourd'hui.** Dépend de la Phase 3 (dépendances entre lots) — la roadmap le dit elle-même. |
+| 3 — Chantiers multi-lots | 🟡 Socle + écran métreur codés le 05/08 (`2925da9`). **PAS déployé, PAS testé en direct.** |
+| 4 — Planner v2 | 🟡 **Codé aujourd'hui (05/08, suite) : Planner rendu lot-aware (levée de la limitation Phase 3) + les 4 items roadmap (dépendances, conflits de ressources, congés, matériel).** `flutter analyze`/`npm run lint` 0 erreur. **PAS déployé, PAS testé en direct** (dépend du même backend non déployé que la Phase 3). |
 | 5 — Expérience terrain (temps, non-conformité, validation) | Pas commencée. |
 | 6 — Tableau de bord dirigeant (KPIs) | Pas commencée. |
 | 7 — Validation des 12 métiers & lancement | Pas commencée (phase produit, pas dev). |
 
-### Ce qui doit être fait AVANT ou PENDANT la Phase 4, à ne pas perdre de vue
-1. **Décider si on déploie la Phase 3** (`firebase deploy --only functions,firestore:rules`) avant d'attaquer la
-   Phase 4, ou si la Phase 4 se code d'abord et que tout se déploie/teste ensemble. Rien n'est déployé pour
-   l'instant sur `workit-1daa1` — le code en prod aujourd'hui est encore au commit `257bf18` (Phase 2 uniquement).
-2. **Phase 4 dépend explicitement de la Phase 3** (roadmap : *"Affichage des dépendances entre lots dans la
-   grille... a besoin des lots multi-métier"*) — or Planner (`planner_screen.dart`) n'a **aucune notion de lot**
-   pour l'instant (hors scope Phase 3 de ce 05/08). Point à trancher en premier en attaquant la Phase 4 : est-ce
-   qu'on commence par donner à Planner la notion de lot (lever la limitation assumée de la Phase 3) avant de
-   construire les nouvelles fonctionnalités Phase 4 (dépendances visuelles, conflits de ressources, congés) ?
-   Sans ça, la Phase 4 telle que décrite dans la roadmap n'a pas de base solide.
-3. Le test en direct de la Phase 3 (scénario détaillé plus bas) et des 11 métiers Phase 2 restent à faire — sur
-   le Mac, décidé le 05/08, sans automatisation Chrome (bug rencontré ce jour-là, détail plus bas).
+### Ce qui doit être fait AVANT ou PENDANT la prochaine session
+1. **Décider du déploiement groupé Phase 3 + Phase 4** (`firebase deploy --only functions,firestore:rules`) — les
+   deux phases touchent le même modèle de données (lots) et n'ont jamais pu être testées en direct l'une sans
+   l'autre puisque le Planner ne sait manipuler des lots que depuis cette session. Rien n'est déployé sur
+   `workit-1daa1` — le code en prod est encore au commit `257bf18` (Phase 2 uniquement).
+2. **Test en direct complet à faire sur le Mac** (comme convenu le 05/08 pour la Phase 3) : scénario détaillé
+   dans la section dédiée plus bas — glisser-déposer un lot, vérifier le badge de dépendance, tester un conflit
+   de ressources (deux lots du même devis, même équipe, même jour), ajouter une absence, éditer le matériel
+   requis, consulter l'historique.
+3. Le test en direct des 11 métiers Phase 2 reste aussi à faire (sans automatisation Chrome, bug rencontré le
+   05/08).
 
 ### Repères utiles pour reprendre vite
-- Plan détaillé de la Phase 3 (approuvé) : `~/.claude/plans/swift-snacking-dove.md`.
-- Dernier commit poussé : `2925da9` (Phase 3, ce 05/08). Rien en attente localement, `git status` propre au
-  moment de cette sauvegarde.
+- Plan détaillé de la Phase 4 (approuvé) : `~/.claude/plans/wiggly-crafting-stroustrup.md`. Plan Phase 3 :
+  `~/.claude/plans/swift-snacking-dove.md`.
 - Environnement de test : comptes `commercial@workit-test.fr` / `metreur@workit-test.fr` / `poseur@workit-test.fr`
   (mdp `Workit2026!`), workspace "Ambiance Alu" (id `1Tz93YBgwnrd08ORABaZ`).
 - Sur ce PC Windows : `flutter run -d web-server --web-port=8765 --web-hostname=localhost` puis piloter depuis
   l'extension Claude for Chrome (PAS `-d chrome`, fenêtre isolée non pilotable) — mais l'automatisation Chrome
-  s'est montrée peu fiable le 05/08 (voir section dédiée), Christophe a préféré basculer sur le Mac en pilotage
-  manuel pour tester.
+  s'est montrée peu fiable le 05/08, Christophe a préféré basculer sur le Mac en pilotage manuel pour tester.
+
+---
+
+## 🆕 Session 2026-08-05 (suite) — Phase 4 : Planner v2 (lot-aware, dépendances, congés, ressources, matériel)
+
+Christophe a demandé d'attaquer la Phase 4. Avant de coder, question posée (AskUserQuestion) sur la dépendance
+non résolue entre Phase 4 et Phase 3 : la roadmap dit que la Phase 4 a besoin des lots multi-métier pour afficher
+leurs dépendances, mais le Planner (`planner_screen.dart`) n'avait encore aucune notion de lot (scope réduit de
+la Phase 3). **Christophe a choisi de lever cette limitation en premier** plutôt que de construire les nouvelles
+fonctionnalités sur une base qui ignore les lots. Passage par un plan détaillé avant codage (taille comparable à
+la Phase 3), voir `~/.claude/plans/wiggly-crafting-stroustrup.md` pour le plan complet approuvé.
+
+### Décision de conception clé
+Le Planner a besoin, pour chaque devis affiché, du détail temps réel de chacun de ses lots (statut, équipe,
+dépendances...). Plutôt qu'une requête `collectionGroup('lots')` (aurait nécessité d'ajouter `workspaceId` sur
+chaque lot, un nouvel index Firestore, une nouvelle règle), le choix a été d'étendre la dénormalisation déjà en
+place depuis la Phase 3 (`devis.lotsSummary`, écrite par `transitionDevisStatus`) avec les champs manquants —
+`teamId`, `dependsOn`, `estimatedDurationDays`, `poseurCountRequired`, `materielRequis`, `poseurNames`. Le
+Planner continue de fonctionner avec le seul flux qu'il connaissait déjà (`devis.snapshots()`), sans nouvelle
+règle ni nouvel index.
+
+### Implémenté
+- **`functions/index.js`** : lots seedés avec `poseurCountRequired: 1`/`materielRequis: ''` en plus de
+  `estimatedDurationDays: null` déjà existant ; `lotsSummary` (aux deux endroits où elle est générée — seeding et
+  agrégat après transition d'un lot) étendue avec les nouveaux champs ; `setLotDependencies` répercute désormais
+  `dependsOn` sur `lotsSummary` (sinon le Planner aurait affiché une dépendance obsolète jusqu'à la prochaine
+  transition de statut du lot) via un nouveau helper `patchLotSummary` ; nouvelle Cloud Function callable
+  `updateLotPlanningFields` (calquée sur `setLotDependencies`) pour éditer durée/poseurs/matériel d'un lot —
+  nécessaire car `lots/{lotId}` reste en écriture serveur uniquement côté règles Firestore, et ces champs ne sont
+  pas des transitions de statut donc ne passent pas par `transitionDevisStatus`. Aucun changement dans
+  `devisWorkflow.js` : les transitions existantes (`À planifier → En pose`, `En pose → En pose`) acceptaient déjà
+  `teamId`/`poseDate`/`poseurIds`/`poseurNames` par lot depuis la Phase 3.
+- **`lib/services/devis_service.dart`** : nouvelle méthode `updateLotPlanningFields()`.
+- **`lib/screens/planner_screen.dart`** (réécriture complète, 1113 → 1652 lignes) :
+  - Nouveau modèle `_PlanUnit` remplace `_ChantierPlan` comme unité planifiable : un devis sans lot produit une
+    seule unité (comportement inchangé) ; un devis avec lots (`lotsSummary` non vide) produit une unité par lot.
+    Backlog et grille filtrent désormais sur le statut de l'unité (pas le statut agrégé du devis) — un devis avec
+    un lot prêt et un lot encore en attente affiche maintenant deux cartes distinctes avec le bon statut chacune,
+    au lieu d'un statut agrégé qui masquait celui qui est prêt. C'est le cœur du déblocage de la limitation
+    Phase 3.
+  - Glisser-déposer : le payload `Draggable`/`DragTarget` porte directement un `_PlanUnit` (devisId + lotId
+    optionnel) au lieu d'un simple id de devis ; `_assignToCell` transmet `lotId` à `DevisService.updateStatus`.
+  - Conflits de ressources : `_teamLoad`/`_teamCapacity`/`overloadCount` opèrent sur `_PlanUnit` avec la même
+    forme qu'avant — couvrent désormais automatiquement le cas "deux lots du même devis sur la même équipe le
+    même jour" sans logique supplémentaire.
+  - Badge de dépendance (`_DependencyChip`, réutilisé backlog/grille/fiche détail) : affiche les lots amonts
+    d'un lot avec `dependsOn`, distingue visuellement satisfait/bloqué (miroir Dart de `LOT_TERMINAL_STATUSES` :
+    `_kLotTerminalStatuses`) ; `isReady` étend sa condition existante (livraison fournisseur) avec la
+    satisfaction des dépendances. Comme pour la date de livraison, c'est une aide visuelle côté client — le
+    serveur reste la seule autorité réelle (`requiresDependenciesValidated`, déjà en place depuis la Phase 3) :
+    un lot encore bloqué reste techniquement draggable mais le serveur refuserait la transition avec un message
+    clair, exactement comme le pattern déjà existant pour la date de livraison.
+  - "Chantiers non affectés" (item roadmap) : couvert nativement par le panneau backlog une fois lot-aware, pas
+    de liste séparée construite.
+  - Nouveau bouton "Historique" dans la fiche détail (`_HistorySheet`) : lit `statusHistory` (sous-collection du
+    lot si applicable, sinon du devis), déjà immuable et alimentée par `transitionDevisStatus` — pur ajout de
+    lecture, aucune écriture.
+  - Champ "Matériel requis" ajouté à la fiche détail, sauvegardé via `updateLotPlanningFields` si l'unité est un
+    lot, ou écriture directe Firestore (comme durée/poseurs le sont déjà) si c'est un devis sans lot.
+  - Nouvel écran de saisie des congés (`_UnavailabilitiesSheet` + `_UnavailabilityFormSheet`), ouvert depuis un
+    bouton "Congés" dans la barre supérieure à côté du bouton "Équipe" existant : liste/ajout/modification/
+    suppression des `unavailabilities` du workspace (poseur, dates, motif parmi congé/maladie/formation/absence
+    partielle) — écriture directe côté client, règle déjà ouverte depuis la Phase v1 du Planner (aucun
+    changement de règles Firestore nécessaire).
+
+### Vérifications faites cette session
+- `npm run lint` (functions) : 0 erreur.
+- `node -c functions/index.js` : syntaxe validée.
+- `flutter analyze` : 0 erreur, 138 issues (136 avant + 2 nettes, uniquement des `withOpacity` dépréciés — même
+  famille que les dépréciations déjà tolérées ailleurs dans le projet, pas de nouvelle vraie erreur).
+
+### ⚠️ Pas fait cette session (volontairement, cohérent avec la Phase 3)
+- **Pas déployé** — backend Phase 3 + Phase 4 jamais déployé sur `workit-1daa1`, décision de déploiement groupé à
+  prendre avec Christophe.
+- **Pas testé en direct** — même décision que pour la Phase 3 : test réel prévu sur le Mac, en pilotage manuel
+  (pas d'automatisation Chrome, instable lors de la session précédente). Scénario de test suggéré pour la
+  prochaine session : créer/reprendre un devis multi-métier, le faire passer par le métré pour générer ses lots,
+  ouvrir le Planner, vérifier que chaque lot apparaît comme une carte backlog distincte avec son propre statut,
+  glisser-déposer un lot prêt vers une équipe/jour, déclarer une dépendance entre deux lots (via l'écran
+  métreur) et vérifier le badge "Bloqué par..." dans le Planner, forcer un conflit de ressources (deux lots,
+  même équipe, même jour), ajouter une absence via le nouveau bouton "Congés", éditer le matériel requis d'un
+  lot et vérifier sa persistance, consulter l'historique d'un lot.
+
+### Reste à faire (prochaine session)
+1. Déployer Phase 3 + Phase 4 ensemble (`firebase deploy --only functions,firestore:rules`) une fois Christophe
+   d'accord.
+2. Tester en direct le scénario ci-dessus, sur le Mac.
+3. Adapter `poseurs_home_screen.dart` (clôture par lot) — dernière limitation Phase 3 encore non levée, en
+   dehors du périmètre du Planner.
+4. Éventuellement : petite UI de statut par lot sur `commercial_home_screen.dart`/`admin_dashboard_tab.dart`
+   (mentionné comme optionnel depuis la Phase 3).
 
 ---
 

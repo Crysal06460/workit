@@ -98,6 +98,35 @@ class DevisService {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // Met à jour les champs de planification d'un lot (durée estimée,
+  // poseurs requis, matériel requis) — Phase 4, Planner v2. Champs de
+  // planification, pas une transition de statut, donc pas via updateStatus.
+  // Appelle la Cloud Function callable updateLotPlanningFields (lots en
+  // écriture serveur uniquement côté règles Firestore).
+  // ─────────────────────────────────────────────────────────────
+  static Future<void> updateLotPlanningFields({
+    required String workspaceId,
+    required String devisId,
+    required String lotId,
+    int? estimatedDurationDays,
+    int? poseurCountRequired,
+    String? materielRequis,
+  }) async {
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+        .httpsCallable('updateLotPlanningFields');
+    await callable.call(<String, dynamic>{
+      'workspaceId': workspaceId,
+      'devisId': devisId,
+      'lotId': lotId,
+      if (estimatedDurationDays != null)
+        'estimatedDurationDays': estimatedDurationDays,
+      if (poseurCountRequired != null)
+        'poseurCountRequired': poseurCountRequired,
+      if (materielRequis != null) 'materielRequis': materielRequis,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // Stream notifications non lues pour un rôle (badge bottom nav)
   // ─────────────────────────────────────────────────────────────
   static Stream<int> unreadCount({

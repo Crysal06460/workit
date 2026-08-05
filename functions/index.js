@@ -686,6 +686,8 @@ exports.transitionDevisStatus = onCall(
                 teamId: null,
                 poseDate: null,
                 estimatedDurationDays: null,
+                poseurCountRequired: 1,
+                materielRequis: "",
                 dependsOn: [],
                 createdAt: now,
                 updatedAt: now,
@@ -698,7 +700,13 @@ exports.transitionDevisStatus = onCall(
               label: l.data.label,
               status: l.data.status,
               poseurIds: l.data.poseurIds,
+              poseurNames: l.data.poseurNames,
               poseDate: l.data.poseDate,
+              teamId: l.data.teamId,
+              dependsOn: l.data.dependsOn,
+              estimatedDurationDays: l.data.estimatedDurationDays,
+              poseurCountRequired: l.data.poseurCountRequired,
+              materielRequis: l.data.materielRequis,
             }));
           }
         }
@@ -723,7 +731,14 @@ exports.transitionDevisStatus = onCall(
               label: transitionedLotData.label,
               status: transitionedLotData.status,
               poseurIds: transitionedLotData.poseurIds || [],
+              poseurNames: transitionedLotData.poseurNames || "",
               poseDate: transitionedLotData.poseDate || null,
+              teamId: transitionedLotData.teamId || null,
+              dependsOn: transitionedLotData.dependsOn || [],
+              estimatedDurationDays:
+                transitionedLotData.estimatedDurationDays || null,
+              poseurCountRequired: transitionedLotData.poseurCountRequired || 1,
+              materielRequis: transitionedLotData.materielRequis || "",
             },
             ...Object.entries(siblingLotDataById).map(([id, d]) => ({
               lotId: id,
@@ -731,7 +746,13 @@ exports.transitionDevisStatus = onCall(
               label: d.label,
               status: d.status,
               poseurIds: d.poseurIds || [],
+              poseurNames: d.poseurNames || "",
               poseDate: d.poseDate || null,
+              teamId: d.teamId || null,
+              dependsOn: d.dependsOn || [],
+              estimatedDurationDays: d.estimatedDurationDays || null,
+              poseurCountRequired: d.poseurCountRequired || 1,
+              materielRequis: d.materielRequis || "",
             })),
           ];
           devisUpdate = {
@@ -779,6 +800,28 @@ exports.transitionDevisStatus = onCall(
 
       return {ok: true};
     });
+
+/**
+ * Phase 4 (Planner v2) : réécrit l'entrée `lotId` dans `devis.lotsSummary`
+ * avec les champs fournis dans `patch`, sans toucher aux autres lots. Utilisé
+ * par `setLotDependencies` et `updateLotPlanningFields`, qui écrivent toutes
+ * deux directement sur le document lot (pas via `transitionDevisStatus`) et
+ * doivent donc répercuter le changement elles-mêmes sur la dénormalisation
+ * lue par le Planner — sinon celui-ci resterait sur une valeur obsolète
+ * jusqu'à la prochaine transition de statut de ce lot.
+ * @param {FirebaseFirestore.DocumentReference} devisRef
+ * @param {FirebaseFirestore.DocumentSnapshot} devisSnap
+ * @param {string} lotId
+ * @param {Object} patch
+ * @return {Promise<void>}
+ */
+async function patchLotSummary(devisRef, devisSnap, lotId, patch) {
+  const lotsSummary = Array.isArray(devisSnap.data().lotsSummary) ?
+    devisSnap.data().lotsSummary : [];
+  const updated = lotsSummary.map((entry) =>
+    entry.lotId === lotId ? {...entry, ...patch} : entry);
+  await devisRef.update({lotsSummary: updated});
+}
 
 /**
  * Phase 3 (multi-lots) : déclare les dépendances d'un lot envers d'autres
@@ -877,6 +920,89 @@ exports.setLotDependencies = onCall(
         dependsOn,
         updatedAt: Timestamp.now(),
       });
+      await patchLotSummary(devisRef, devisSnap, lotId, {dependsOn});
+
+      return {ok: true};
+    });
+
+/**
+ * Phase 4 (Planner v2) : met à jour la durée estimée, le nombre de poseurs
+ * requis et le matériel requis d'un lot — des champs de planification qui ne
+ * sont pas des transitions de statut et ne passent donc pas par
+ * `transitionDevisStatus`. Passe quand même par une Cloud Function car
+ * `lots/{lotId}` reste en écriture serveur uniquement côté règles
+ * Firestore (voir firestore.rules) ; vérification de rôle calquée sur
+ * `setLotDependencies`.
+ */
+exports.updateLotPlanningFields = onCall(
+    {region: "europe-west1"},
+    async (request) => {
+      const callerUid = request.auth && request.auth.uid;
+      if (!callerUid) throw new Error("Non autorisé");
+
+      const data = request.data || {};
+      const workspaceId = data.workspaceId;
+      const devisId = data.devisId;
+      const lotId = data.lotId;
+
+      if (!workspaceId || !devisId || !lotId) {
+        throw new Error("workspaceId, devisId et lotId sont requis");
+      }
+
+      const callerDoc = await db.collection("users").doc(callerUid).get();
+      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      const callerData = callerDoc.data();
+      const callerRole = callerData.role;
+      const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
+      if (!["metreur", "admin"].includes(callerRole)) {
+        throw new Error(
+            `Non autorisé : le rôle ${callerRole} ne peut pas modifier les ` +
+            "champs de planification d'un lot",
+        );
+      }
+
+      const workspaceDoc =
+        await db.collection("workspaces").doc(workspaceId).get();
+      if (!workspaceDoc.exists) {
+        throw new Error("Espace de travail introuvable");
+      }
+      const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
+      if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
+        throw new Error(
+            "Non autorisé : ce chantier n'appartient pas à votre espace " +
+            "de travail",
+        );
+      }
+
+      const devisRef = db.collection("workspaces").doc(workspaceId)
+          .collection("devis").doc(devisId);
+      const devisSnap = await devisRef.get();
+      if (!devisSnap.exists) throw new Error("Chantier introuvable");
+      const lotIds = devisSnap.data().lotIds || [];
+      if (!lotIds.includes(lotId)) {
+        throw new Error("Lot introuvable sur ce chantier");
+      }
+
+      const patch = {};
+      if (Object.prototype.hasOwnProperty
+          .call(data, "estimatedDurationDays")) {
+        patch.estimatedDurationDays = data.estimatedDurationDays;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "poseurCountRequired")) {
+        patch.poseurCountRequired = data.poseurCountRequired;
+      }
+      if (Object.prototype.hasOwnProperty.call(data, "materielRequis")) {
+        patch.materielRequis = data.materielRequis;
+      }
+      if (Object.keys(patch).length === 0) {
+        throw new Error("Aucun champ à mettre à jour");
+      }
+
+      await devisRef.collection("lots").doc(lotId).update({
+        ...patch,
+        updatedAt: Timestamp.now(),
+      });
+      await patchLotSummary(devisRef, devisSnap, lotId, patch);
 
       return {ok: true};
     });
