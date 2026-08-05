@@ -11,6 +11,7 @@ import 'measurement_form_screen.dart';
 import 'planner_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
+import '../core/dictionary_service.dart';
 import '../core/theme/app_colors.dart';
 import '../services/devis_service.dart';
 import '../services/document_engine.dart';
@@ -1169,6 +1170,51 @@ class _PriorityItem {
   final String tag;
 }
 
+/// Résumé d'un lot (Phase 3, multi-lots) — `workspaces/{id}/devis/{devisId}/
+/// lots/{lotId}`. Les instances construites depuis le champ dénormalisé
+/// `lotsSummary` du devis (liste des chantiers, chips de statut) n'ont pas
+/// `dependsOn`/`teamId`/`estimatedDurationDays` renseignés (non dénormalisés,
+/// pour ne pas alourdir chaque carte) ; l'écran de détail (
+/// `_MeasureRequestSummary`) lit le document lot complet via une
+/// souscription dédiée à l'ouverture pour les avoir.
+class _LotSummary {
+  const _LotSummary({
+    required this.lotId,
+    required this.metierKey,
+    required this.label,
+    required this.status,
+    this.poseurIds = const [],
+    this.poseurNames = '',
+    this.poseDate,
+    this.teamId,
+    this.dependsOn = const [],
+  });
+
+  final String lotId;
+  final String metierKey;
+  final String label;
+  final String status;
+  final List<String> poseurIds;
+  final String poseurNames;
+  final DateTime? poseDate;
+  final String? teamId;
+  final List<String> dependsOn;
+
+  factory _LotSummary.fromMap(String lotId, Map<String, dynamic> map) {
+    return _LotSummary(
+      lotId: lotId,
+      metierKey: map['metierKey']?.toString() ?? lotId,
+      label: map['label']?.toString().isNotEmpty == true ? map['label'].toString() : lotId,
+      status: map['status']?.toString() ?? 'À commander',
+      poseurIds: (map['poseurIds'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      poseurNames: map['poseurNames']?.toString() ?? '',
+      poseDate: map['poseDate'] is Timestamp ? (map['poseDate'] as Timestamp).toDate() : null,
+      teamId: map['teamId']?.toString(),
+      dependsOn: (map['dependsOn'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+    );
+  }
+}
+
 class _MeasureCardData {
   _MeasureCardData({
     required this.id,
@@ -1186,6 +1232,8 @@ class _MeasureCardData {
     this.metreurId,
     this.workspaceId,
     this.draft,
+    this.lotIds = const [],
+    this.lotsSummary = const [],
   });
 
   final String id;
@@ -1203,6 +1251,11 @@ class _MeasureCardData {
   final String? metreurId;
   final String? workspaceId;
   final _QuoteDraft? draft;
+  // Phase 3 (multi-lots) : présent (non vide) uniquement une fois le métré
+  // terminé — voir le commentaire sur transitionDevisStatus côté Cloud
+  // Function pour le moment exact de naissance des lots.
+  final List<String> lotIds;
+  final List<_LotSummary> lotsSummary;
 
   _MeasureCardData copyWith({
     String? id,
@@ -1220,6 +1273,8 @@ class _MeasureCardData {
     String? metreurId,
     String? workspaceId,
     _QuoteDraft? draft,
+    List<String>? lotIds,
+    List<_LotSummary>? lotsSummary,
   }) {
     return _MeasureCardData(
       id: id ?? this.id,
@@ -1237,6 +1292,8 @@ class _MeasureCardData {
       metreurId: metreurId ?? this.metreurId,
       workspaceId: workspaceId ?? this.workspaceId,
       draft: draft ?? this.draft,
+      lotIds: lotIds ?? this.lotIds,
+      lotsSummary: lotsSummary ?? this.lotsSummary,
     );
   }
 
@@ -1257,6 +1314,7 @@ class _MeasureCardData {
       'metreurId': metreurId,
       'workspaceId': workspaceId,
       'draft': draft?.toMap(),
+      'lotIds': lotIds,
     };
   }
 
@@ -1292,6 +1350,11 @@ class _MeasureCardData {
       metreurId: (map['metreurId'] ?? map['assignedMetreurId'])?.toString(),
       workspaceId: map['workspaceId']?.toString(),
       draft: map['draft'] is Map<String, dynamic> ? _QuoteDraft.fromMap(map['draft'] as Map<String, dynamic>) : null,
+      lotIds: (map['lotIds'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      lotsSummary: (map['lotsSummary'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map((m) => _LotSummary.fromMap(m['lotId']?.toString() ?? '', m))
+          .toList(),
     );
   }
 }
@@ -1929,11 +1992,45 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
   // formulaire vide au lieu des valeurs qu'on venait d'enregistrer.
   late _MeasureCardData _data;
 
+  // Phase 3 (multi-lots) : les lots eux-mêmes (dependsOn compris) sont lus
+  // en direct depuis la sous-collection à l'ouverture de cet écran de
+  // détail plutôt que depuis le champ dénormalisé `lotsSummary` du devis
+  // (qui ne porte pas `dependsOn`, pour ne pas alourdir chaque carte de la
+  // liste). Vide tant que le métré n'est pas terminé (aucun lot créé).
+  List<_LotSummary> _lots = [];
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _lotsSub;
+
   @override
   void initState() {
     super.initState();
     _data = widget.data;
     meetingAt = widget.data.meetingAt;
+    _subscribeLots();
+  }
+
+  void _subscribeLots() {
+    final wsId = _data.workspaceId ?? widget.workspaceId;
+    if (wsId == null) return;
+    _lotsSub?.cancel();
+    _lotsSub = FirebaseFirestore.instance
+        .collection('workspaces')
+        .doc(wsId)
+        .collection('devis')
+        .doc(_data.id)
+        .collection('lots')
+        .snapshots()
+        .listen((snap) {
+      if (!mounted) return;
+      setState(() {
+        _lots = snap.docs.map((d) => _LotSummary.fromMap(d.id, d.data())).toList();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _lotsSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _generateBonPreparation() async {
@@ -1993,6 +2090,25 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         final extraFields = <String, dynamic>{'updated': 'Métré terminé'};
         if (updatedDraft != null) {
           extraFields['draft'] = updatedDraft.toMap();
+          // Phase 3 (multi-lots) : si ce passage en "À commander" est le
+          // premier pour ce devis, la Cloud Function crée un lot par
+          // metierKey distinct parmi les produits — elle a besoin des
+          // libellés métier (le dictionnaire n'est pas accessible côté
+          // serveur) pour nommer les lots créés.
+          if (data.lotIds.isEmpty) {
+            final metierKeys = updatedDraft.products
+                .map((p) => p.metierKey)
+                .whereType<String>()
+                .where((k) => k.isNotEmpty)
+                .toSet();
+            final metierLabels = <String, String>{};
+            for (final key in metierKeys) {
+              metierLabels[key] = await DictionaryService.instance.metierLabel(key);
+            }
+            if (metierLabels.isNotEmpty) {
+              extraFields['metierLabels'] = metierLabels;
+            }
+          }
         }
 
         await DevisService.updateStatus(
@@ -2035,6 +2151,391 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         }
       }
     }
+  }
+
+  // ─── Phase 3 (multi-lots) : actions par lot ────────────────────────────
+
+  /// Libellé du premier lot bloquant parmi les dépendances de [lot] (pas
+  /// encore Terminé/À clôturer), ou null si aucune dépendance ne bloque.
+  String? _blockingDependencyLabel(_LotSummary lot) {
+    for (final depId in lot.dependsOn) {
+      final dep = _lots.where((l) => l.lotId == depId).toList();
+      final depStatus = dep.isNotEmpty ? dep.first.status : null;
+      if (depStatus != 'Terminé' && depStatus != 'À clôturer') {
+        return dep.isNotEmpty ? dep.first.label : depId;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _confirmOrderLot(_LotSummary lot) async {
+    final wsId = _data.workspaceId ?? widget.workspaceId;
+    if (wsId == null) return;
+    try {
+      await DevisService.updateStatus(
+        workspaceId: wsId,
+        devisId: _data.id,
+        newStatus: 'À planifier',
+        lotId: lot.lotId,
+        extraFields: const {'updated': 'Pose à programmer'},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lot "${lot.label}" — commande confirmée.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur : $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _schedulePoseLot(_LotSummary lot) async {
+    final wsId = _data.workspaceId ?? widget.workspaceId;
+    if (wsId == null) return;
+
+    var poseurs = <Map<String, String>>[];
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('workspaceId', isEqualTo: wsId)
+          .get();
+      poseurs = snap.docs
+          .where((d) => d.data()['role'] == 'poseur' && d.data()['status'] != 'disabled')
+          .map((d) => {
+                'id': d.id,
+                'name': '${d.data()['firstName'] ?? ''} ${d.data()['lastName'] ?? ''}'.trim(),
+              })
+          .toList();
+    } catch (_) {}
+
+    if (!mounted) return;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 7)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (date == null) return;
+    if (!mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 8, minute: 0),
+    );
+    if (time == null) return;
+    final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+
+    final selectedIds = <String>{};
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: _metreurCard,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).viewInsets.bottom + 24),
+        child: StatefulBuilder(
+          builder: (ctx, setSt) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.groups_outlined, color: AppColors.grey500),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Programmer la pose — lot ${lot.label}',
+                        style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Pose le ${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year} '
+                  'à ${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(color: AppColors.grey500),
+                ),
+                const SizedBox(height: 12),
+                if (poseurs.isEmpty)
+                  const Text(
+                    'Aucun poseur dans l\'équipe — ajoutez-en depuis Admin > Équipe.',
+                    style: TextStyle(color: AppColors.grey500),
+                  )
+                else
+                  ...poseurs.map((p) => CheckboxListTile(
+                        value: selectedIds.contains(p['id']),
+                        onChanged: (v) => setSt(() {
+                          if (v == true) {
+                            selectedIds.add(p['id']!);
+                          } else {
+                            selectedIds.remove(p['id']!);
+                          }
+                        }),
+                        title: Text(
+                          p['name']!.isEmpty ? p['id']! : p['name']!,
+                          style: const TextStyle(color: AppColors.grey900),
+                        ),
+                        activeColor: _metreurAccent,
+                        contentPadding: EdgeInsets.zero,
+                      )),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _PrimaryAction(
+                    label: 'Confirmer la pose',
+                    icon: Icons.check,
+                    onPressed: () async {
+                      final poseurIds = selectedIds.toList();
+                      final poseurNames = poseurs
+                          .where((p) => selectedIds.contains(p['id']))
+                          .map((p) => p['name']!.isEmpty ? p['id']! : p['name']!)
+                          .join(', ');
+                      Navigator.of(ctx).pop();
+                      try {
+                        await DevisService.updateStatus(
+                          workspaceId: wsId,
+                          devisId: _data.id,
+                          newStatus: 'En pose',
+                          lotId: lot.lotId,
+                          extraFields: {
+                            'poseDate': dt.toIso8601String(),
+                            'poseurIds': poseurIds,
+                            'poseurNames': poseurNames,
+                            'updated': 'Pose programmée',
+                          },
+                        );
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(
+                              content: Text('Erreur : $e'),
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(
+                            content: Text('Lot "${lot.label}" — pose programmée.'),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editLotDependencies(_LotSummary lot) async {
+    final wsId = _data.workspaceId ?? widget.workspaceId;
+    if (wsId == null) return;
+    final others = _lots.where((l) => l.lotId != lot.lotId).toList();
+    final selected = Set<String>.from(lot.dependsOn);
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: _metreurCard,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).viewInsets.bottom + 24),
+        child: StatefulBuilder(
+          builder: (ctx, setSt) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                Row(
+                  children: [
+                    const Icon(Icons.account_tree_outlined, color: AppColors.grey500),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Dépendances du lot ${lot.label}',
+                        style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'La pose de ce lot ne pourra démarrer qu\'une fois les lots cochés terminés.',
+                  style: TextStyle(color: AppColors.grey500, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                if (others.isEmpty)
+                  const Text('Aucun autre lot sur ce chantier.', style: TextStyle(color: AppColors.grey500))
+                else
+                  ...others.map((o) => CheckboxListTile(
+                        value: selected.contains(o.lotId),
+                        onChanged: (v) => setSt(() {
+                          if (v == true) {
+                            selected.add(o.lotId);
+                          } else {
+                            selected.remove(o.lotId);
+                          }
+                        }),
+                        title: Text(o.label, style: const TextStyle(color: AppColors.grey900)),
+                        activeColor: _metreurAccent,
+                        contentPadding: EdgeInsets.zero,
+                      )),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _PrimaryAction(
+                    label: 'Enregistrer',
+                    icon: Icons.check,
+                    onPressed: () async {
+                      Navigator.of(ctx).pop();
+                      try {
+                        await DevisService.setLotDependencies(
+                          workspaceId: wsId,
+                          devisId: _data.id,
+                          lotId: lot.lotId,
+                          dependsOn: selected.toList(),
+                        );
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(this.context).showSnackBar(
+                            SnackBar(
+                              content: Text('Erreur : $e'),
+                              behavior: SnackBarBehavior.floating,
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _lotActionRow(_LotSummary lot) {
+    final blockedBy = _blockingDependencyLabel(lot);
+    Widget action;
+    switch (lot.status) {
+      case 'À commander':
+      case 'Commande en cours':
+        action = ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.warning,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          onPressed: () => _confirmOrderLot(lot),
+          child: const Text('Confirmer la commande', style: TextStyle(fontSize: 12)),
+        );
+        break;
+      case 'À planifier':
+        action = blockedBy != null
+            ? OutlinedButton(
+                onPressed: null,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('Bloqué par : $blockedBy', style: const TextStyle(fontSize: 11)),
+              )
+            : ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.purple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => _schedulePoseLot(lot),
+                child: const Text('Programmer la pose', style: TextStyle(fontSize: 12)),
+              );
+        break;
+      case 'En pose':
+        action = Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          decoration: BoxDecoration(color: AppColors.successLight, borderRadius: BorderRadius.circular(12)),
+          child: const Text(
+            'Pose programmée',
+            style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+        );
+        break;
+      default:
+        action = Text(lot.status, style: const TextStyle(color: AppColors.grey500, fontSize: 12));
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.grey50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.grey100),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(lot.label, style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(lot.status, style: const TextStyle(color: AppColors.grey400, fontSize: 12)),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.account_tree_outlined, color: AppColors.grey400, size: 20),
+              tooltip: 'Dépendances',
+              onPressed: () => _editLotDependencies(lot),
+            ),
+            action,
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -2335,6 +2836,30 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                 ),
               ),
             ),
+            // Phase 3 (multi-lots) : une fois le métré terminé et les lots
+            // créés, chaque lot avance indépendamment (bouton dédié,
+            // dépendances) plutôt que via le bouton unique ci-dessous.
+            if (data.lotIds.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Lots',
+                      style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800, fontSize: 14),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_lots.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('Chargement des lots…', style: TextStyle(color: AppColors.grey400)),
+                      )
+                    else
+                      ..._lots.map(_lotActionRow),
+                  ],
+                ),
+              ),
             if (data.status == 'À planifier' || data.status == 'En pose')
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -2378,6 +2903,16 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                   ),
                   const SizedBox(width: 10),
                   Builder(builder: (context) {
+                    // Phase 3 (multi-lots) : au-delà de l'acceptation, ces
+                    // statuts sont pilotés lot par lot (bloc "Lots"
+                    // ci-dessus) dès qu'un devis a des lots.
+                    if (data.lotIds.isNotEmpty &&
+                        (data.status == 'À commander' ||
+                            data.status == 'Commande en cours' ||
+                            data.status == 'À planifier' ||
+                            data.status == 'En pose')) {
+                      return const SizedBox.shrink();
+                    }
                     switch (data.status) {
                       case 'Acceptée':
                         return Expanded(

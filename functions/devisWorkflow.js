@@ -42,13 +42,19 @@ const TRANSITIONS = {
     {to: "En cours", roles: ["metreur", "admin"], extraFields: ["meetingAt"],
       dateFields: ["meetingAt"]},
     {to: "À commander", roles: ["metreur", "admin"],
-      extraFields: ["draft", "updated"]},
+      // "metierLabels" (Phase 3, multi-lots) : libellés métier utilisés
+      // uniquement si ce passage crée les lots (premier "À commander" de ce
+      // devis) — voir transitionDevisStatus. Ignoré sinon.
+      extraFields: ["draft", "updated", "metierLabels"]},
   ],
   "Acceptée": [
     {to: "En cours", roles: ["metreur", "admin"], extraFields: ["meetingAt"],
       dateFields: ["meetingAt"]},
     {to: "À commander", roles: ["metreur", "admin"],
-      extraFields: ["draft", "updated"]},
+      // "metierLabels" (Phase 3, multi-lots) : libellés métier utilisés
+      // uniquement si ce passage crée les lots (premier "À commander" de ce
+      // devis) — voir transitionDevisStatus. Ignoré sinon.
+      extraFields: ["draft", "updated", "metierLabels"]},
   ],
   "À commander": [
     {to: "À planifier", roles: ["metreur", "admin"], extraFields: ["updated"]},
@@ -61,7 +67,12 @@ const TRANSITIONS = {
       extraFields: [
         "teamId", "poseDate", "poseurIds", "poseurNames", "updated",
       ],
-      dateFields: ["poseDate"]},
+      dateFields: ["poseDate"],
+      // Phase 3 (multi-lots) : le démarrage de pose d'un lot peut être
+      // bloqué tant qu'un lot dont il dépend (`dependsOn`) n'est pas
+      // Terminé/À clôturer. N'a d'effet que sur les transitions de lot
+      // (lotId fourni) — sans effet sur les devis sans lots.
+      requiresDependenciesValidated: true},
   ],
   "En pose": [
     // Réaffectation (déplacer un chantier déjà planifié vers une autre
@@ -91,6 +102,85 @@ function findTransition(currentStatus, newStatus) {
   return candidates.find((c) => c.to === newStatus) || null;
 }
 
+// ─── Phase 3 (multi-lots) : agrégation du statut/champs des lots vers le
+// devis parent, pour que les écrans qui ne connaissent pas encore la notion
+// de lot (Planner, écran poseur, écran commercial, dashboard admin)
+// continuent de lire des champs devis-level cohérents. ──────────────────────
+
+// Un lot ne naît qu'au passage en "À commander" (voir functions/index.js) :
+// pas besoin de couvrir les statuts antérieurs ici.
+const LOT_STATUS_ORDER = {
+  "À commander": 0,
+  "Commande en cours": 0,
+  "À planifier": 1,
+  "En pose": 2,
+  "Terminé": 3,
+  "À clôturer": 3,
+};
+const LOT_TERMINAL_STATUSES = new Set(["Terminé", "À clôturer"]);
+
+/**
+ * Statut agrégé du devis à partir des statuts de ses lots : le moins avancé,
+ * sauf si tous les lots sont à un statut terminal (Terminé/À clôturer), auquel
+ * cas le devis passe lui-même Terminé (ou À clôturer si au moins un lot a un
+ * problème signalé).
+ * @param {Object[]} lotDataList Données brutes (pas des DocumentSnapshot) de
+ *   chaque lot — le lot en cours de transition doit y figurer avec son
+ *   NOUVEAU statut (voir functions/index.js, qui fusionne current+updatePayload
+ *   avant d'appeler ces helpers, car une transaction Firestore ne peut pas
+ *   relire un document qu'elle vient d'écrire).
+ * @return {string}
+ */
+function aggregateDevisStatus(lotDataList) {
+  const statuses = lotDataList.map((d) => d.status || INITIAL_STATUS);
+  if (statuses.length === 0) return INITIAL_STATUS;
+  if (statuses.every((s) => LOT_TERMINAL_STATUSES.has(s))) {
+    return statuses.includes("À clôturer") ? "À clôturer" : "Terminé";
+  }
+  let least = statuses[0];
+  let leastOrder = LOT_STATUS_ORDER[least] || 0;
+  for (const s of statuses) {
+    const order = LOT_STATUS_ORDER[s] || 0;
+    if (order < leastOrder) {
+      least = s;
+      leastOrder = order;
+    }
+  }
+  return least;
+}
+
+/**
+ * Union (dédupliquée) d'un champ tableau à travers tous les lots.
+ * @param {Object[]} lotDataList
+ * @param {string} field
+ * @return {Array}
+ */
+function aggregateUnion(lotDataList, field) {
+  const set = new Set();
+  for (const d of lotDataList) {
+    const value = d[field];
+    if (Array.isArray(value)) value.forEach((v) => set.add(v));
+  }
+  return Array.from(set);
+}
+
+/**
+ * Timestamp le plus proche (le plus tôt) d'un champ date à travers les lots
+ * qui le renseignent. Retourne null si aucun lot n'a de valeur.
+ * @param {Object[]} lotDataList
+ * @param {string} field
+ * @return {FirebaseFirestore.Timestamp|null}
+ */
+function aggregateEarliest(lotDataList, field) {
+  let earliest = null;
+  for (const d of lotDataList) {
+    const value = d[field];
+    if (!value) continue;
+    if (!earliest || value.toMillis() < earliest.toMillis()) earliest = value;
+  }
+  return earliest;
+}
+
 /**
  * Envoie les effets de bord (push FCM + in-app) d'une transition, une fois
  * le statut et l'historique écrits. Reprend telle quelle la copie des
@@ -99,14 +189,22 @@ function findTransition(currentStatus, newStatus) {
  * au même endroit, côté serveur.
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} newStatus
- * @param {Object} after Données du devis après écriture.
+ * @param {Object} after Données du devis après écriture (fusionnées avec les
+ *   données du lot quand `lotContext` est fourni — voir functions/index.js).
  * @param {Object} ctx {workspaceId, devisId}
+ * @param {Object|null} lotContext Phase 3 (multi-lots) : {lotId, label} si la
+ *   transition concerne un lot plutôt que le devis entier. Le nom du lot est
+ *   ajouté au texte des notifications pour qu'un métreur avec plusieurs lots
+ *   sur le même chantier puisse les distinguer.
  */
-async function notifyTransition(db, newStatus, after, ctx) {
+async function notifyTransition(db, newStatus, after, ctx, lotContext = null) {
   const {workspaceId, devisId} = ctx;
-  const client = after.clientName || after.client || "client inconnu";
+  const clientName = after.clientName || after.client || "client inconnu";
+  const client = lotContext ?
+    `${clientName} (lot ${lotContext.label})` : clientName;
   const userId = after.userId || after.commercialId || null;
-  const baseData = {workspaceId, devisId};
+  const baseData = {workspaceId, devisId,
+    ...(lotContext ? {lotId: lotContext.lotId} : {})};
 
   const commercialTokens = userId ? await getTokenByUid(userId) : [];
 
@@ -250,4 +348,8 @@ module.exports = {
   TRANSITIONS,
   findTransition,
   notifyTransition,
+  aggregateDevisStatus,
+  aggregateUnion,
+  aggregateEarliest,
+  LOT_TERMINAL_STATUSES,
 };

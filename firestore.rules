@@ -158,6 +158,29 @@ service cloud.firestore {
           );
           allow update, delete: if false;
         }
+
+        // ── Lots (Phase 3, multi-lots) — un lot par métier distinct parmi ─
+        // les produits du chantier, créés par transitionDevisStatus au
+        // passage "À commander" (Admin SDK). Même principe que
+        // statusHistory : lecture ouverte aux membres du workspace, écriture
+        // exclusivement serveur (jamais de write client direct, y compris
+        // pour `dependsOn` — passe par la Cloud Function setLotDependencies
+        // pour valider les IDs et détecter les cycles).
+        match /lots/{lotId} {
+          allow read: if isAuth() && (
+            get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+            myWorkspaceId() == workspaceId
+          );
+          allow write: if false;
+
+          match /statusHistory/{historyId} {
+            allow read: if isAuth() && (
+              get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+              myWorkspaceId() == workspaceId
+            );
+            allow write: if false;
+          }
+        }
       }
 
       // ── Sous-collection invites/ ────────────────────────────────────────

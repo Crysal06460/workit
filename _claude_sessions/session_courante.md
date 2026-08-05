@@ -1,7 +1,94 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-05 — Phase 2 étendue aux 11 autres métiers (dictionnaire sourcé) + tentative
-de test en direct interrompue par un bug Flutter (voir section dédiée)
+**Dernière mise à jour :** 2026-08-05 — Phase 3 (chantiers multi-lots) codée : socle Cloud Functions/Firestore +
+écran métreur, non déployée (attend feu vert) ni testée en direct (prévu sur Mac)
+
+## 🆕 Session 2026-08-05 (suite) — Phase 3 : chantiers multi-lots (socle + écran métreur), codée mais non déployée
+
+Christophe a demandé d'attaquer la Phase 3 de la roadmap (`roadmap_plateforme_multimetier.md`). Vu la taille XL
+(gros changement de modèle de données sur une app en prod), passage par un plan détaillé avant codage (voir
+`~/.claude/plans/swift-snacking-dove.md` pour le plan complet approuvé) — deux décisions actées avec Christophe
+avant de coder : **lots dérivés automatiquement par métier** (un lot = tous les produits d'un devis partageant
+le même `metierKey`, aucune nouvelle UI de saisie commerciale) et **scope réduit à cette session** : le socle
+(modèle de données, Cloud Function multi-lot, règles Firestore) + l'écran métreur uniquement — Planner, écran
+poseur, écran commercial et dashboard admin restent intentionnellement non modifiés.
+
+### Décisions de conception clés (issues d'un second passage de relecture avant codage)
+- **Les lots naissent au passage `Acceptée/En cours → À commander`** (pas à l'acceptation) — le métré reste une
+  opération globale au chantier (un seul RDV), et ça évite des lots orphelins si le métreur supprime des
+  produits pendant le métré (pas d'UI d'ajout après coup). `lotId` = le `metierKey` lui-même.
+- **Statut/`poseurIds`/`poseDate` agrégés sur le devis parent** après chaque écriture de lot (le moins avancé
+  parmi les lots, union des poseurs, date la plus proche) — pour que Planner/poseur/commercial/dashboard, non
+  modifiés cette session, continuent de lire des champs devis-level cohérents sans rien savoir des lots.
+- **Garde-fou explicite assumé** : une fois qu'un devis a des lots, toute transition envoyée SANS `lotId` est
+  refusée côté serveur (erreur propre, pas de corruption). Conséquence concrète : **un chantier avec des lots ne
+  peut plus être programmé via le Planner (glisser-déposer) ni clôturé via l'écran poseur** tant que ces deux
+  écrans n'auront pas été adaptés à la notion de lot (session suivante) — à programmer/clôturer uniquement
+  depuis l'écran métreur pour l'instant. Les chantiers déjà en cours avant ce déploiement, et tout chantier tant
+  que son métré n'est pas fini, ne sont pas concernés.
+- **Dépendances entre lots déclarées manuellement** (pas d'inférence automatique par paire de métiers, jugé trop
+  fragile) via une petite feuille dans l'écran métreur + nouvelle Cloud Function `setLotDependencies` (valide
+  que les IDs sont bien des lots du même chantier, détecte les cycles). Le blocage ne s'applique qu'au démarrage
+  de pose (`À planifier → En pose`), pas à l'acceptation/au métré/à la commande. **Effet pratique inerte cette
+  session** : aucun lot ne peut atteindre `Terminé` (ça passe par l'écran poseur, hors scope) donc la validation
+  de dépendance ne peut jamais être satisfaite pour l'instant — prêt côté données/serveur, pas testable de bout
+  en bout avant la session poseur.
+
+### Implémenté
+- **`functions/devisWorkflow.js`** : flag `requiresDependenciesValidated` sur `À planifier → En pose`,
+  `notifyTransition` accepte un `lotContext` optionnel (nom du lot injecté dans les notifications, sinon un
+  métreur avec 3 lots reçoit 3 notifications indiscernables), helpers `aggregateDevisStatus`/`aggregateUnion`/
+  `aggregateEarliest` exportés, whitelist `extraFields` des transitions `→ À commander` étendue à
+  `metierLabels`.
+- **`functions/index.js`** : `transitionDevisStatus` accepte un `lotId` optionnel, transaction restructurée
+  (lectures — devis, lot ciblé, lots amonts pour les dépendances, lots frères pour l'agrégat — strictement avant
+  toute écriture, contrainte Firestore), garde-fou devis-level décrit plus haut, seeding des lots au premier
+  `À commander` avec écriture simultanée de `lotIds`/`lotsSummary` dénormalisés sur le devis. Nouvelle Cloud
+  Function callable `setLotDependencies`.
+- **`firestore.rules`** : bloc `devis/{id}/lots/{lotId}` (+ sa propre `statusHistory`) calqué exactement sur le
+  pattern `statusHistory` existant — lecture ouverte aux membres du workspace, écriture `if false` (tout passe
+  par les Cloud Functions). Compilation validée (`firebase deploy --only firestore:rules --dry-run`).
+- **`lib/services/devis_service.dart`** : `updateStatus()` gagne un paramètre `lotId` optionnel ; nouvelle
+  méthode `setLotDependencies()`.
+- **`lib/screens/metreur_home_screen.dart`** : nouveau modèle `_LotSummary` ; `_MeasureCardData` gagne
+  `lotIds`/`lotsSummary` (lus depuis les champs dénormalisés) ; `_acceptRequest`/`_scheduleMeeting` **inchangés**
+  (restent devis-level, cohérent avec le moment de naissance des lots) ; `_openMeasurementForm` calcule et
+  transmet `metierLabels` uniquement au tout premier passage en `À commander` ; l'écran de détail
+  (`_MeasureRequestSummary`) souscrit en direct à la sous-collection `lots` (pour avoir `dependsOn`, pas
+  dénormalisé) et affiche un bloc "Lots" avec un bouton d'action indépendant par lot
+  (`_confirmOrderLot`/`_schedulePoseLot`, calqués sur les méthodes devis-level existantes mais scopés par
+  `lotId`) + un bouton "Dépendances" par lot ; le bouton de statut unique existant se masque proprement
+  (`SizedBox.shrink()`) dès qu'un devis a des lots, sans toucher au cas `Acceptée`/défaut (démarrage du métré).
+
+### Vérifications faites cette session
+- `npm run lint` (functions) : 0 erreur.
+- `flutter analyze` : 0 erreur, 136 issues (133 avant + 3 infos `unnecessary_this` mineures dans le nouveau
+  code, cosmétiques, même famille que 3 occurrences déjà préexistantes dans ce fichier — pas corrigées, pas
+  bloquantes).
+- `firebase deploy --only firestore:rules --dry-run` : règles compilées avec succès.
+- Relecture manuelle attentive de l'ordre lectures/écritures de la transaction Firestore restructurée (point le
+  plus sensible identifié par la relecture de conception) — cohérent : toutes les lectures (devis, lot ciblé,
+  dépendances, lots frères) précèdent toute écriture.
+
+### ⚠️ Pas fait cette session (volontairement)
+- **Pas déployé** (`firebase deploy --only functions,firestore:rules`) — en attente du feu vert de Christophe,
+  vu l'impact potentiel sur les chantiers réels en cours dans "Ambiance Alu" et le fait que rien n'a pu être
+  testé en direct cette fois.
+- **Pas testé en direct** — décidé avec Christophe de tester sur son Mac ce soir/demain, en pilotage manuel
+  direct (pas d'automatisation Chrome, qui avait posé problème lors de la session précédente sur les 11
+  métiers). Scénario de test prévu : créer un devis multi-métier, l'accepter, faire le métré, vérifier que les
+  lots apparaissent avec le bon libellé, confirmer la commande d'un lot indépendamment d'un autre, programmer la
+  pose d'un lot, vérifier qu'une dépendance non satisfaite bloque bien le bouton avec le bon message.
+- Planner, écran poseur, écran commercial, dashboard admin : non touchés, comme prévu par le scope.
+
+### Reste à faire (prochaine session, sur le Mac ou ici)
+1. Déployer (`firebase deploy --only functions,firestore:rules`) une fois Christophe d'accord.
+2. Tester en direct le scénario ci-dessus.
+3. Adapter `poseurs_home_screen.dart` (clôture par lot) et `planner_screen.dart` (programmation par lot) pour
+   lever la limitation assumée — c'est ce qui débloquera l'effet pratique des dépendances entre lots.
+4. Éventuellement : petite UI de statut par lot sur `commercial_home_screen.dart`/`admin_dashboard_tab.dart`.
+
+---
 
 ## ⚠️ Session 2026-08-05 (suite) — Tentative de test en direct d'un des 11 nouveaux métiers, bloquée
 
@@ -27,8 +114,9 @@ insister. Le serveur `localhost:8765` a été laissé tournant en arrière-plan 
 reprendre la main lui-même dans Chrome.
 
 ### Reste à faire (prochaine session)
-- Retester un des 11 nouveaux métiers en direct — probablement plus simple avec `flutter run -d chrome`
-  (fenêtre isolée, moins de risque de collision entre l'automatisation et le rendu) ou en pilotant soi-même.
+- **Décidé avec Christophe : le test en direct des 11 nouveaux métiers se fera sur le Mac (ce soir ou demain),
+  sans passer par l'automatisation Chrome** — pilotage manuel direct, pour éviter le bug d'automatisation
+  rencontré ici. Lire cette section en priorité en reprenant sur le Mac.
 - Si le bug `dropdown.dart:1480` se reproduit en usage normal (pas juste via automatisation), le signaler comme
   bug Flutter à surveiller — mais pas de preuve à ce stade que ça arrive en usage humain normal.
 

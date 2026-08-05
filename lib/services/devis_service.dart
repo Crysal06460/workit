@@ -48,6 +48,12 @@ class DevisService {
   // Mettre à jour le statut (toute transition)
   // Appelle la Cloud Function transitionDevisStatus — voir
   // functions/devisWorkflow.js pour la table des transitions autorisées.
+  //
+  // [lotId] (Phase 3, multi-lots) : quand fourni, la transition porte sur
+  // ce lot (workspaces/{id}/devis/{devisId}/lots/{lotId}) plutôt que sur le
+  // devis entier. Une fois qu'un devis a des lots (après son métré), toute
+  // transition ultérieure DOIT fournir lotId — voir le commentaire sur
+  // transitionDevisStatus côté Cloud Function pour le détail.
   // ─────────────────────────────────────────────────────────────
   static Future<void> updateStatus({
     required String workspaceId,
@@ -55,6 +61,7 @@ class DevisService {
     required String newStatus,
     Map<String, dynamic> extraFields = const {},
     String? comment,
+    String? lotId,
   }) async {
     final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
         .httpsCallable('transitionDevisStatus');
@@ -64,6 +71,29 @@ class DevisService {
       'newStatus': newStatus,
       'extraFields': extraFields,
       if (comment != null) 'comment': comment,
+      if (lotId != null) 'lotId': lotId,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Déclarer les dépendances d'un lot envers d'autres lots du même chantier
+  // (Phase 3, multi-lots). Appelle la Cloud Function callable
+  // setLotDependencies (valide que les IDs sont bien des lots de ce
+  // chantier et détecte les cycles côté serveur).
+  // ─────────────────────────────────────────────────────────────
+  static Future<void> setLotDependencies({
+    required String workspaceId,
+    required String devisId,
+    required String lotId,
+    required List<String> dependsOn,
+  }) async {
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+        .httpsCallable('setLotDependencies');
+    await callable.call(<String, dynamic>{
+      'workspaceId': workspaceId,
+      'devisId': devisId,
+      'lotId': lotId,
+      'dependsOn': dependsOn,
     });
   }
 

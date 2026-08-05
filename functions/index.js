@@ -23,7 +23,11 @@ const {
   getTokenByUid,
   sendNotification,
 } = require("./notifyHelpers");
-const {findTransition, notifyTransition} = require("./devisWorkflow");
+const {
+  findTransition, notifyTransition,
+  aggregateDevisStatus, aggregateUnion, aggregateEarliest,
+  LOT_TERMINAL_STATUSES,
+} = require("./devisWorkflow");
 
 setGlobalOptions({
   region: "europe-west1",
@@ -448,11 +452,25 @@ function generateTempPassword() {
 
 /**
  * Point d'entrée unique pour toute transition de statut d'un chantier
- * (workspaces/{workspaceId}/devis/{devisId}). Vérifie les droits (rôle,
- * appartenance workspace, assignation poseur si requise) et la liste des
- * champs additionnels autorisés (devisWorkflow.js), écrit le nouveau statut
- * et une entrée d'historique immuable de façon atomique (transaction), puis
- * envoie les notifications de la transition.
+ * (workspaces/{workspaceId}/devis/{devisId}) OU, depuis la Phase 3
+ * (multi-lots), d'un de ses lots (workspaces/{workspaceId}/devis/{devisId}/
+ * lots/{lotId}) quand `lotId` est fourni. Vérifie les droits (rôle,
+ * appartenance workspace, assignation poseur si requise, dépendances entre
+ * lots si requises) et la liste des champs additionnels autorisés
+ * (devisWorkflow.js), écrit le nouveau statut et une entrée d'historique
+ * immuable de façon atomique (transaction), puis envoie les notifications.
+ *
+ * Phase 3 — cycle de vie des lots : un devis n'a pas de lots tant que son
+ * métré n'est pas terminé. Les lots naissent, un par `metierKey` distinct
+ * parmi les produits, au moment même du passage devis-level "À commander"
+ * (voir plus bas dans cette fonction) — pas avant, pour éviter des lots
+ * orphelins si le métreur supprime des produits pendant le métré (pas d'UI
+ * d'ajout de produit après le métré). Une fois les lots créés, TOUTE
+ * transition ultérieure de ce devis DOIT fournir `lotId` : appeler cette
+ * fonction sans `lotId` sur un devis qui a des lots est refusé (garde-fou
+ * ci-dessous) — Planner (glisser-déposer) et l'écran poseur (clôture)
+ * n'ont pas encore la notion de lot et échoueront proprement sur ces
+ * chantiers-là tant qu'ils n'auront pas été adaptés (session suivante).
  */
 exports.transitionDevisStatus = onCall(
     {region: "europe-west1"},
@@ -463,6 +481,7 @@ exports.transitionDevisStatus = onCall(
       const data = request.data || {};
       const workspaceId = data.workspaceId;
       const devisId = data.devisId;
+      const lotId = data.lotId || null;
       const newStatus = data.newStatus;
       const extraFields =
         (data.extraFields && typeof data.extraFields === "object") ?
@@ -498,12 +517,43 @@ exports.transitionDevisStatus = onCall(
 
       let fromStatus = null;
       let after = null;
+      // Données fusionnées utilisées pour les notifications : toujours les
+      // champs du devis (identité client, etc.), même quand la transition
+      // porte sur un lot — voir devisWorkflow.js:notifyTransition.
+      let notifyAfter = null;
+      let lotContext = null;
 
       await db.runTransaction(async (tx) => {
-        const snap = await tx.get(devisRef);
-        if (!snap.exists) throw new Error("Chantier introuvable");
-        const current = snap.data();
-        fromStatus = current.status || current.metreurStatus || null;
+        // ── Lectures (toutes avant la moindre écriture, exigé par
+        // l'API transaction Firestore) ──────────────────────────────────
+        const devisSnap = await tx.get(devisRef);
+        if (!devisSnap.exists) throw new Error("Chantier introuvable");
+        const devisData = devisSnap.data();
+        const existingLotIds =
+          Array.isArray(devisData.lotIds) ? devisData.lotIds : [];
+
+        if (!lotId && existingLotIds.length > 0) {
+          throw new Error(
+              "Ce chantier a des lots : indiquez lotId pour cette " +
+              "transition (Planner et clôture poseur pas encore adaptés " +
+              "aux lots — utilisez l'écran métreur).",
+          );
+        }
+
+        let current;
+        let targetRef;
+        let lotSnap = null;
+        if (lotId) {
+          lotSnap = await tx.get(devisRef.collection("lots").doc(lotId));
+          if (!lotSnap.exists) throw new Error("Lot introuvable");
+          current = lotSnap.data();
+          fromStatus = current.status || null;
+          targetRef = lotSnap.ref;
+        } else {
+          current = devisData;
+          fromStatus = current.status || current.metreurStatus || null;
+          targetRef = devisRef;
+        }
 
         const transition = findTransition(fromStatus, newStatus);
         if (!transition) {
@@ -527,6 +577,26 @@ exports.transitionDevisStatus = onCall(
             );
           }
         }
+
+        // Dépendances entre lots (Phase 3) : lecture des lots amonts, encore
+        // dans la phase "lecture" de la transaction.
+        if (lotId && transition.requiresDependenciesValidated) {
+          const dependsOn =
+            Array.isArray(current.dependsOn) ? current.dependsOn : [];
+          for (const depId of dependsOn) {
+            const depSnap = await tx.get(devisRef.collection("lots")
+                .doc(depId));
+            const depData = depSnap.exists ? depSnap.data() : null;
+            const depStatus = depData ? depData.status : null;
+            if (!LOT_TERMINAL_STATUSES.has(depStatus)) {
+              const depLabel = (depData && depData.label) || depId;
+              throw new Error(
+                  `Bloqué par le lot "${depLabel}" (pas encore terminé)`,
+              );
+            }
+          }
+        }
+
         const rejectedKeys = Object.keys(extraFields)
             .filter((k) => !transition.extraFields.includes(k));
         if (rejectedKeys.length > 0) {
@@ -536,6 +606,22 @@ exports.transitionDevisStatus = onCall(
           );
         }
 
+        // Lecture des lots frères, nécessaire pour recalculer l'agrégat sur
+        // le devis parent après l'écriture d'un lot — toujours dans la phase
+        // lecture (avant toute écriture).
+        const siblingLotDataById = {};
+        if (lotId) {
+          const siblingIds = existingLotIds.filter((id) => id !== lotId);
+          const siblingSnaps = await Promise.all(
+              siblingIds.map((id) =>
+                tx.get(devisRef.collection("lots").doc(id))),
+          );
+          siblingSnaps.forEach((s, i) => {
+            if (s.exists) siblingLotDataById[siblingIds[i]] = s.data();
+          });
+        }
+
+        // ── Calculs (aucune lecture au-delà de ce point) ────────────────
         const now = Timestamp.now();
         const updatePayload = {
           status: newStatus,
@@ -564,13 +650,103 @@ exports.transitionDevisStatus = onCall(
         if (newStatus === "Terminé") {
           updatePayload.clotureAt = now;
         }
-        if (callerRole === "metreur") {
+        if (callerRole === "metreur" && !lotId) {
           updatePayload.metreurId = callerUid;
           updatePayload.metreurUpdatedAt = now;
         }
 
-        tx.update(devisRef, updatePayload);
-        tx.set(devisRef.collection("statusHistory").doc(), {
+        // Phase 3 — naissance des lots : premier passage devis-level en
+        // "À commander" sur un devis qui n'en a pas encore. Regroupe les
+        // produits du draft final par metierKey distinct, un lot par
+        // groupe, tous au statut "À commander".
+        let seededLots = null;
+        if (!lotId && newStatus === "À commander" &&
+            existingLotIds.length === 0) {
+          const draft = updatePayload.draft || current.draft || {};
+          const products =
+            Array.isArray(draft.products) ? draft.products : [];
+          const metierLabels =
+            (extraFields.metierLabels &&
+              typeof extraFields.metierLabels === "object") ?
+              extraFields.metierLabels : {};
+          const seenKeys = [];
+          for (const p of products) {
+            const key = (p && p.metierKey) ? p.metierKey : "_non_classe";
+            if (!seenKeys.includes(key)) seenKeys.push(key);
+          }
+          if (seenKeys.length > 0) {
+            seededLots = seenKeys.map((key) => ({
+              lotId: key,
+              data: {
+                metierKey: key,
+                label: metierLabels[key] || key,
+                status: "À commander",
+                poseurIds: [],
+                poseurNames: "",
+                teamId: null,
+                poseDate: null,
+                estimatedDurationDays: null,
+                dependsOn: [],
+                createdAt: now,
+                updatedAt: now,
+              },
+            }));
+            updatePayload.lotIds = seenKeys;
+            updatePayload.lotsSummary = seededLots.map((l) => ({
+              lotId: l.lotId,
+              metierKey: l.data.metierKey,
+              label: l.data.label,
+              status: l.data.status,
+              poseurIds: l.data.poseurIds,
+              poseDate: l.data.poseDate,
+            }));
+          }
+        }
+
+        // Phase 3 — agrégat sur le devis parent après écriture d'un lot :
+        // fusionne le lot transitionné (nouveau statut) avec ses frères
+        // (statut inchangé, lu ci-dessus) pour recalculer status/poseurIds/
+        // poseDate/lotsSummary devis-level, pour que Planner/poseur/
+        // commercial/dashboard (non modifiés cette session) continuent de
+        // lire des champs devis-level cohérents.
+        let devisUpdate = null;
+        if (lotId) {
+          const transitionedLotData = {...current, ...updatePayload};
+          const allLotData = [
+            transitionedLotData,
+            ...Object.values(siblingLotDataById),
+          ];
+          const allLotSummaries = [
+            {
+              lotId,
+              metierKey: transitionedLotData.metierKey,
+              label: transitionedLotData.label,
+              status: transitionedLotData.status,
+              poseurIds: transitionedLotData.poseurIds || [],
+              poseDate: transitionedLotData.poseDate || null,
+            },
+            ...Object.entries(siblingLotDataById).map(([id, d]) => ({
+              lotId: id,
+              metierKey: d.metierKey,
+              label: d.label,
+              status: d.status,
+              poseurIds: d.poseurIds || [],
+              poseDate: d.poseDate || null,
+            })),
+          ];
+          devisUpdate = {
+            status: aggregateDevisStatus(allLotData),
+            poseurIds: aggregateUnion(allLotData, "poseurIds"),
+            poseDate: aggregateEarliest(allLotData, "poseDate"),
+            lotsSummary: allLotSummaries,
+            updatedAt: now,
+          };
+          lotContext = {lotId, label: current.label || lotId};
+        }
+
+        // ── Écritures ────────────────────────────────────────────────
+        tx.update(targetRef, updatePayload);
+        tx.set(targetRef.collection("statusHistory").doc(), {
           fromStatus,
           toStatus: newStatus,
           uid: callerUid,
@@ -580,15 +756,127 @@ exports.transitionDevisStatus = onCall(
           origin,
           extraFields,
         });
+        if (seededLots) {
+          for (const l of seededLots) {
+            tx.set(devisRef.collection("lots").doc(l.lotId), l.data);
+          }
+        }
+        if (devisUpdate) {
+          tx.update(devisRef, devisUpdate);
+        }
 
         after = {...current, ...updatePayload};
+        notifyAfter = lotId ? {...devisData, ...updatePayload} : after;
       });
 
       try {
-        await notifyTransition(db, newStatus, after, {workspaceId, devisId});
+        await notifyTransition(
+            db, newStatus, notifyAfter, {workspaceId, devisId}, lotContext,
+        );
       } catch (e) {
         logger.error("transitionDevisStatus notify error:", e);
       }
+
+      return {ok: true};
+    });
+
+/**
+ * Phase 3 (multi-lots) : déclare les dépendances d'un lot envers d'autres
+ * lots du même chantier (ex. "carrelage" dépend de "salle_de_bain_etancheite"
+ * — le carrelage ne pourra pas démarrer sa pose tant que l'étanchéité n'est
+ * pas Terminée, voir `requiresDependenciesValidated` sur la transition
+ * À planifier → En pose dans devisWorkflow.js). Écriture directe (pas une
+ * transition de statut) mais passe quand même par une Cloud Function pour
+ * valider que les IDs fournis sont bien des lots du même chantier et pour
+ * garder une vérification de rôle cohérente avec `transitionDevisStatus`.
+ */
+exports.setLotDependencies = onCall(
+    {region: "europe-west1"},
+    async (request) => {
+      const callerUid = request.auth && request.auth.uid;
+      if (!callerUid) throw new Error("Non autorisé");
+
+      const data = request.data || {};
+      const workspaceId = data.workspaceId;
+      const devisId = data.devisId;
+      const lotId = data.lotId;
+      const dependsOn = Array.isArray(data.dependsOn) ? data.dependsOn : [];
+
+      if (!workspaceId || !devisId || !lotId) {
+        throw new Error("workspaceId, devisId et lotId sont requis");
+      }
+      if (dependsOn.includes(lotId)) {
+        throw new Error("Un lot ne peut pas dépendre de lui-même");
+      }
+
+      const callerDoc = await db.collection("users").doc(callerUid).get();
+      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      const callerData = callerDoc.data();
+      const callerRole = callerData.role;
+      const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
+      if (!["metreur", "admin"].includes(callerRole)) {
+        throw new Error(
+            `Non autorisé : le rôle ${callerRole} ne peut pas modifier les ` +
+            "dépendances de lots",
+        );
+      }
+
+      const workspaceDoc =
+        await db.collection("workspaces").doc(workspaceId).get();
+      if (!workspaceDoc.exists) {
+        throw new Error("Espace de travail introuvable");
+      }
+      const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
+      if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
+        throw new Error(
+            "Non autorisé : ce chantier n'appartient pas à votre espace " +
+            "de travail",
+        );
+      }
+
+      const devisRef = db.collection("workspaces").doc(workspaceId)
+          .collection("devis").doc(devisId);
+      const devisSnap = await devisRef.get();
+      if (!devisSnap.exists) throw new Error("Chantier introuvable");
+      const lotIds = devisSnap.data().lotIds || [];
+      if (!lotIds.includes(lotId)) {
+        throw new Error("Lot introuvable sur ce chantier");
+      }
+      const invalidIds = dependsOn.filter((id) => !lotIds.includes(id));
+      if (invalidIds.length > 0) {
+        throw new Error(
+            `Lot(s) inconnu(s) sur ce chantier : ${invalidIds.join(", ")}`,
+        );
+      }
+      // Détection de cycle simple (DFS) : dependsOn ne doit jamais pouvoir,
+      // en suivant les dépendances déjà déclarées des autres lots, revenir
+      // sur lotId lui-même.
+      const otherLotsSnap = await devisRef.collection("lots").get();
+      const graph = {};
+      otherLotsSnap.forEach((doc) => {
+        graph[doc.id] = doc.id === lotId ?
+          dependsOn : (doc.data().dependsOn || []);
+      });
+      const visited = new Set();
+      const hasCycle = (nodeId, stack) => {
+        if (stack.has(nodeId)) return true;
+        if (visited.has(nodeId)) return false;
+        visited.add(nodeId);
+        stack.add(nodeId);
+        for (const next of graph[nodeId] || []) {
+          if (hasCycle(next, stack)) return true;
+        }
+        stack.delete(nodeId);
+        return false;
+      };
+      if (hasCycle(lotId, new Set())) {
+        throw new Error("Dépendance cyclique détectée entre lots");
+      }
+
+      await devisRef.collection("lots").doc(lotId).update({
+        dependsOn,
+        updatedAt: Timestamp.now(),
+      });
 
       return {ok: true};
     });
