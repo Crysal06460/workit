@@ -22,6 +22,7 @@ const {
   getTokensByRole,
   getTokenByUid,
   sendNotification,
+  writeInAppNotification,
 } = require("./notifyHelpers");
 const {
   findTransition, notifyTransition,
@@ -29,6 +30,7 @@ const {
   LOT_TERMINAL_STATUSES, NON_CONFORMITE_CAUSES,
 } = require("./devisWorkflow");
 const {recordKpiTransition} = require("./kpiStats");
+const {getRelanceConfig} = require("./relanceConfig");
 
 // Phase 5 (temps passé) : les 6 événements horodatés reconnus par
 // logTimeEntry, dans l'ordre attendu d'une journée de pose.
@@ -588,7 +590,19 @@ exports.transitionDevisStatus = onCall(
               `→ ${newStatus}`,
           );
         }
-        if (!transition.roles.includes(callerRole)) {
+        // allowPermission est un override tri-état sur users/{uid}, pas un
+        // simple booléen additif : absent -> le rôle de base fait foi ;
+        // true -> autorise même hors des roles listés (ex. commercial
+        // délégué canPlaceOrders) ; false -> refuse même pour un rôle listé
+        // (ex. métreur à qui on a retiré le droit de passer commande).
+        const hasRole = transition.roles.includes(callerRole);
+        let allowed = hasRole;
+        if (transition.allowPermission) {
+          const override = callerData[transition.allowPermission];
+          if (override === true) allowed = true;
+          else if (override === false) allowed = false;
+        }
+        if (!allowed) {
           throw new Error(
               `Non autorisé : le rôle ${callerRole} ne peut pas effectuer ` +
               "cette transition",
@@ -858,6 +872,135 @@ exports.transitionDevisStatus = onCall(
 
       return {ok: true};
     });
+
+/**
+ * Relance manuelle : notification déclenchée par un clic utilisateur (pas
+ * par une transition de statut, contrairement à notifyTransition) — voir
+ * relanceConfig.js pour la table des types et leurs cibles/statuts
+ * applicables. Même squelette de vérifications que transitionDevisStatus
+ * (auth, appartenance workspace, rôle) + un anti-spam par cooldown basé sur
+ * la sous-collection immuable {devis|lot}/relances.
+ */
+exports.sendRelance = onCall(
+    {region: "europe-west1"},
+    async (request) => {
+      const callerUid = request.auth && request.auth.uid;
+      if (!callerUid) throw new Error("Non autorisé");
+
+      const data = request.data || {};
+      const workspaceId = data.workspaceId;
+      const devisId = data.devisId;
+      const lotId = data.lotId || null;
+      const relanceType = data.relanceType;
+
+      if (!workspaceId || !devisId || !relanceType) {
+        throw new Error("workspaceId, devisId et relanceType sont requis");
+      }
+      const config = getRelanceConfig(relanceType);
+      if (!config) {
+        throw new Error(`Type de relance inconnu : ${relanceType}`);
+      }
+
+      const callerDoc = await db.collection("users").doc(callerUid).get();
+      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      const callerData = callerDoc.data();
+      const callerRole = callerData.role;
+      const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
+
+      const workspaceDoc =
+        await db.collection("workspaces").doc(workspaceId).get();
+      if (!workspaceDoc.exists) {
+        throw new Error("Espace de travail introuvable");
+      }
+      const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
+      if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
+        throw new Error(
+            "Non autorisé : ce chantier n'appartient pas à votre espace " +
+            "de travail",
+        );
+      }
+      if (!config.fromRoles.includes(callerRole) && callerRole !== "admin") {
+        throw new Error(
+            `Non autorisé : le rôle ${callerRole} ne peut pas envoyer ` +
+            "cette relance",
+        );
+      }
+
+      const devisRef = db.collection("workspaces").doc(workspaceId)
+          .collection("devis").doc(devisId);
+      const devisSnap = await devisRef.get();
+      if (!devisSnap.exists) throw new Error("Chantier introuvable");
+      const devisData = devisSnap.data();
+
+      let current = devisData;
+      let targetRef = devisRef;
+      if (lotId) {
+        const lotSnap = await devisRef.collection("lots").doc(lotId).get();
+        if (!lotSnap.exists) throw new Error("Lot introuvable");
+        current = lotSnap.data();
+        targetRef = lotSnap.ref;
+      }
+      const currentStatus = current.status || current.metreurStatus || null;
+      if (!config.applicableStatuses.includes(currentStatus)) {
+        throw new Error(
+            "Ce chantier n'est plus dans un état où cette relance a du sens",
+        );
+      }
+
+      // Anti-spam : cooldown par type de relance sur ce devis (ou ce lot).
+      const relancesRef = targetRef.collection("relances");
+      const lastRelanceSnap = await relancesRef
+          .where("relanceType", "==", relanceType)
+          .orderBy("at", "desc")
+          .limit(1)
+          .get();
+      if (!lastRelanceSnap.empty) {
+        const lastAt = lastRelanceSnap.docs[0].data().at;
+        const cooldownMs = (config.cooldownMinutes || 15) * 60 * 1000;
+        if (lastAt && Date.now() - lastAt.toMillis() < cooldownMs) {
+          throw new Error(
+              "Relance déjà envoyée il y a moins de " +
+              `${config.cooldownMinutes} minutes`,
+          );
+        }
+      }
+
+      const clientName = devisData.clientName || devisData.client ||
+        "client inconnu";
+      const client = lotId ?
+        `${clientName} (lot ${current.label || lotId})` : clientName;
+
+      let tokens = [];
+      if (config.targetRole === "poseur") {
+        const poseurIds =
+          Array.isArray(current.poseurIds) ? current.poseurIds : [];
+        const tokenArrays = await Promise.all(
+            poseurIds.map((id) => getTokenByUid(id)));
+        tokens = tokenArrays.flat();
+      } else {
+        tokens = await getTokensByRole(workspaceId, config.targetRole);
+      }
+
+      const title = config.title;
+      const body = config.body(client);
+      const now = Timestamp.now();
+
+      await Promise.all([
+        sendNotification(tokens, title, body, {
+          workspaceId, devisId, ...(lotId ? {lotId} : {}), type: "relance",
+        }),
+        writeInAppNotification(db, {
+          workspaceId, devisId, targetRole: config.targetRole,
+          type: `relance_${relanceType}`, title, body,
+        }),
+        relancesRef.add({
+          relanceType, byUid: callerUid, byRole: callerRole, at: now,
+        }),
+      ]);
+
+      return {ok: true};
+    },
+);
 
 /**
  * Phase 4 (Planner v2) : réécrit l'entrée `lotId` dans `devis.lotsSummary`

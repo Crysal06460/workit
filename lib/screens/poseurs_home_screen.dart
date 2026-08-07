@@ -11,7 +11,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'chantier_chat_screen.dart';
 import 'settings_screen.dart';
 import 'sign_in_screen.dart';
+import '../core/models/wi_devis_summary.dart';
 import '../core/theme/app_colors.dart';
+import '../core/utils/recent_chantiers.dart';
+import '../core/widgets/wi_devis_list_modal.dart';
+import '../core/widgets/wi_recent_chantiers_section.dart';
 import '../services/devis_service.dart';
 import '../services/document_engine.dart';
 
@@ -69,6 +73,65 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
     _lastName = prefs.getString(_userLastNameKey);
     _userId = FirebaseAuth.instance.currentUser?.uid;
     await _loadChantiers();
+  }
+
+  // Même mapping que `_ChantierCard._statusColor`/`_statusLabel` — dupliqué
+  // volontairement (pas de composant partagé pour ça, voir stratégie DRY du
+  // popup/récents).
+  Color _summaryStatusColor(String? status) {
+    switch (status) {
+      case 'Terminé':
+        return Colors.greenAccent;
+      case 'Clôturé':
+        return Colors.tealAccent;
+      case 'À clôturer':
+        return Colors.orangeAccent;
+      case 'SAV':
+        return Colors.deepOrangeAccent;
+      case 'En pose':
+      default:
+        return _poseurAccent;
+    }
+  }
+
+  String _summaryStatusLabel(String? status) {
+    switch (status) {
+      case 'Terminé':
+        return 'Terminé';
+      case 'Clôturé':
+        return 'Clôturé';
+      case 'À clôturer':
+        return 'En attente de validation';
+      case 'SAV':
+        return 'SAV';
+      case 'En pose':
+      default:
+        return 'En pose';
+    }
+  }
+
+  WiDevisSummary _toSummary(BuildContext context, _ChantierData data) {
+    return WiDevisSummary(
+      id: data.lotId != null ? '${data.id}_${data.lotId}' : data.id,
+      clientLabel: data.clientDisplay,
+      address: data.address,
+      status: data.metreurStatus ?? '',
+      statusLabel: data.lotLabel != null
+          ? '${_summaryStatusLabel(data.metreurStatus)} (${data.lotLabel})'
+          : _summaryStatusLabel(data.metreurStatus),
+      statusColor: _summaryStatusColor(data.metreurStatus),
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => _PoseurChantierDetail(
+            data: data,
+            workspaceId: _workspaceId ?? '',
+            onRefresh: _loadChantiers,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadChantiers() async {
@@ -237,20 +300,66 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
                 child: CircularProgressIndicator(color: _poseurAccent),
               )
             : SafeArea(
-                child: TabBarView(
+                child: Column(
                   children: [
-                    _ChantierList(
-                      items: _aFaire,
-                      emptyMessage: 'Aucun chantier assigné.',
-                      workspaceId: _workspaceId ?? '',
-                      onRefresh: _loadChantiers,
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: InkWell(
+                        onTap: () => WiDevisListModal.show(
+                          context,
+                          title: 'Chantiers en cours',
+                          items: _aFaire.map((e) => _toSummary(context, e)).toList(),
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.grey50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                '${_aFaire.length}',
+                                style: const TextStyle(
+                                    color: _poseurAccent, fontWeight: FontWeight.w800, fontSize: 20),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('chantiers en cours',
+                                  style: TextStyle(color: AppColors.grey500, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                    _ChantierList(
-                      items: _historique,
-                      emptyMessage: 'Aucun chantier dans l\'historique.',
-                      workspaceId: _workspaceId ?? '',
-                      onRefresh: _loadChantiers,
-                      isHistorique: true,
+                    Builder(builder: (context) {
+                      final recent = mergeRecentChantiers(
+                          [..._aFaire, ..._historique].map((e) => _toSummary(context, e)).toList());
+                      if (recent.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                        child: WiRecentChantiersSection(title: 'Chantiers récemment ajoutés', items: recent),
+                      );
+                    }),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _ChantierList(
+                            items: _aFaire,
+                            emptyMessage: 'Aucun chantier assigné.',
+                            workspaceId: _workspaceId ?? '',
+                            onRefresh: _loadChantiers,
+                          ),
+                          _ChantierList(
+                            items: _historique,
+                            emptyMessage: 'Aucun chantier dans l\'historique.',
+                            workspaceId: _workspaceId ?? '',
+                            onRefresh: _loadChantiers,
+                            isHistorique: true,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -2305,6 +2414,8 @@ class _ChantierData {
     this.summary = const [],
     this.attachments = const [],
     this.draft,
+    this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
@@ -2327,6 +2438,12 @@ class _ChantierData {
   final List<_SummaryEntry> summary;
   final List<_AttachmentEntry> attachments;
   final _DraftData? draft;
+  // Section "chantiers récemment ajoutés" (écran d'accueil) : lus depuis les
+  // champs déjà écrits côté serveur, aucune écriture cliente supplémentaire.
+  // Pour une unité issue d'un lot, approximés par les valeurs devis-level
+  // (lotsSummary ne dénormalise pas de timestamp par lot).
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   String get clientDisplay {
     final parts = <String>[];
@@ -2394,6 +2511,8 @@ class _ChantierData {
       summary: summary,
       attachments: attachments,
       draft: draft,
+      createdAt: map['createdAt'] is Timestamp ? (map['createdAt'] as Timestamp).toDate() : null,
+      updatedAt: map['updatedAt'] is Timestamp ? (map['updatedAt'] as Timestamp).toDate() : null,
     );
   }
 
@@ -2420,6 +2539,8 @@ class _ChantierData {
       summary: summary,
       attachments: attachments,
       draft: draft,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 

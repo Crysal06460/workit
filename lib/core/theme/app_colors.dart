@@ -75,4 +75,12 @@ abstract class AppColors {
 
   static const Color statusProblemBg   = dangerLight;
   static const Color statusProblemText = danger;
+
+  // ── Desktop : sidebar / hover / focus ─────────────────
+  static const Color sidebarBg         = surface;
+  static const Color sidebarActiveBg   = primaryLight;
+  static const Color sidebarActiveText = primary;
+  static const Color sidebarBorder     = grey200;
+  static const Color hoverOverlay      = grey50;
+  static const Color focusRing         = Color(0x592563EB); // primary @ 35%
 }

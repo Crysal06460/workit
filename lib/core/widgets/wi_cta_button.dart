@@ -17,12 +17,17 @@ class WiCtaButton extends StatelessWidget {
   final VoidCallback? onTap;
   final Color? color;
 
+  /// Pleine largeur par défaut (comportement mobile historique). Passer
+  /// `false` pour un bouton de largeur naturelle (ex: top bar desktop).
+  final bool fullWidth;
+
   const WiCtaButton({
     super.key,
     required this.label,
     this.icon,
     this.onTap,
     this.color,
+    this.fullWidth = true,
   });
 
   @override
@@ -35,8 +40,8 @@ class WiCtaButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
         child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 15),
+          width: fullWidth ? double.infinity : null,
+          padding: EdgeInsets.symmetric(horizontal: fullWidth ? 0 : 20, vertical: 15),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

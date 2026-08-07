@@ -57,10 +57,19 @@ const TRANSITIONS = {
       extraFields: ["draft", "updated", "metierLabels"]},
   ],
   "À commander": [
-    {to: "À planifier", roles: ["metreur", "admin"], extraFields: ["updated"]},
+    // allowPermission : override tri-état de users/{uid}.canPlaceOrders,
+    // pas un simple ajout de droit (voir transitionDevisStatus) —
+    // true : un commercial sans le rôle metreur/admin peut aussi déclencher
+    // cette transition si un admin le lui a délégué (même mécanisme que
+    // canManageTeam pour l'invitation de membres) ; false : un métreur à qui
+    // ce droit a été explicitement retiré ne peut plus la déclencher, même
+    // si "metreur" est listé dans roles.
+    {to: "À planifier", roles: ["metreur", "admin"],
+      allowPermission: "canPlaceOrders", extraFields: ["updated"]},
   ],
   "Commande en cours": [
-    {to: "À planifier", roles: ["metreur", "admin"], extraFields: ["updated"]},
+    {to: "À planifier", roles: ["metreur", "admin"],
+      allowPermission: "canPlaceOrders", extraFields: ["updated"]},
   ],
   "À planifier": [
     {to: "En pose", roles: ["metreur", "admin"],

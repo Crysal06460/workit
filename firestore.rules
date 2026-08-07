@@ -67,6 +67,7 @@ service cloud.firestore {
           request.resource.data.get('canManageTeam', false) == resource.data.get('canManageTeam', false) &&
           request.resource.data.get('manageableRoles', []) == resource.data.get('manageableRoles', []) &&
           request.resource.data.get('isAdmin', false) == resource.data.get('isAdmin', false) &&
+          request.resource.data.get('canPlaceOrders', false) == resource.data.get('canPlaceOrders', false) &&
           (resource.data.get('status', '') != 'disabled' || request.resource.data.get('status', '') == 'disabled')
         ) ||
         (myRole() == 'admin' &&
@@ -147,6 +148,17 @@ service cloud.firestore {
           allow write: if false;
         }
 
+        // ── Relances manuelles (log immuable, écrit exclusivement par la ─
+        // Cloud Function sendRelance — même principe que statusHistory,
+        // sert aussi de base à l'anti-spam par cooldown).
+        match /relances/{relanceId} {
+          allow read: if isAuth() && (
+            get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+            myWorkspaceId() == workspaceId
+          );
+          allow write: if false;
+        }
+
         // ── Documents générés (bon de commande, bon de préparation, ────
         // rapport d'autocontrôle...) — créés côté client par DocumentEngine
         // (contrairement à statusHistory, pas via Cloud Function), jamais
@@ -194,6 +206,14 @@ service cloud.firestore {
           }
 
           match /timeEntries/{entryId} {
+            allow read: if isAuth() && (
+              get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
+              myWorkspaceId() == workspaceId
+            );
+            allow write: if false;
+          }
+
+          match /relances/{relanceId} {
             allow read: if isAuth() && (
               get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.adminUid == uid() ||
               myWorkspaceId() == workspaceId

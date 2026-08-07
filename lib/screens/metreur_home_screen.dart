@@ -12,7 +12,11 @@ import 'planner_screen.dart';
 import 'sign_in_screen.dart';
 import 'settings_screen.dart';
 import '../core/dictionary_service.dart';
+import '../core/models/wi_devis_summary.dart';
 import '../core/theme/app_colors.dart';
+import '../core/utils/recent_chantiers.dart';
+import '../core/widgets/wi_devis_list_modal.dart';
+import '../core/widgets/wi_recent_chantiers_section.dart';
 import '../services/devis_service.dart';
 import '../services/document_engine.dart';
 
@@ -41,12 +45,16 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
   late List<_MeasureCardData> _toClose;
   final _firestore = FirebaseFirestore.instance;
   StreamSubscription<QuerySnapshot>? _devisSubscription;
+  StreamSubscription<DocumentSnapshot>? _userSubscription;
   String? _workspaceId;
   String? _workspaceName;
   String? _userId;
   String? _userFirstName;
   String? _userLastName;
   int _bottomNavIndex = 0;
+  // Défaut = comportement historique (le métreur peut commander) tant que
+  // users/{uid} n'a pas encore été lu ou n'a pas de restriction explicite.
+  bool _canPlaceOrders = true;
 
   @override
   void initState() {
@@ -85,12 +93,22 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
   @override
   void dispose() {
     _devisSubscription?.cancel();
+    _userSubscription?.cancel();
     super.dispose();
   }
 
   Future<void> _init() async {
     await _loadWorkspaceContext();
     _subscribeToDevis();
+    _subscribeToPermissions();
+  }
+
+  void _subscribeToPermissions() {
+    if (_userId == null) return;
+    _userSubscription = _firestore.collection('users').doc(_userId).snapshots().listen((doc) {
+      if (!mounted) return;
+      setState(() => _canPlaceOrders = doc.data()?['canPlaceOrders'] != false);
+    });
   }
 
   void _subscribeToDevis() {
@@ -357,6 +375,8 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                       count: _newRequests.length,
                       color: AppColors.danger,
                       bg: AppColors.dangerLight,
+                      onTap: () => WiDevisListModal.show(context,
+                          title: 'Urgent', items: _newRequests.map((e) => _toSummary(context, e)).toList()),
                     ),
                     const SizedBox(width: 8),
                     _StatChip(
@@ -364,6 +384,8 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                       count: _toOrder.length,
                       color: AppColors.warning,
                       bg: AppColors.warningLight,
+                      onTap: () => WiDevisListModal.show(context,
+                          title: 'À commander', items: _toOrder.map((e) => _toSummary(context, e)).toList()),
                     ),
                     const SizedBox(width: 8),
                     _StatChip(
@@ -371,10 +393,20 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                       count: _toPlan.length,
                       color: AppColors.purple,
                       bg: AppColors.purpleLight,
+                      onTap: () => WiDevisListModal.show(context,
+                          title: 'À planifier', items: _toPlan.map((e) => _toSummary(context, e)).toList()),
                     ),
                   ],
                 ),
               ),
+              Builder(builder: (context) {
+                final recent = mergeRecentChantiers(allItems.map((e) => _toSummary(context, e)).toList());
+                if (recent.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: WiRecentChantiersSection(title: 'Chantiers récemment ajoutés', items: recent),
+                );
+              }),
               Expanded(
                 child: TabBarView(
                   children: [
@@ -464,6 +496,20 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
     );
   }
 
+  WiDevisSummary _toSummary(BuildContext context, _MeasureCardData data) {
+    return WiDevisSummary(
+      id: data.id,
+      clientLabel: data.title,
+      address: data.address,
+      status: data.status ?? '',
+      statusLabel: (data.status?.isEmpty ?? true) ? 'Nouvelle demande' : data.status!,
+      statusColor: _MetCard._accentColor(data.status),
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      onTap: () => _showRequestDetails(context, data),
+    );
+  }
+
   void _showRequestDetails(BuildContext context, _MeasureCardData data) {
     showModalBottomSheet(
       context: context,
@@ -543,6 +589,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         builder: (_) => _MeasureRequestSummary(
           data: data,
           workspaceId: _workspaceId,
+          canConfirmOrder: _canPlaceOrders,
           onAccept: () => _acceptRequest(context, data),
           onAskInfo: () => _askForInfo(context, data),
           onSchedule: () => _scheduleMeeting(data),
@@ -1237,6 +1284,8 @@ class _MeasureCardData {
     this.draft,
     this.lotIds = const [],
     this.lotsSummary = const [],
+    this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
@@ -1259,6 +1308,10 @@ class _MeasureCardData {
   // Function pour le moment exact de naissance des lots.
   final List<String> lotIds;
   final List<_LotSummary> lotsSummary;
+  // Section "chantiers récemment ajoutés" (écran d'accueil) : lus depuis les
+  // champs déjà écrits côté serveur, aucune écriture cliente supplémentaire.
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   _MeasureCardData copyWith({
     String? id,
@@ -1297,6 +1350,8 @@ class _MeasureCardData {
       draft: draft ?? this.draft,
       lotIds: lotIds ?? this.lotIds,
       lotsSummary: lotsSummary ?? this.lotsSummary,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 
@@ -1358,6 +1413,8 @@ class _MeasureCardData {
           .whereType<Map<String, dynamic>>()
           .map((m) => _LotSummary.fromMap(m['lotId']?.toString() ?? '', m))
           .toList(),
+      createdAt: map['createdAt'] is Timestamp ? (map['createdAt'] as Timestamp).toDate() : null,
+      updatedAt: map['updatedAt'] is Timestamp ? (map['updatedAt'] as Timestamp).toDate() : null,
     );
   }
 }
@@ -1397,34 +1454,40 @@ class _StatChip extends StatelessWidget {
     required this.count,
     required this.color,
     required this.bg,
+    this.onTap,
   });
   final String label;
   final int count;
   final Color color;
   final Color bg;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$count',
-              style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 20),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
-            ),
-          ],
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$count',
+                style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 20),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1974,6 +2037,7 @@ class _MeasureRequestSummary extends StatefulWidget {
     required this.onSchedulePose,
     this.onRefresh,
     this.workspaceId,
+    this.canConfirmOrder = true,
   });
 
   final _MeasureCardData data;
@@ -1984,6 +2048,7 @@ class _MeasureRequestSummary extends StatefulWidget {
   final VoidCallback onSchedulePose;
   final VoidCallback? onRefresh;
   final String? workspaceId;
+  final bool canConfirmOrder;
 
   @override
   State<_MeasureRequestSummary> createState() => _MeasureRequestSummaryState();
@@ -2192,6 +2257,41 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Lot "${lot.label}" — commande confirmée.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur : $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Relance manuelle (notification, pas une transition de statut) : le
+  /// métreur/admin relance les poseurs assignés quand le chantier semble
+  /// terminé sur le terrain mais n'a jamais été clôturé dans l'appli.
+  /// [lotId] absent pour un devis sans lot.
+  Future<void> _sendRelanceCloture({String? lotId}) async {
+    final wsId = _data.workspaceId ?? widget.workspaceId;
+    if (wsId == null) return;
+    try {
+      await DevisService.sendRelance(
+        workspaceId: wsId,
+        devisId: _data.id,
+        lotId: lotId,
+        relanceType: 'cloture_manquante',
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Relance envoyée aux poseurs assignés.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -2469,16 +2569,28 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
     switch (lot.status) {
       case 'À commander':
       case 'Commande en cours':
-        action = ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.warning,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-          onPressed: () => _confirmOrderLot(lot),
-          child: const Text('Confirmer la commande', style: TextStyle(fontSize: 12)),
-        );
+        action = widget.canConfirmOrder
+            ? ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.warning,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => _confirmOrderLot(lot),
+                child: const Text('Confirmer la commande', style: TextStyle(fontSize: 12)),
+              )
+            : OutlinedButton(
+                onPressed: null,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text(
+                  'Commande réservée au commercial/admin',
+                  style: TextStyle(fontSize: 11),
+                ),
+              );
         break;
       case 'À planifier':
         action = blockedBy != null
@@ -2502,13 +2614,23 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
               );
         break;
       case 'En pose':
-        action = Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-          decoration: BoxDecoration(color: AppColors.successLight, borderRadius: BorderRadius.circular(12)),
-          child: const Text(
-            'Pose programmée',
-            style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12),
-          ),
+        action = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+              decoration: BoxDecoration(color: AppColors.successLight, borderRadius: BorderRadius.circular(12)),
+              child: const Text(
+                'Pose programmée',
+                style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            TextButton(
+              onPressed: () => _sendRelanceCloture(lotId: lot.lotId),
+              child: const Text('Relancer la clôture', style: TextStyle(fontSize: 12)),
+            ),
+          ],
         );
         break;
       default:
@@ -2966,17 +3088,32 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                       case 'À commander':
                       case 'Commande en cours':
                         return Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.warning,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              elevation: 0,
-                            ),
-                            onPressed: widget.onConfirmOrder,
-                            child: const Text('Confirmer la commande'),
-                          ),
+                          child: widget.canConfirmOrder
+                              ? ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.warning,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    elevation: 0,
+                                  ),
+                                  onPressed: widget.onConfirmOrder,
+                                  child: const Text('Confirmer la commande'),
+                                )
+                              : Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.grey50,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: AppColors.grey100),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    'Commande réservée au commercial/admin',
+                                    style: TextStyle(color: AppColors.grey500, fontSize: 12),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
                         );
                       case 'À planifier':
                         return Expanded(
@@ -2994,18 +3131,27 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                         );
                       case 'En pose':
                         return Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: AppColors.successLight,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'Pose programmée',
-                                style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: AppColors.successLight,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Center(
+                                  child: Text(
+                                    'Pose programmée',
+                                    style: TextStyle(color: AppColors.success, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
                               ),
-                            ),
+                              TextButton(
+                                onPressed: () => _sendRelanceCloture(),
+                                child: const Text('Relancer la clôture'),
+                              ),
+                            ],
                           ),
                         );
                       default:

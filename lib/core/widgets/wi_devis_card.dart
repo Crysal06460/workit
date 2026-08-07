@@ -48,6 +48,15 @@ class WiDevisCard extends StatelessWidget {
   final Color? accentColor;
   /// Si true, affiche une bordure complète bleue (chantier actif poseur)
   final bool isActive;
+  /// Rend toute la carte tapable (ouverture du détail) — en plus des
+  /// éventuelles actions du footer.
+  final VoidCallback? onTap;
+  /// Remplace le badge de statut par défaut (`WiStatusBadge`) — utile quand
+  /// le libellé affiché diverge du libellé générique de l'enum (ex: nom de
+  /// la personne assignée, libellé métier spécifique à un écran).
+  final Widget? trailingBadge;
+  /// Petites actions icône additionnelles dans l'en-tête (ex: éditer/supprimer).
+  final List<Widget>? headerActions;
 
   const WiDevisCard({
     super.key,
@@ -62,39 +71,18 @@ class WiDevisCard extends StatelessWidget {
     this.secondaryAction,
     this.accentColor,
     this.isActive = false,
+    this.onTap,
+    this.trailingBadge,
+    this.headerActions,
   });
 
   @override
   Widget build(BuildContext context) {
-    final urgency = urgencyBorderColor(status);
     final BorderSide leftBorder = accentColor != null
         ? BorderSide(color: accentColor!, width: 3)
         : BorderSide.none;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: isActive
-            ? Border.all(color: AppColors.primary, width: 2)
-            : accentColor != null
-                ? Border(
-                    left: leftBorder,
-                    top: const BorderSide(color: AppColors.cardBorder),
-                    right: const BorderSide(color: AppColors.cardBorder),
-                    bottom: const BorderSide(color: AppColors.cardBorder),
-                  )
-                : Border.all(color: AppColors.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
+    final content = Padding(
         padding: const EdgeInsets.all(15),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,7 +115,8 @@ class WiDevisCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                WiStatusBadge(status: status),
+                trailingBadge ?? WiStatusBadge(status: status),
+                if (headerActions != null) ...headerActions!,
               ],
             ),
 
@@ -182,7 +171,42 @@ class WiDevisCard extends StatelessWidget {
             ],
           ],
         ),
+      );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: isActive
+            ? Border.all(color: AppColors.primary, width: 2)
+            : accentColor != null
+                ? Border(
+                    left: leftBorder,
+                    top: const BorderSide(color: AppColors.cardBorder),
+                    right: const BorderSide(color: AppColors.cardBorder),
+                    bottom: const BorderSide(color: AppColors.cardBorder),
+                  )
+                : Border.all(color: AppColors.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
+      child: onTap == null
+          ? content
+          : Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(16),
+                child: content,
+              ),
+            ),
     );
   }
 }

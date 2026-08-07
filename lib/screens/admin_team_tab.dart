@@ -78,8 +78,11 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
   void _editPermissions(
     String uid,
     String displayName,
+    String role,
     bool enabled,
     Set<String> roles,
+    bool canPlaceOrders,
+    bool orderRestricted,
   ) {
     showModalBottomSheet(
       context: context,
@@ -92,8 +95,11 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
         workspaceId: widget.workspaceId,
         uid: uid,
         displayName: displayName,
+        memberRole: role,
         initialEnabled: enabled,
         initialRoles: roles,
+        initialCanPlaceOrders: canPlaceOrders,
+        initialOrderRestricted: orderRestricted,
       ),
     );
   }
@@ -280,6 +286,9 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                     (data['manageableRoles'] as List<dynamic>? ?? [])
                         .map((e) => e.toString()),
                   );
+                  final canPlaceOrders = data['canPlaceOrders'] == true;
+                  final orderRestricted =
+                      role == 'metreur' && data['canPlaceOrders'] == false;
 
                   return Container(
                     decoration: BoxDecoration(
@@ -359,22 +368,55 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                                   ],
                                 ),
                               ],
+                              if (canPlaceOrders) ...[
+                                const SizedBox(height: 6),
+                                const Row(
+                                  children: [
+                                    Icon(Icons.local_shipping_outlined,
+                                        size: 12, color: AppColors.grey400),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Peut passer commande',
+                                      style: TextStyle(
+                                          color: AppColors.grey400,
+                                          fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (orderRestricted) ...[
+                                const SizedBox(height: 6),
+                                const Row(
+                                  children: [
+                                    Icon(Icons.block,
+                                        size: 12, color: AppColors.danger),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Commande restreinte',
+                                      style: TextStyle(
+                                          color: AppColors.danger,
+                                          fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
                         if (_isFullAdmin)
                           IconButton(
                             icon: Icon(
-                              canManageTeam
+                              canManageTeam || canPlaceOrders || orderRestricted
                                   ? Icons.shield
                                   : Icons.shield_outlined,
-                              color: canManageTeam
+                              color: canManageTeam || canPlaceOrders || orderRestricted
                                   ? AppColors.primary
                                   : AppColors.grey300,
                             ),
-                            tooltip: 'Droits de gestion d\'équipe',
-                            onPressed: () => _editPermissions(
-                                uid, displayName, canManageTeam, manageableRoles),
+                            tooltip: 'Droits du membre',
+                            onPressed: () => _editPermissions(uid, displayName, role,
+                                canManageTeam, manageableRoles, canPlaceOrders,
+                                orderRestricted),
                           ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, color: AppColors.danger),
@@ -1025,15 +1067,21 @@ class _EditPermissionsSheet extends StatefulWidget {
     required this.workspaceId,
     required this.uid,
     required this.displayName,
+    required this.memberRole,
     required this.initialEnabled,
     required this.initialRoles,
+    required this.initialCanPlaceOrders,
+    required this.initialOrderRestricted,
   });
 
   final String workspaceId;
   final String uid;
   final String displayName;
+  final String memberRole;
   final bool initialEnabled;
   final Set<String> initialRoles;
+  final bool initialCanPlaceOrders;
+  final bool initialOrderRestricted;
 
   @override
   State<_EditPermissionsSheet> createState() => _EditPermissionsSheetState();
@@ -1042,22 +1090,36 @@ class _EditPermissionsSheet extends StatefulWidget {
 class _EditPermissionsSheetState extends State<_EditPermissionsSheet> {
   late bool _enabled = widget.initialEnabled;
   late Set<String> _roles = Set<String>.from(widget.initialRoles);
+  late bool _canPlaceOrders = widget.initialCanPlaceOrders;
+  late bool _orderRestricted = widget.initialOrderRestricted;
   bool _saving = false;
 
   Future<void> _save() async {
     if (_saving) return;
     setState(() => _saving = true);
     try {
-      await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
+      // canPlaceOrders est un override tri-état côté serveur (voir
+      // devisWorkflow.js) : pour un commercial il ACCORDE le droit, pour un
+      // métreur il le RETIRE. On ne l'écrit que pour le rôle concerné, pour
+      // ne jamais écraser silencieusement l'autre sémantique en éditant
+      // d'autres droits (canManageTeam) sur un membre d'un rôle tiers.
+      final payload = <String, dynamic>{
         'canManageTeam': _enabled,
         'manageableRoles': _enabled ? _roles.toList() : [],
-      });
+      };
+      if (widget.memberRole == 'commercial') {
+        payload['canPlaceOrders'] = _canPlaceOrders;
+      }
+      if (widget.memberRole == 'metreur') {
+        payload['canPlaceOrders'] = !_orderRestricted;
+      }
+      await FirebaseFirestore.instance.collection('users').doc(widget.uid).update(payload);
       await writeAuditLog(
         widget.workspaceId,
         action: 'rights_changed',
         targetUid: widget.uid,
         performedByRole: 'admin', // cette feuille n'est ouvrable que par un admin
-        details: {'canManageTeam': _enabled, 'manageableRoles': _roles.toList()},
+        details: payload,
       );
       if (mounted) {
         Navigator.of(context).pop();
@@ -1110,6 +1172,44 @@ class _EditPermissionsSheetState extends State<_EditPermissionsSheet> {
             onEnabledChanged: (v) => setState(() => _enabled = v),
             onRolesChanged: (r) => setState(() => _roles = r),
           ),
+          if (widget.memberRole == 'commercial') ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _canPlaceOrders,
+              onChanged: (v) => setState(() => _canPlaceOrders = v),
+              activeThumbColor: AppColors.primary,
+              title: const Text(
+                'Autoriser à passer commande',
+                style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              subtitle: const Text(
+                'Ce commercial pourra confirmer la commande sur ses propres chantiers (normalement réservé au métreur).',
+                style: TextStyle(color: AppColors.grey500, fontSize: 12),
+              ),
+            ),
+          ],
+          if (widget.memberRole == 'metreur') ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _orderRestricted,
+              onChanged: (v) => setState(() => _orderRestricted = v),
+              activeThumbColor: AppColors.danger,
+              title: const Text(
+                'Restreindre le droit de passer commande',
+                style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              subtitle: const Text(
+                'Ce métreur ne pourra plus confirmer de commande — réservé au commercial/admin sur ses chantiers.',
+                style: TextStyle(color: AppColors.grey500, fontSize: 12),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,

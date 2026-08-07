@@ -6,6 +6,7 @@ abstract class AppTheme {
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'Inter',
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         primary: AppColors.primary,
@@ -13,6 +14,20 @@ abstract class AppTheme {
         background: AppColors.background,
       ),
       scaffoldBackgroundColor: AppColors.background,
+      hoverColor: AppColors.hoverOverlay,
+      focusColor: AppColors.focusRing,
+
+      // ── NavigationRail (sidebar desktop) ────────────
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: AppColors.sidebarBg,
+        selectedIconTheme: const IconThemeData(color: AppColors.sidebarActiveText),
+        unselectedIconTheme: const IconThemeData(color: AppColors.grey400),
+        selectedLabelTextStyle: const TextStyle(color: AppColors.sidebarActiveText, fontWeight: FontWeight.w700, fontSize: 13),
+        unselectedLabelTextStyle: const TextStyle(color: AppColors.grey500, fontWeight: FontWeight.w500, fontSize: 13),
+        indicatorColor: AppColors.sidebarActiveBg,
+        indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        useIndicator: true,
+      ),
 
       // ── AppBar ──────────────────────────────────────
       appBarTheme: const AppBarTheme(

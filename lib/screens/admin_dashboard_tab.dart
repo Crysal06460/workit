@@ -1,4 +1,8 @@
+import '../core/models/wi_devis_summary.dart';
 import '../core/theme/app_colors.dart';
+import '../core/utils/recent_chantiers.dart';
+import '../core/widgets/wi_devis_list_modal.dart';
+import '../core/widgets/wi_recent_chantiers_section.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -40,6 +44,26 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
     if (s == 'SAV') return AppColors.danger;
     if (s == 'Terminé' || s == 'Clôturé') return AppColors.success;
     return AppColors.grey300;
+  }
+
+  WiDevisSummary _toSummary(BuildContext context, QueryDocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final status = (data['status'] ?? data['metreurStatus'] ?? '').toString();
+    final createdAt = data['createdAt'];
+    final updatedAt = data['updatedAt'];
+    return WiDevisSummary(
+      id: doc.id,
+      clientLabel: (data['client'] ?? '—').toString(),
+      address: (data['address'] ?? '').toString(),
+      status: status,
+      statusLabel: status.isEmpty
+          ? 'Nouvelle demande'
+          : (status == 'À planifier' ? 'Pose à programmer' : status),
+      statusColor: _statusColor(status),
+      createdAt: createdAt is Timestamp ? createdAt.toDate() : null,
+      updatedAt: updatedAt is Timestamp ? updatedAt.toDate() : null,
+      onTap: () => _openDetail(context, doc.id, data),
+    );
   }
 
   void _openDetail(BuildContext context, String devisId, Map<String, dynamic> data) {
@@ -360,37 +384,34 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
 
         final docs = snapshot.data!.docs;
 
-        final enAttente = docs.where((d) {
-          final data = d.data() as Map<String, dynamic>;
-          final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
+        bool isEnAttente(Map<String, dynamic> d) {
+          final s = (d['status'] ?? d['metreurStatus'] ?? '').toString();
           return s == 'Nouvelle demande' || s == 'Acceptée' || s.isEmpty;
-        }).length;
-
-        final metreEnCours = docs.where((d) {
-          final data = d.data() as Map<String, dynamic>;
-          final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
-          return s == 'En cours';
-        }).length;
-
-        final commandePose = docs.where((d) {
-          final data = d.data() as Map<String, dynamic>;
-          final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
+        }
+        bool isMetreEnCours(Map<String, dynamic> d) =>
+            (d['status'] ?? d['metreurStatus'] ?? '').toString() == 'En cours';
+        bool isCommandePose(Map<String, dynamic> d) {
+          final s = (d['status'] ?? d['metreurStatus'] ?? '').toString();
           return s == 'À commander' || s == 'Commande en cours' || s == 'À planifier' || s == 'En pose';
-        }).length;
-
-        final termines = docs.where((d) {
-          final data = d.data() as Map<String, dynamic>;
-          final s = (data['status'] ?? data['metreurStatus'] ?? '').toString();
+        }
+        bool isTermine(Map<String, dynamic> d) {
+          final s = (d['status'] ?? d['metreurStatus'] ?? '').toString();
           return s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé' || s == 'SAV';
-        }).length;
+        }
 
-        final recent = docs.take(20).toList();
+        final enAttenteDocs = docs.where((d) => isEnAttente(d.data() as Map<String, dynamic>)).toList();
+        final metreEnCoursDocs = docs.where((d) => isMetreEnCours(d.data() as Map<String, dynamic>)).toList();
+        final commandePoseDocs = docs.where((d) => isCommandePose(d.data() as Map<String, dynamic>)).toList();
+        final termineDocs = docs.where((d) => isTermine(d.data() as Map<String, dynamic>)).toList();
+
+        final allSummaries = docs.map((d) => _toSummary(context, d)).toList();
+        final recentSummaries = mergeRecentChantiers(allSummaries);
 
         return CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -418,142 +439,74 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                       children: [
                         _StatCard(
                           title: 'En attente',
-                          count: enAttente,
+                          count: enAttenteDocs.length,
                           icon: Icons.hourglass_empty_rounded,
                           color: AppColors.primary,
+                          onTap: () => WiDevisListModal.show(
+                            context,
+                            title: 'En attente',
+                            items: enAttenteDocs.map((d) => _toSummary(context, d)).toList(),
+                          ),
                         ),
                         _StatCard(
                           title: 'Métré en cours',
-                          count: metreEnCours,
+                          count: metreEnCoursDocs.length,
                           icon: Icons.architecture_outlined,
                           color: AppColors.warning,
+                          onTap: () => WiDevisListModal.show(
+                            context,
+                            title: 'Métré en cours',
+                            items: metreEnCoursDocs.map((d) => _toSummary(context, d)).toList(),
+                          ),
                         ),
                         _StatCard(
                           title: 'Commande / Pose',
-                          count: commandePose,
+                          count: commandePoseDocs.length,
                           icon: Icons.home_repair_service_outlined,
                           color: AppColors.purple,
+                          onTap: () => WiDevisListModal.show(
+                            context,
+                            title: 'Commande / Pose',
+                            items: commandePoseDocs.map((d) => _toSummary(context, d)).toList(),
+                          ),
                         ),
                         _StatCard(
                           title: 'Terminés',
-                          count: termines,
+                          count: termineDocs.length,
                           icon: Icons.check_circle_outline,
                           color: AppColors.success,
+                          onTap: () => WiDevisListModal.show(
+                            context,
+                            title: 'Terminés',
+                            items: termineDocs.map((d) => _toSummary(context, d)).toList(),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 28),
-                    const Text(
-                      'Derniers chantiers',
-                      style: TextStyle(
-                        color: AppColors.grey900,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
+                    if (recentSummaries.isEmpty)
+                      Center(
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 24),
+                            Icon(Icons.inbox_outlined, size: 52, color: AppColors.grey200),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Aucun chantier pour l\'instant',
+                              style: TextStyle(color: AppColors.grey300, fontSize: 15),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      WiRecentChantiersSection(
+                        title: 'Chantiers récemment ajoutés',
+                        items: recentSummaries,
                       ),
-                    ),
-                    const SizedBox(height: 12),
                   ],
                 ),
               ),
             ),
-            if (recent.isEmpty)
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.inbox_outlined, size: 52, color: AppColors.grey200),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Aucun chantier pour l\'instant',
-                        style: TextStyle(color: AppColors.grey300, fontSize: 15),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) {
-                      final data = recent[i].data() as Map<String, dynamic>;
-                      final status = (data['status'] ?? data['metreurStatus'] ?? '').toString();
-                      final client = (data['client'] ?? '—').toString();
-                      final address = (data['address'] ?? '').toString();
-                      final createdAt = data['createdAt'];
-                      String dateStr = '';
-                      if (createdAt is Timestamp) {
-                        final d = createdAt.toDate();
-                        dateStr = '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year.toString().substring(2)}';
-                      }
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: InkWell(
-                          onTap: () => _openDetail(context, recent[i].id, data),
-                          borderRadius: BorderRadius.circular(14),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: AppColors.cardBorder),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        client,
-                                        style: const TextStyle(
-                                          color: AppColors.grey900,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (address.isNotEmpty) ...[
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          address,
-                                          style: const TextStyle(color: AppColors.grey400, fontSize: 12),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    _StatusChip(status: status, color: _statusColor(status)),
-                                    if (dateStr.isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        dateStr,
-                                        style: const TextStyle(color: AppColors.grey300, fontSize: 11),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                    childCount: recent.length,
-                  ),
-                ),
-              ),
           ],
         );
       },
@@ -567,49 +520,55 @@ class _StatCard extends StatelessWidget {
     required this.count,
     required this.icon,
     required this.color,
+    this.onTap,
   });
 
   final String title;
   final int count;
   final IconData icon;
   final Color color;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 28, color: color),
-          const SizedBox(height: 10),
-          Text(
-            '$count',
-            style: const TextStyle(
-              color: AppColors.grey900,
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.grey500, fontSize: 12),
-          ),
-        ],
+          ],
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 28, color: color),
+            const SizedBox(height: 10),
+            Text(
+              '$count',
+              style: const TextStyle(
+                color: AppColors.grey900,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.grey500, fontSize: 12),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -15,15 +15,31 @@ class WiStat {
   final String value;
   final String label;
   final Color color;
-  const WiStat({required this.value, required this.label, required this.color});
+  final VoidCallback? onTap;
+  const WiStat({required this.value, required this.label, required this.color, this.onTap});
 }
 
 class WiStatRow extends StatelessWidget {
   final List<WiStat> stats;
-  const WiStatRow({super.key, required this.stats});
+
+  /// Sur desktop (>=900px), bascule d'un `Row` étiré (qui devient
+  /// disproportionné sur grand écran) vers un `Wrap` de cartes à largeur
+  /// fixe alignées à gauche. Défaut `false` = comportement mobile inchangé.
+  final bool compactOnDesktop;
+
+  const WiStatRow({super.key, required this.stats, this.compactOnDesktop = false});
 
   @override
   Widget build(BuildContext context) {
+    if (compactOnDesktop && MediaQuery.sizeOf(context).width >= 900) {
+      return Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: stats
+            .map((s) => SizedBox(width: 180, child: _StatCard(stat: s)))
+            .toList(),
+      );
+    }
     return Row(
       children: stats
           .map((s) => Expanded(child: _StatCard(stat: s)))
@@ -40,44 +56,48 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            stat.value,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: stat.color,
+    return InkWell(
+      onTap: stat.onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            stat.label,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: AppColors.grey400,
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              stat.value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: stat.color,
+              ),
             ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              stat.label,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: AppColors.grey400,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -31,6 +31,16 @@
 
   <title>workit</title>
   <link rel="manifest" href="manifest.json">
+  <script>
+    // App Check debug provider (localhost uniquement) : le SDK JS Firebase
+    // intercepte ce flag avant l'activation d'App Check et bascule sur un
+    // jeton de debug au lieu du provider reCAPTCHA configuré côté Dart
+    // (lib/main.dart), qui ne fonctionne pas sur localhost (pas de domaine
+    // enregistré). Sans effet sur un domaine réel.
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    }
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

@@ -153,6 +153,31 @@ class DevisService {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // Envoie une relance manuelle (clic utilisateur, pas une transition de
+  // statut) — Commercial → Métreur (chantier pas accepté / commande en
+  // attente) ou Métreur → Poseurs assignés (clôture pas faite dans l'appli).
+  // Appelle la Cloud Function callable sendRelance, qui vérifie les droits,
+  // le statut courant du chantier et un cooldown anti-spam par type — voir
+  // functions/relanceConfig.js pour la table des types. L'exception (ex.
+  // cooldown pas écoulé) remonte telle quelle pour affichage côté appelant.
+  // ─────────────────────────────────────────────────────────────
+  static Future<void> sendRelance({
+    required String workspaceId,
+    required String devisId,
+    String? lotId,
+    required String relanceType,
+  }) async {
+    final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
+        .httpsCallable('sendRelance');
+    await callable.call(<String, dynamic>{
+      'workspaceId': workspaceId,
+      'devisId': devisId,
+      if (lotId != null) 'lotId': lotId,
+      'relanceType': relanceType,
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // Stream notifications non lues pour un rôle (badge bottom nav)
   // ─────────────────────────────────────────────────────────────
   static Stream<int> unreadCount({

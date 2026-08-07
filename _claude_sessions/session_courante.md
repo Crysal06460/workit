@@ -1,10 +1,407 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-05 (suite) — **Déploiement complet (`firebase deploy`, functions +
-firestore rules + index) confirmé sur `workit-1daa1`**, à la demande explicite de Christophe : projet encore en
-phase de développement, aucun vrai utilisateur, uniquement des comptes de test — le point de prudence soulevé
-plus tôt (comptes réels sur d'anciens builds) ne s'applique pas. **Christophe teste ce soir sur le Mac, Phase 7
-prévue demain.**
+**Dernière mise à jour :** 2026-08-07 (suite) — Christophe part 4 jours (long week-end), continuera sur le
+Mac avec un simulateur. Avant de partir, il a demandé un audit complet du code réel face à son récap (voir
+section tout en haut, la plus récente) et un `git push` de tout le travail accumulé — **fait, tout est sur
+`origin/main`**. Ce commit couvre à la fois la refonte responsive du 06/08 (jamais commitée jusqu'ici) et
+les 3 chantiers du 07/08 (restriction commande métreur, relances, popup+récents). **Rien n'est encore
+déployé sur Firebase** (uniquement des dry-run) — décision à prendre avec Christophe à son retour.
+
+## 🆕 Session 2026-08-07 (suite) — Audit complet vs récap + git push avant les 4 jours d'absence
+
+Avant de partir, Christophe a demandé : (1) une revérification complète du code réel face à SON récap
+(pas juste les 3 chantiers déjà traités ce jour), (2) un état des lieux du design (il sait déjà que les
+écrans de métré sont restés "en noir/vert"), (3) un résumé de ce qui reste à faire, (4) tout sauvegarder
+dans ce journal et pousser sur `origin/main`. 4 agents lancés en parallèle (un par rôle) pour comparer
+chaque ligne du récap au code réel — méthode : lecture directe des fichiers, pas de confiance dans le
+journal ou la mémoire.
+
+### 🐛 Bug critique trouvé : le Commercial voit les chantiers de TOUT le workspace, pas seulement les siens
+Le récap est explicite : les pastilles/popup/récents du Commercial doivent être scopées à ses propres
+chantiers ("pas comme admin qui voit tout le monde"). Confirmé par grep sur `commercial_home_screen.dart` :
+**aucune** des requêtes Firestore qui alimentent les stats/popup/récents ne filtre par `userId`/
+`commercialId` (contrairement à `agenda_screen.dart` dans le même dossier, qui applique bien
+`.where('userId', isEqualTo: uid)`). Un commercial voit donc aujourd'hui les chantiers des autres
+commerciaux dans son propre tableau de bord — fuite de données entre commerciaux d'un même workspace, pas
+juste un écart de confort. **Pas corrigé cette session** (trouvé en toute fin, faute de temps) — à corriger
+en priorité avant tout test avec de vrais comptes commerciaux multiples.
+
+### Écarts fonctionnels confirmés (par rôle)
+
+**Admin**
+- Tableau de bord : 4 pastilles au lieu des 6 catégories distinctes demandées. En particulier, "Terminés"
+  fusionne silencieusement les chantiers réellement terminés ET ceux en SAV/problème (`À clôturer`/`SAV`) —
+  perd la distinction "terminé propre" vs "pas terminé/problème" que le récap demande explicitement dans les
+  notifs ET le dashboard.
+- Notification "nouveau chantier créé par un commercial" : envoyée en push (`functions/index.js:1388-1393`)
+  mais jamais écrite en in-app (`writeInAppNotification` absent à cet endroit, présent pour les 2 autres cas
+  admin) — asymétrie mineure, l'admin ne la retrouve pas dans son historique de notifs.
+- Reste conforme : Planner par équipe, gestion d'équipe (ajout/suppression + les 2 droits), admin peut
+  métrer/commander lui-même.
+
+**Commercial** (voir bug critique ci-dessus)
+- 3 pastilles au lieu de 6 (même limitation que l'admin, en plus du bug de scope).
+- Pas de vrai agenda/planning par équipe — `AgendaScreen` est une simple liste chronologique, et le
+  `WiKanbanBoard` de l'écran d'accueil n'est qu'un board de statuts de devis, pas un planning par équipe de
+  pose avec métrés programmés comme demandé.
+- Conforme : ajout de chantier, gestion d'équipe si droits (via Réglages), les 6 notifications demandées
+  sont toutes bien envoyées.
+
+**Métreur**
+- **Ne peut pas clôturer un chantier** — seulement "Relancer la clôture" (nouveau bouton de ce jour). La
+  vraie validation (Terminé/SAV) est réservée au Commercial/Admin depuis la Phase 5 (décision déjà actée à
+  l'époque). Le récap dit "clôture les chantiers" pour le métreur — **contradiction à trancher avec
+  Christophe** : le récap est-il imprécis, ou veut-il vraiment redonner ce pouvoir au métreur ?
+- **Aucun accès à la gestion d'équipe**, même avec le droit — pire, l'écran renvoie littéralement le métreur
+  vers "Admin > Équipe" dans son propre message d'erreur. `canManageTeam` existe comme mécanisme générique
+  mais n'est jamais branché côté métreur.
+- Conforme : toutes les autres étapes du rôle, les 4 notifications demandées, l'agenda par équipe (vrai lien
+  vers le Planner).
+
+**Poseur**
+- **Aucun flux d'acceptation de chantier** — le récap dit "Accepte les nouveaux chantiers" mais un chantier
+  assigné par le métreur apparaît directement dans "À faire" sans étape d'acceptation/refus. À clarifier :
+  fonctionnalité manquante, ou le récap décrit-il juste l'affichage automatique en le formulant maladroitement ?
+- **Aucun agenda par équipe** — seulement 2 onglets plats (À faire/Historique), aucun lien vers le Planner.
+- Conforme : terminer/déclarer un problème, notification d'assignation avec date de pose, et le nouveau
+  tableau de bord (pastille+popup+récents) de ce jour est cohérent.
+
+### Dette design — le point "écrans en noir/vert"
+Localisé précisément : **`lib/screens/measurement_form_screen.dart`** (le formulaire de métré du métreur)
+a son propre thème sombre autonome, totalement déconnecté du reste de l'appli — constantes en tête de
+fichier `_bg = Color(0xFF07090D)`, `_accent = Color(0xFF00E676) // Metreur Green` (commentaire explicite
+dans le code), `_cardBg = Color(0xFF13161C)`, réutilisées ~16 fois + 7 `Colors.black*` bruts. **C'est cet
+écran, pas `metreur_home_screen.dart`** (lui déjà propre, branché sur `AppColors` depuis un moment), qui est
+responsable du "noir/vert" — à refondre en priorité vu que c'est l'écran le plus utilisé par le métreur.
+
+Dette design par écran (couleurs codées en dur au lieu de `AppColors.*`, comptage approximatif) :
+| Écran | Couleurs en dur | État |
+|---|---|---|
+| `measurement_form_screen.dart` | ~23 | Thème parallèle complet — priorité 1 |
+| `poseurs_home_screen.dart` | ~41 | Le plus chargé, + couleur d'accent bleue au lieu du vert `AppColors.rolePoseur` qui lui est assigné |
+| `admin_team_tab.dart` | ~13 | Partiellement migré |
+| `admin_dashboard_tab.dart` | ~9 | Partiellement migré |
+| `planner_screen.dart` | ~8 | Dette légère |
+| `metreur_home_screen.dart` | ~8 (cosmétique, ombres/texte) | Déjà propre sur le fond |
+| `admin_kpis_tab.dart` | 0 | Référence, entièrement aligné |
+
+Rappel palette (`lib/core/theme/app_colors.dart`) : `primary` bleu, `success` vert, `warning` orange,
+`danger` rouge, `purple`, `amber`. Couleurs de rôle : `roleCommercial`=bleu, `roleMetteur`=violet,
+`rolePoseur`=vert, `roleAdmin`=orange. Rappel aussi : la refonte responsive (sidebar desktop, Kanban) du
+06/08 n'a touché QUE l'écran Commercial (pilote) — Métreur/Poseur/Admin ont toujours leur nav bottom bar
+faite main, pas de layout desktop dédié (déjà noté comme suite possible dans le journal du 06/08).
+
+### Résumé — ce qu'il reste à faire, par priorité
+
+1. **Corriger le bug de scope Commercial** (pastilles/popup/récents non filtrées à ses propres chantiers) —
+   priorité absolue, c'est une fuite de données entre commerciaux, pas un simple écart de confort.
+2. **Décisions produit à trancher avec Christophe** avant de coder plus (pas des bugs, des clarifications
+   sur l'intention du récap) :
+   - Le métreur doit-il pouvoir clôturer un chantier lui-même (contredit la Phase 5), ou seulement relancer ?
+   - Le poseur doit-il avoir un vrai bouton Accepter/Refuser un chantier assigné ?
+   - Le métreur doit-il avoir accès à la gestion d'équipe comme le commercial (actuellement exclu) ?
+   - Faut-il un vrai agenda/planning par équipe pour Commercial et Poseur (aujourd'hui réservé à
+     Admin+Métreur), ou les tabs/kanban de statuts actuels suffisent en pratique ?
+3. **Dashboards à 6 catégories** au lieu des 3-4 actuelles (Admin/Commercial/Métreur) — travail de code ET
+   de design, à combiner avec le point 4 pour ne pas refaire l'UI deux fois.
+4. **Refonte design**, dans l'ordre de priorité suggéré :
+   - `measurement_form_screen.dart` (le "noir/vert") — remplacer `_bg`/`_accent`/`_cardBg` par `AppColors`.
+   - `poseurs_home_screen.dart` — le plus de couleurs en dur, + corriger l'identité couleur (vert, pas bleu).
+   - `admin_team_tab.dart`, `admin_dashboard_tab.dart`, `planner_screen.dart` — dette légère à moyenne.
+   - Généraliser le design system responsive (sidebar desktop, déjà construit le 06/08) aux 3 rôles restants,
+     actuellement seul le Commercial en bénéficie.
+5. Notification admin "nouveau chantier" — asymétrie push/in-app à corriger (petit bug, cf. ci-dessus).
+6. **Tester en direct** — bloqué toute cette session (page blanche persistante dans Chrome, cause non
+   identifiée). Christophe teste sur le Mac avec un simulateur ce week-end : sujet à reprendre ensemble à
+   son retour, avec en plus le scénario de test `canPlaceOrders` resté en pause depuis le 06/08.
+
+### Vérifications faites cette session (audit, pas de nouveau code)
+Aucune ligne de code modifiée pendant l'audit lui-même (4 agents en lecture seule). `flutter analyze`
+revérifié avant l'audit : 138 issues, 0 erreur (état inchangé depuis les 3 chantiers du matin).
+
+### Git : tout commité et poussé sur `origin/main`
+Le dépôt avait ~33 fichiers modifiés/nouveaux accumulés depuis le 05/08 soir (la refonte responsive du 06/08
+n'avait jamais été commitée). Vérifié qu'aucun fichier sensible ne traînait (pas de clé de service, pas de
+`.env`) avant de tout ajouter. Un seul commit regroupant refonte responsive (06/08) + 3 chantiers (07/08),
+poussé sur `origin/main`.
+
+---
+
+## 🆕 Session 2026-08-07 — 3 chantiers du récap : restriction commande métreur, relances, popup+récents
+
+### Chantier 1 — Restriction du droit "passer commande" pour le métreur
+Le métreur pouvait jusqu'ici toujours passer commande (droit natif du rôle). Christophe a expliqué que dans
+certaines entreprises seul le commercial/admin doit le faire. Décision de conception : réutiliser
+`canPlaceOrders` (déjà additif pour un commercial délégué) en le rendant **tri-état** côté serveur plutôt que
+créer un nouveau champ — absent = comportement du rôle inchangé, `true` = force l'autorisation (cas
+commercial existant), `false` = force le refus même pour un rôle listé (nouveau cas métreur). Vérifié que
+`firestore.rules` n'a besoin d'aucun changement (`.get('canPlaceOrders', false)` traite déjà absent et `false`
+identiquement).
+- `functions/index.js` (`transitionDevisStatus`) : logique `hasRole || hasDelegatedPermission` remplacée par
+  un override tri-état.
+- `lib/screens/admin_team_tab.dart` : bug corrigé au passage (`_EditPermissionsSheet._save()` écrivait
+  `canPlaceOrders` inconditionnellement quel que soit le rôle édité — aurait pu retirer silencieusement le
+  droit d'un métreur en éditant juste `canManageTeam`) ; nouveau toggle "Restreindre le droit de passer
+  commande" visible uniquement pour les métreurs, badge "Commande restreinte" sur la carte membre.
+- `lib/screens/metreur_home_screen.dart` : nouveau flux temps réel sur `users/{uid}` (l'écran ne lisait rien
+  sur son propre utilisateur avant) ; bouton "Confirmer la commande" masqué (bandeau informatif à la place)
+  aux 2 endroits concernés (devis simple et multi-lots) si le droit est retiré.
+
+### Chantier 4 — Relances manuelles (Commercial→Métreur, Métreur→Poseurs)
+Aucune infrastructure n'existait (le bouton "Relancer" visible côté commercial était un bug — même `onTap`
+que "Voir détails", n'envoyait rien). 3 types définis avec Christophe : `metreur_non_accepte` et
+`metreur_commande_attente` (commercial/admin → métreur), et **`cloture_manquante`** (métreur/admin → poseurs
+assignés) — ce 3ᵉ type a été précisé en cours de session : ce n'est pas une histoire de "validation par
+l'équipe de pose" comme le récap le suggérait littéralement, mais le cas réel où les poseurs terminent un
+chantier en retard, enchaînent sur le suivant et oublient de faire la clôture dans l'appli plusieurs jours
+après — le métreur les relance pour qu'ils clôturent "physiquement".
+- **`functions/relanceConfig.js`** (nouveau) : table déclarative des 3 types (rôles autorisés, cible,
+  statuts applicables, cooldown 15 min), sur le modèle de `TRANSITIONS` dans `devisWorkflow.js`.
+- **`functions/index.js`** : nouvelle callable `sendRelance` (même squelette de vérifications que
+  `transitionDevisStatus`) ; anti-spam via une nouvelle sous-collection immuable `{devis|lot}/relances`
+  (même pattern que `statusHistory`) ; réutilise tel quel `notifyHelpers.js` (aucun changement à ce fichier).
+- **`firestore.rules`** : bloc `relances/{relanceId}` ajouté aux niveaux devis et lot, calqué sur
+  `statusHistory`.
+- **`lib/services/devis_service.dart`** : nouvelle méthode `sendRelance()`.
+- **`lib/screens/commercial/commercial_quote_list.dart`** : bug du bouton "Relancer"/"Rappel" corrigé (déclenche
+  maintenant la vraie relance) ; nouveau bouton "Relancer →" sur les statuts À commander/Commande en cours
+  **seulement si le commercial n'a pas `canPlaceOrders`** (sinon il a déjà "Commander →" — décidé avec
+  Christophe).
+- **`lib/screens/metreur_home_screen.dart`** : nouveau bouton "Relancer la clôture" sur les chantiers en
+  statut `En pose` (les 2 endroits, devis simple et multi-lots).
+
+### Chantiers 2+3 — Popup enrichi au clic sur une pastille + section "chantiers récemment ajoutés"
+Aucune pastille n'avait de `onTap` sur aucun des 4 écrans avant cette session (contrairement à ce que le
+récap supposait "déjà fait"). Stratégie DRY retenue : ne pas unifier les 4 composants de pastille
+(`_StatCard` admin, `WiStat` commercial, `_StatChip` métreur, rien côté poseur — trop différents, refactor
+disproportionné), mais mutualiser la popup et la logique de fusion "récents", qui sont de la vraie logique
+métier.
+- **Nouveaux composants partagés** : `lib/core/models/wi_devis_summary.dart` (DTO normalisé
+  `WiDevisSummary`), `lib/core/widgets/wi_devis_list_modal.dart` (popup liste, réutilise
+  `showWiAdaptiveModal` existant), `lib/core/utils/recent_chantiers.dart` (`mergeRecentChantiers` — union des
+  2-3 plus récents par `createdAt` et de ceux mis à jour dans les 7 derniers jours, dédupliqués, plafonnés à
+  6), `lib/core/widgets/wi_recent_chantiers_section.dart` (section "récents", distingue visuellement
+  "Nouveau" vs "Mis à jour").
+- **Admin** (`admin_dashboard_tab.dart`, preuve de concept) : `onTap` ajouté aux 4 `_StatCard`, section
+  "Derniers chantiers" (simple `take(20)` par date de création) remplacée par la nouvelle section avec la
+  logique de réapparition sur changement de statut.
+- **Commercial** (`commercial_home_screen.dart`) : `onTap` ajouté à `WiStat`/`WiStatRow` (n'en avait aucun) ;
+  nouvelle section récents ajoutée entre la barre de stats et la barre de recherche.
+- **Métreur** (`metreur_home_screen.dart`) : `onTap` ajouté à `_StatChip` ; nouvelle section récents entre
+  les pastilles et les onglets.
+- **Poseur** (`poseurs_home_screen.dart`) : décidé avec Christophe même traitement que les 3 autres rôles
+  malgré l'absence totale de pastille aujourd'hui (juste des onglets À faire/Historique) — nouvelle pastille
+  "chantiers en cours" **net-new** ajoutée + section récents.
+- **Modèles Dart** : `updatedAt` (et `createdAt` pour le poseur, qui ne l'avait pas non plus) ajoutés à
+  `_QuoteItem`, `_MeasureCardData`, `_ChantierData` — lecture directe de champs déjà écrits côté serveur,
+  aucune écriture supplémentaire. Pour le poseur, une unité issue d'un lot (Phase 3) approxime ces dates avec
+  les valeurs devis-level (`lotsSummary` ne dénormalise pas de timestamp par lot).
+
+### Vérifications faites cette session
+- `npm run lint` (functions) + `node -c` sur `index.js`/`devisWorkflow.js`/`relanceConfig.js` : 0 erreur.
+- `flutter analyze` après chaque étape puis en global : **0 erreur**, 138 issues (137 avant, +1 —
+  uniquement une dépréciation `withOpacity` de plus, même famille que celles déjà tolérées partout ailleurs).
+- `firebase deploy --only functions,firestore:rules --dry-run` : réussi **3 fois** au fil de la session
+  (règles compilées, nouvelle callable `sendRelance` empaquetée correctement). Un 4ᵉ essai a échoué avec un
+  timeout ("Cannot determine backend specification") pendant que le serveur `flutter run` tournait encore en
+  arrière-plan — pure contention de ressources CPU sur ce PC, pas un vrai problème de code : le dry-run est
+  repassé au vert immédiatement après avoir arrêté le serveur Flutter.
+
+### ⚠️ Pas testé en direct dans Chrome cette session (bloqué, pas contourné)
+Tentative de test visuel sur le workspace de test (comptes commercial/métreur/admin d'"Ambiance Alu" ou
+"WorkIt Test CPO") : `flutter run -d web-server --web-port=8765` lancé normalement, mais la page est restée
+**blanche indéfiniment** — reproduit après un `indexedDB.clear()` pour changer de compte (erreur possiblement
+introduite par ce nettoyage), confirmé encore après fermeture de l'onglet fautif, ouverture d'un nouvel
+onglet propre, ET redémarrage complet du serveur `flutter run` (`Stop-Process` + relance) : toujours blanc,
+alors que tous les modules DDC se chargeaient avec succès (1000 requêtes réseau, statut 200) et que le
+service de debug Dart VM se connectait normalement côté serveur. Cause exacte non identifiée. Décidé avec
+Christophe (AskUserQuestion) de continuer le code sans ce test plutôt que de continuer à insister — donc
+**le rendu visuel réel des 3 chantiers ci-dessus (surtout Chantier 2/3, le plus visuel) n'a jamais été
+confirmé à l'écran**, seulement par compilation/relecture. Priorité pour la prochaine session avant tout
+nouveau chantier.
+
+### Reste à faire (prochaine session)
+1. **Tester en direct** les 3 chantiers de cette session — priorité absolue avant de continuer, vu qu'aucun
+   n'a été vérifié visuellement. Si le blocage Chrome/web-server se reproduit, essayer : un profil Chrome
+   différent, `-d chrome` au lieu de `-d web-server` (malgré la limitation connue de fenêtre non pilotable en
+   automatisation), ou simplement le test manuel de Christophe sur son poste.
+2. Scénario de test suggéré pour Chantier 1 : admin restreint un métreur de test, vérifier la disparition du
+   bouton "Confirmer la commande" aux 2 endroits, vérifier qu'un admin garde toujours le droit.
+3. Scénario Chantier 4 : déclencher les 3 types de relance, vérifier réception (notif in-app + logs
+   `firebase functions:log`), vérifier que le cooldown de 15 min bloque bien un second clic rapide avec un
+   message clair.
+4. Scénario Chantiers 2+3 : cliquer chaque pastille sur les 4 rôles → popup cohérente avec le compteur ;
+   changer le statut d'un vieux chantier → vérifier qu'il réapparaît dans "Chantiers récemment ajoutés" avec
+   le badge "Mis à jour".
+5. Une fois testé et validé par Christophe : décider du déploiement (`firebase deploy --only
+   functions,firestore:rules`) — rien n'est en prod pour l'instant, uniquement des dry-run.
+6. Le test en pause de `canPlaceOrders` côté commercial (session du 06/08, scénario détaillé dans la section
+   ci-dessous) reste aussi à boucler — peut être fait dans la même session de test que le point 1 ci-dessus.
+
+---
+
+## 🆕 Session 2026-08-06 (suite) — Refonte UI/UX responsive (design system + écran pilote
+Commercial) **+ permission déléguée `canPlaceOrders`**, toutes deux **déployées** sur `workit-1daa1`. Test en
+direct de `canPlaceOrders` commencé (workspace de test "WorkIt Test CPO" créé, bug App Check/ReCAPTCHA local
+corrigé) mais **pas terminé** — mis en pause à la demande de Christophe, qui prépare un récapitulatif complet
+du comportement attendu avant de continuer. **Lire ce récap en premier en reprenant.**
+
+## 🆕 Session 2026-08-06 (suite) — Permission déléguée `canPlaceOrders`
+
+En regardant l'écran Commercial redessiné (session du même jour, voir plus bas), Christophe a repéré un bouton
+"Commander →" affiché côté Commercial sur les chantiers "À commander" — anormal, puisque c'est censé être le
+métreur qui passe commande suite au métré. Audit du code avant d'agir : **pas de faille de sécurité** — le
+bouton n'exécutait aucune action réelle (même `onTap` que "Voir détails"), et la Cloud Function
+`transitionDevisStatus` vérifie déjà côté serveur que seuls `metreur`/`admin` peuvent déclencher cette
+transition (`functions/devisWorkflow.js`, table `TRANSITIONS`). Juste un libellé trompeur. Décidé avec
+Christophe (AskUserQuestion) : retirer ce bouton par défaut, et étendre le système de permissions déléguées
+**déjà existant** pour "gérer l'équipe" (`canManageTeam`/`manageableRoles`, accordé individuellement par un
+admin, vérifié côté serveur) à un nouveau droit équivalent pour "passer commande". Plan dans
+`~/.claude/plans/partitioned-bouncing-lynx.md` (regénéré pour cette tâche, remplace le plan de la refonte UI).
+
+### Implémenté (reproduit fidèlement le pattern `canManageTeam`)
+- **`firestore.rules`** : nouveau champ `canPlaceOrders` sur `users/{uid}`, verrouillé en self-update (même
+  ligne que `canManageTeam`/`manageableRoles`/`isAdmin`) — seul un admin du workspace peut le modifier.
+- **`functions/devisWorkflow.js`** : les transitions `"À commander"`/`"Commande en cours"` → `"À planifier"`
+  gagnent `allowPermission: "canPlaceOrders"` en plus de `roles: ["metreur", "admin"]` (OU, pas remplacement).
+- **`functions/index.js:591`** : le check de rôle dans `transitionDevisStatus` généralisé (`hasRole ||
+  hasDelegatedPermission`) — mécanisme réutilisable pour de futures permissions du même genre, pas câblé en dur
+  sur `canPlaceOrders` uniquement.
+- **`lib/screens/admin_team_tab.dart`** : `_EditPermissionsSheet` gagne un second toggle "Autoriser à passer
+  commande", visible uniquement pour les membres de rôle `commercial` ; écriture Firestore directe (même
+  mécanisme que `canManageTeam`, pas de nouvelle Cloud Function pour l'octroi) ; petit indicateur (icône
+  camion) sur la carte membre quand actif.
+- **`lib/screens/commercial/commercial_home_screen.dart`** : nouveau `_canPlaceOrders`, chargé en direct depuis
+  Firestore au démarrage (lecture ponctuelle du doc `users/{uid}`, pas de cache SharedPreferences — même
+  pattern que `canManageTeam` dans `settings_screen.dart`).
+- **`lib/screens/commercial/commercial_quote_list.dart`** : `_quoteCardFor` n'affiche plus de CTA "Commander"
+  par défaut sur les statuts À commander/Commande en cours (seul "Voir détails" reste, même traitement que les
+  chantiers terminés) ; si `canPlaceOrders == true`, le CTA réapparaît et déclenche la vraie transition
+  (nouvelle fonction `_placeOrder`, même appel `DevisService.updateStatus(..., newStatus: 'À planifier')` que
+  `_confirmOrderLot` côté métreur — transition devis-level sans `lotId`, cohérent avec le fait que l'écran
+  Commercial n'a jamais été rendu lot-aware, Phases 3-5).
+
+### Vérifications faites cette session
+- `npm run lint` (functions) + `node -c index.js`/`devisWorkflow.js` : 0 erreur.
+- `firebase deploy --only firestore:rules --dry-run` : règles compilées avec succès.
+- `flutter analyze` : 0 erreur, 137 issues (inchangé).
+- **Pas testé en direct** (nécessite un déploiement functions+rules, pas fait cette session — décision à
+  prendre avec Christophe, comme pour les Phases précédentes).
+
+### ✅ Déployé (à la demande explicite de Christophe)
+`firebase deploy --only functions,firestore:rules` exécuté avec succès sur `workit-1daa1` : règles publiées,
+8 Cloud Functions mises à jour (`transitionDevisStatus`, `provisionAccounts` notamment — celles qui portent
+`canPlaceOrders`). `canPlaceOrders` est donc **actif en prod** dès maintenant (mais personne ne l'a tant qu'un
+admin ne l'accorde pas explicitement — comportement par défaut inchangé).
+
+### 🧪 Test en direct — en cours, mis en pause par Christophe (recap à venir)
+
+Christophe n'a pas de compte admin pour "Ambiance Alu" (c'est son compte perso, jamais utilisé par Claude) — un
+nouveau workspace de test **"WorkIt Test CPO"** a donc été créé de zéro via le flux d'inscription normal de
+l'app (`onboarding_screen.dart`), pour disposer d'un admin de test. **4 comptes créés, mdp `Workit2026!` pour
+tous :**
+- Admin : `admin.cpo.test@workit-test.fr` (Admin TestCPO)
+- Commercial : `commercial.cpo.test@workit-test.fr` (Corinne Commande)
+- Métreur : `metreur.cpo.test@workit-test.fr` (Marc Metreur)
+- Poseur : `poseur.cpo.test@workit-test.fr` (Léo Poseur) — créé mais pas encore utilisé dans les tests
+
+**Bug d'infra corrigé au passage (`web/index.html`)** : App Check était configuré avec
+`ReCaptchaV3Provider('debug')` côté web dans `lib/main.dart` — 'debug' traité comme une clé de site reCAPTCHA
+invalide, d'où des erreurs `AppCheck: ReCAPTCHA error` récurrentes bloquant certaines actions (création de
+compte, changement de mot de passe) sur `localhost`. Corrigé en injectant le vrai mécanisme de debug web
+(`self.FIREBASE_APPCHECK_DEBUG_TOKEN = true`, strictement limité à `localhost`/`127.0.0.1`, sans effet sur un
+domaine réel). Le jeton de debug généré (`fa4c267a-cd38-4995-b54e-43d1832cb9f6`) a été enregistré par
+Christophe dans la console Firebase (App Check → Manage debug tokens) — **ce token restera valable pour les
+prochaines sessions**, plus besoin de reconfigurer ça.
+
+**Vérifié en direct avec succès :**
+- Comportement par défaut confirmé sur **deux workspaces** ("Ambiance Alu" avec `commercial@workit-test.fr`, et
+  "WorkIt Test CPO" avec Corinne) : le bouton "Commander" n'apparaît plus, seul "Voir détails" reste sur les
+  chantiers À commander.
+- Parcours métreur complet fonctionnel : création d'un devis réel côté Corinne ("##8705 - Testeur CPO") →
+  accepté, métré saisi et validé par Marc (Metteur en œuvre) → **mais le bouton "Confirmer la commande" du
+  métreur fait la transition À commander → À planifier **en un seul clic**, sans étape intermédiaire visible**
+  — le devis test est donc passé directement à "À planifier" avant que le test du point de vue Commercial (à
+  l'étape "À commander" précisément) ait pu être fait.
+
+**Reste à faire pour boucler ce test** : créer un 2e devis test, le faire accepter + métrer par Marc, **s'arrêter
+juste après "Métré terminé" sans cliquer "Confirmer la commande"** (le devis reste alors "À commander"), puis
+basculer sur Corinne : (1) sans droit → confirmer que "Commander" reste absent ; (2) admin active le toggle
+"Autoriser à passer commande" sur la fiche de Corinne (icône bouclier, `admin_team_tab.dart`) ; (3) recharger
+côté Corinne → le bouton "Commander" doit apparaître et fonctionner réellement (transition vers "À planifier").
+
+### 🐛 Bug pré-existant découvert (sans rapport avec cette session, pas creusé)
+Le flux "Sécuriser votre compte" (`sign_in_screen.dart`, première connexion d'un compte fraîchement provisionné
+par `provisionAccounts`) a intermittemment renvoyé `[cloud_firestore/permission-denied] Missing or insufficient
+permissions` lors de l'écriture `.set(..., merge:true)` sur `users/{uid}` (prénom/nom/téléphone/rôle/
+mustChangePassword). Reproduit sur le compte métreur de test, pas systématiquement (a fini par passer après
+plusieurs tentatives). Cause non identifiée — possible piste : le champ `role` réécrit avec `_role ??
+widget.currentRole` pourrait diverger du `role` réel stocké côté Firestore dans certains cas. **Non corrigé,
+hors scope de cette session**, mais à surveiller si Christophe ou un nouveau membre d'équipe rencontre un blocage
+similaire en se connectant pour la première fois.
+
+### ⏸️ Pause demandée par Christophe
+Christophe prépare de son côté un récapitulatif complet du comportement attendu (métreur/commercial/admin,
+droits, notifications, à quel moment quoi se passe) pour cadrer la suite avant de continuer. **Reprendre en
+lisant ce récap en premier** s'il est présent quelque part (à chercher dans les fichiers du projet ou demander
+à Christophe s'il ne l'a pas encore collé dans la conversation).
+
+### Reste à faire (prochaine session)
+1. **Lire le récapitulatif de Christophe en premier** (voir ci-dessus).
+2. Terminer le test en direct de `canPlaceOrders` (scénario détaillé ci-dessus) dans le workspace "WorkIt Test
+   CPO".
+3. Optionnel : investiguer le bug `permission-denied` sur "Sécuriser votre compte" si Christophe le recroise.
+
+---
+
+## 🆕 Session 2026-08-06 — Refonte UI/UX responsive (web/desktop), écran pilote Commercial
+
+Christophe veut un vrai design professionnel 2026 pour la version web de WorkIt (Chrome), pensé pour un usage
+mixte mobile/tablette (terrain) et desktop (bureau) — le code Flutter est resté mobile-only jusqu'ici (aucun
+breakpoint, aucune nav desktop). Décisions validées avec lui avant codage (AskUserQuestion) : fondations +
+écran pilote (pas généralisation immédiate), garder la palette de couleurs existante (déjà proche de son thème
+Adobe Color perso), vrai layout desktop dédié (sidebar, pas juste du responsive simple). Style visuel inspiré de
+captures que Christophe a fournies de **Revel'Home** et **Krafteo** — deux logiciels concurrents qu'il utilise
+professionnellement pour le même métier (devis/chantiers menuiserie) : sidebar repliable, top bar avec
+recherche, et surtout une **vue pipeline en colonnes (Kanban)** qui correspond exactement aux 7 statuts déjà
+gérés par WorkIt. Plan détaillé dans `~/.claude/plans/partitioned-bouncing-lynx.md`.
+
+### Étape A — Fondations design system (bénéficient à tous les rôles, pas seulement Commercial)
+- **`lib/core/responsive/`** (nouveau) : `wi_breakpoints.dart` (`WiScreenSize` compact<600/medium<900/expanded<1200/large`) + `responsive_context.dart` (extension `BuildContext` : `.isMobile`/`.isDesktop`/`.showSidebar`/`.isSidebarExpanded`), basés sur la largeur d'écran (`MediaQuery`, jamais `kIsWeb`) — un même code sert le web ET le mobile natif.
+- **Police Inter** bundlée en asset local (PAS `google_fonts`, pour éviter tout appel réseau au runtime — poseurs en connexion terrain intermittente) : téléchargée via l'API JSON de Google Fonts (`fonts.google.com/download/list?family=Inter`) en 6 graisses (400→900), dans `assets/fonts/Inter/`, déclarée dans `pubspec.yaml`, activée via `fontFamily: 'Inter'` dans `app_theme.dart` (le `textTheme` existant n'a pas changé).
+- **`lib/core/theme/app_layout_tokens.dart`** (nouveau) : tokens desktop (`maxContentWidth`, `sidebarWidthExpanded/Collapsed`, `masterPaneWidth`, `dialogWidthForm`, `kanbanColumnWidth`). Extensions additives dans `app_colors.dart` (sidebar/hover/focus) et `app_theme.dart` (`NavigationRailThemeData`).
+- **`lib/core/widgets/shell/wi_app_shell.dart` + `wi_sidebar_nav.dart`** (nouveaux) : shell responsive réutilisable par les 4 rôles à terme — bascule automatiquement bottom nav (mobile/tablette) / sidebar réduite 72px (petit desktop) / sidebar étendue 240px (grand écran), style inspiré Revel'Home (logo, items icône+label, footer workspace/utilisateur). `WiBottomNav` passé de 56 à 64px de hauteur (aligné sur ce que Commercial/Métreur faisaient déjà en pratique côté mobile — meilleure cible tactile terrain).
+- **Nouveaux composants** `lib/core/widgets/` : `wi_master_detail_layout.dart` (liste+détail desktop), `wi_kanban_board.dart` (board en colonnes, **lecture seule** — pas de drag-and-drop pour ne pas contourner les règles serveur de transition de statut), `wi_responsive_dialog.dart` (`showWiAdaptiveModal` : dialog centré desktop / plein écran mobile).
+- `WiDevisCard` (existant) étendu : `onTap` (carte entière cliquable), `trailingBadge` (override du badge par défaut), `headerActions` (icônes éditer/supprimer). `WiCtaButton` gagne `fullWidth`, `WiStatRow` gagne `compactOnDesktop`.
+
+### Étape B — Écran pilote : Commercial (`lib/screens/commercial_home_screen.dart` → `lib/screens/commercial/`)
+- **Scindé en 5 fichiers** (4027 → ~4036 lignes réparties) via le mécanisme Dart `part`/`part of` (pas de renommage des classes privées `_QuoteItem`/`_QuoteCard`/etc. — elles restent mutuellement visibles comme dans un seul fichier) : `commercial_home_screen.dart`, `commercial_models.dart`, `commercial_quote_list.dart`, `commercial_quote_wizard.dart`, `commercial_chantier_detail.dart`. Import mis à jour dans `auth_navigation_service.dart`.
+- **Nav** : `WiAppShell` remplace `_buildBottomNav()`/`_NavItem` fait main. Bug de doublon préexistant corrigé au passage ("Accueil" et "Devis" pointaient vers le même contenu) → fusionnés en un seul item **Devis** (+ Agenda, Réglages).
+- **Desktop (≥900px)** : la zone "Devis" bascule d'onglets+listes vers un **Kanban** (`WiKanbanBoard`, 6 colonnes de statuts, cartes `WiDevisCard`) + **panneau détail** à droite au clic sur une carte (au lieu du bottom sheet mobile). La barre de pills TabBar est masquée sur desktop (redondante avec le Kanban). `_ChantierDetailSheet` scindé en `_ChantierDetailBody` (contenu pur, réutilisé) + wrapper mobile (bottom sheet inchangé) + nouveau `_ChantierDetailPanel` (desktop, bouton fermer).
+- **Mobile/tablette (<900px) : strictement inchangé** — mêmes tabs, mêmes listes, même bottom sheet.
+- **Wizard "Nouveau devis"** : desktop → `showWiAdaptiveModal` (dialog centré 640px) ; mobile → `Navigator.push` plein écran inchangé. Seul le chrome externe est conditionnel, la logique interne (steps, sauvegarde Firestore/Storage) n'a pas bougé.
+- **2 bugs découverts et corrigés en testant en direct dans Chrome** (précieux rappel de toujours tester après ce genre de refonte) :
+  1. Le panneau détail s'affichait par défaut au chargement (un item de démo avec `id == null` matchait accidentellement `_selectedQuoteId == null` lors de la recherche par id) → recherche désormais gardée par `if (_selectedQuoteId != null)`.
+  2. Les items de démo (sans `id` Firestore) n'étaient pas sélectionnables dans le Kanban → clé de sélection basée sur `item.id ?? item.number` (`number` toujours renseigné et unique) au lieu de `item.id` seul.
+  3. Colonnes "En attente"/"Devis prog." du Kanban n'incluaient pas les items de démo (contrairement aux 4 autres colonnes et aux listes mobiles) → fusion démo ajoutée pour cohérence avec le reste de l'écran.
+
+### Vérifications faites cette session
+- `flutter analyze` après chaque étape : **0 erreur** tout du long, 144→137 issues (baisse, nettoyage de code mort au passage : `_QuoteCard`, `_StatCard`, `_NavItem` supprimés au profit des composants du design system).
+- **Testé en direct dans Chrome** (extension Claude for Chrome, `flutter run -d web-server --web-port=8765`) : connexion `commercial@workit-test.fr`, workspace "Ambiance Alu" — sidebar desktop (réduite/étendue), Kanban (6 colonnes, comptages cohérents avec les stats), sélection de carte → panneau détail → fermeture, wizard "Nouveau devis" en dialog desktop (5 étapes visibles). **Vue mobile non re-testée en direct cette session** : le redimensionnement de fenêtre via l'automatisation Chrome n'a pas fonctionné de façon fiable (la fenêtre ne se redimensionnait pas visuellement malgré des appels `resize_window` réussis) — la garantie de non-régression mobile vient de la relecture de code (les branches mobile de `WiAppShell`/`_AddQuoteScreen`/etc. sont either inchangées, either sur un `if (!context.isDesktop)` qui reproduit exactement l'ancien code), pas d'un test visuel réel.
+
+### ⚠️ Pas fait cette session
+- **Métreur, Poseur, Admin non touchés** — scope volontairement limité à l'écran pilote Commercial pour validation avant généralisation (décidé avec Christophe). Ces 3 rôles ont toujours leur nav bottom bar/tabs faite main, pas de layout desktop.
+- **Pas de vrai test mobile en direct** dans cette session (voir ci-dessus) — à faire en priorité en reprenant, idéalement sur le Mac ou un vrai téléphone/tablette plutôt que via l'automatisation Chrome (qui a déjà posé problème lors d'une session précédente le 05/08).
+- Pas de commit/push — travail local uniquement.
+
+### Reste à faire (prochaine session)
+1. **Christophe regarde lui-même l'écran Commercial** (desktop large, ouvert dans Chrome) pour repérer incohérences/oublis — c'est la demande initiale de cette session.
+2. Tester réellement le rendu mobile (vrai téléphone/tablette ou simulateur) pour confirmer l'absence de régression visuelle — pas fait en direct cette session.
+3. Si validé : généraliser le pattern (`WiAppShell`, Kanban si pertinent, wizard adaptatif) aux 3 autres rôles (Métreur, Poseur, Admin) — chacun a sa propre nav dupliquée à remplacer.
+4. Décider si la vue Kanban doit aussi couvrir le statut "Problème"/SAV comme colonne séparée (actuellement fusionné dans "Terminés").
+5. Toujours en attente depuis les sessions précédentes : test en direct des Phases 3-6 (multi-lots, Planner v2, expérience terrain, KPIs) et Phase 7 (validation des 12 métiers).
+
+---
 
 ## 📍 État actuel du projet — À LIRE EN PREMIER avant de reprendre
 
