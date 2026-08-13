@@ -40,6 +40,21 @@ class WiStatRow extends StatelessWidget {
             .toList(),
       );
     }
+    // Au-delà de 3 pastilles, un Row étiré (Expanded) devient trop étroit
+    // sur mobile (6 catégories) — bascule sur une rangée défilante à largeur
+    // de carte fixe plutôt que de compresser illisiblement chaque carte.
+    if (stats.length > 3) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: stats
+              .map((s) => SizedBox(width: 104, child: _StatCard(stat: s)))
+              .expand((w) => [w, const SizedBox(width: 8)])
+              .toList()
+            ..removeLast(),
+        ),
+      );
+    }
     return Row(
       children: stats
           .map((s) => Expanded(child: _StatCard(stat: s)))

@@ -1058,7 +1058,9 @@ exports.setLotDependencies = onCall(
       const callerData = callerDoc.data();
       const callerRole = callerData.role;
       const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
-      if (!["metreur", "admin"].includes(callerRole)) {
+      // Commercial ajouté pour l'agenda par équipe (Planner) — voir
+      // devisWorkflow.js pour le même ajout sur les transitions de statut.
+      if (!["metreur", "admin", "commercial"].includes(callerRole)) {
         throw new Error(
             `Non autorisé : le rôle ${callerRole} ne peut pas modifier les ` +
             "dépendances de lots",
@@ -1155,7 +1157,9 @@ exports.updateLotPlanningFields = onCall(
       const callerData = callerDoc.data();
       const callerRole = callerData.role;
       const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
-      if (!["metreur", "admin"].includes(callerRole)) {
+      // Commercial ajouté pour l'agenda par équipe (Planner) — voir
+      // devisWorkflow.js pour le même ajout sur les transitions de statut.
+      if (!["metreur", "admin", "commercial"].includes(callerRole)) {
         throw new Error(
             `Non autorisé : le rôle ${callerRole} ne peut pas modifier les ` +
             "champs de planification d'un lot",

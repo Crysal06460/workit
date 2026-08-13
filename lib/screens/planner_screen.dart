@@ -46,9 +46,27 @@ const _kWeekdayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 DateTime? _tsOf(dynamic v) => v is Timestamp ? v.toDate() : null;
 
 class PlannerScreen extends StatefulWidget {
-  const PlannerScreen({super.key, required this.workspaceId, required this.accentColor});
+  const PlannerScreen({
+    super.key,
+    required this.workspaceId,
+    required this.accentColor,
+    this.readOnly = false,
+    this.filterPoseurId,
+  });
   final String workspaceId;
   final Color accentColor;
+
+  /// Poseur (et, à terme, tout rôle sans droit d'écriture serveur sur la
+  /// planification) : masque création d'équipe/congés et rend les cellules
+  /// non draggables/déposables — les Cloud Functions de planification
+  /// (updateLotPlanningFields, setLotDependencies, transitionDevisStatus)
+  /// n'acceptent que metreur/admin/commercial côté serveur de toute façon.
+  final bool readOnly;
+
+  /// Si renseigné (Poseur), restreint la vue à ses propres poses : équipes
+  /// dont il est membre, chantiers où il figure dans poseurIds. Backlog masqué
+  /// (rien à planifier soi-même).
+  final String? filterPoseurId;
 
   @override
   State<PlannerScreen> createState() => _PlannerScreenState();
@@ -103,6 +121,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
         final teams = (teamsSnap.data?.docs ?? [])
             .map(_PlanningTeam.fromDoc)
             .where((t) => t.active)
+            .where((t) => widget.filterPoseurId == null || t.memberIds.contains(widget.filterPoseurId))
             .toList();
         return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: _usersStream,
@@ -130,12 +149,17 @@ class _PlannerScreenState extends State<PlannerScreen> {
                     for (final doc in (devisSnap.data?.docs ?? [])) {
                       units.addAll(_PlanUnit.fromDevisDoc(doc));
                     }
-                    final backlog =
-                        units.where((u) => _kBacklogStatuses.contains(u.status)).toList();
-                    final scheduled = units.where((u) => u.status == 'En pose').toList();
+                    final backlog = widget.filterPoseurId != null
+                        ? const <_PlanUnit>[]
+                        : units.where((u) => _kBacklogStatuses.contains(u.status)).toList();
+                    final scheduled = units
+                        .where((u) => u.status == 'En pose')
+                        .where((u) => widget.filterPoseurId == null || u.poseurIds.contains(widget.filterPoseurId))
+                        .toList();
                     return _PlannerBody(
                       workspaceId: widget.workspaceId,
                       accentColor: widget.accentColor,
+                      readOnly: widget.readOnly,
                       teams: teams,
                       poseurs: poseurs,
                       unavailabilities: unavailabilities,
@@ -403,6 +427,7 @@ class _PlannerBody extends StatelessWidget {
   const _PlannerBody({
     required this.workspaceId,
     required this.accentColor,
+    required this.readOnly,
     required this.teams,
     required this.poseurs,
     required this.unavailabilities,
@@ -416,6 +441,7 @@ class _PlannerBody extends StatelessWidget {
 
   final String workspaceId;
   final Color accentColor;
+  final bool readOnly;
   final List<_PlanningTeam> teams;
   final List<_PoseurOption> poseurs;
   final List<_Unavailability> unavailabilities;
@@ -494,8 +520,8 @@ class _PlannerBody extends StatelessWidget {
           onToggleWeekMode: onToggleWeekMode,
           onPrev: () => onShiftAnchor(-1),
           onNext: () => onShiftAnchor(1),
-          onCreateTeam: () => _openTeamSheet(context, null),
-          onOpenConges: () => _openUnavailabilitiesSheet(context),
+          onCreateTeam: readOnly ? null : () => _openTeamSheet(context, null),
+          onOpenConges: readOnly ? null : () => _openUnavailabilitiesSheet(context),
         ),
         if (overloadCount > 0)
           Container(
@@ -511,11 +537,13 @@ class _PlannerBody extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                width: _kBacklogWidth,
-                child: _BacklogPanel(workspaceId: workspaceId, backlog: backlog),
-              ),
-              const VerticalDivider(width: 1, color: AppColors.cardBorder),
+              if (!readOnly) ...[
+                SizedBox(
+                  width: _kBacklogWidth,
+                  child: _BacklogPanel(workspaceId: workspaceId, backlog: backlog),
+                ),
+                const VerticalDivider(width: 1, color: AppColors.cardBorder),
+              ],
               Expanded(
                 child: SingleChildScrollView(
                   child: SingleChildScrollView(
@@ -550,7 +578,7 @@ class _PlannerBody extends StatelessWidget {
               width: _kTeamColumnWidth,
               height: 64,
               child: InkWell(
-                onTap: () => _openTeamSheet(context, team),
+                onTap: readOnly ? null : () => _openTeamSheet(context, team),
                 child: Container(
                   margin: const EdgeInsets.all(4),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -610,7 +638,7 @@ class _PlannerBody extends StatelessWidget {
           return SizedBox(
             width: _kTeamColumnWidth,
             child: DragTarget<_PlanUnit>(
-              onWillAcceptWithDetails: (details) => true,
+              onWillAcceptWithDetails: (details) => !readOnly,
               onAcceptWithDetails: (details) => _assignToCell(context, details.data, team, day),
               builder: (context, candidateData, rejectedData) {
                 final highlighted = candidateData.isNotEmpty;
@@ -649,7 +677,7 @@ class _PlannerBody extends StatelessWidget {
                           ),
                         ],
                       ),
-                      ...dayChantiers.map((c) => _ScheduledCard(workspaceId: workspaceId, unit: c, day: day)),
+                      ...dayChantiers.map((c) => _ScheduledCard(workspaceId: workspaceId, unit: c, day: day, readOnly: readOnly)),
                     ],
                   ),
                 );
@@ -751,7 +779,7 @@ class _PlannerBody extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _ChantierDetailSheet(workspaceId: workspaceId, unit: unit, accentColor: accentColor),
+      builder: (_) => _ChantierDetailSheet(workspaceId: workspaceId, unit: unit, accentColor: accentColor, readOnly: readOnly),
     );
   }
 }
@@ -776,8 +804,8 @@ class _TopBar extends StatelessWidget {
   final ValueChanged<bool> onToggleWeekMode;
   final VoidCallback onPrev;
   final VoidCallback onNext;
-  final VoidCallback onCreateTeam;
-  final VoidCallback onOpenConges;
+  final VoidCallback? onCreateTeam;
+  final VoidCallback? onOpenConges;
 
   @override
   Widget build(BuildContext context) {
@@ -793,26 +821,30 @@ class _TopBar extends StatelessWidget {
           _SegmentButton(label: 'Jour', selected: !weekMode, accentColor: accentColor, onTap: () => onToggleWeekMode(false)),
           const SizedBox(width: 4),
           _SegmentButton(label: 'Semaine', selected: weekMode, accentColor: accentColor, onTap: () => onToggleWeekMode(true)),
-          const SizedBox(width: 16),
-          TextButton.icon(
-            onPressed: onOpenConges,
-            style: TextButton.styleFrom(foregroundColor: AppColors.grey700),
-            icon: const Icon(Icons.beach_access_outlined, size: 18),
-            label: const Text('Congés'),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: onCreateTeam,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: accentColor,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          if (onOpenConges != null) ...[
+            const SizedBox(width: 16),
+            TextButton.icon(
+              onPressed: onOpenConges,
+              style: TextButton.styleFrom(foregroundColor: AppColors.grey700),
+              icon: const Icon(Icons.beach_access_outlined, size: 18),
+              label: const Text('Congés'),
             ),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Équipe'),
-          ),
+          ],
+          if (onCreateTeam != null) ...[
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: onCreateTeam,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Équipe'),
+            ),
+          ],
         ],
       ),
     );
@@ -1002,10 +1034,11 @@ class _BacklogCard extends StatelessWidget {
 }
 
 class _ScheduledCard extends StatelessWidget {
-  const _ScheduledCard({required this.workspaceId, required this.unit, required this.day});
+  const _ScheduledCard({required this.workspaceId, required this.unit, required this.day, this.readOnly = false});
   final String workspaceId;
   final _PlanUnit unit;
   final DateTime day;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -1045,14 +1078,17 @@ class _ScheduledCard extends StatelessWidget {
           workspaceId: workspaceId,
           unit: unit,
           accentColor: AppColors.primary,
+          readOnly: readOnly,
         ),
       ),
-      child: Draggable<_PlanUnit>(
-        data: unit,
-        feedback: Material(color: Colors.transparent, child: SizedBox(width: _kTeamColumnWidth - 16, child: card)),
-        childWhenDragging: Opacity(opacity: 0.3, child: card),
-        child: card,
-      ),
+      child: readOnly
+          ? card
+          : Draggable<_PlanUnit>(
+              data: unit,
+              feedback: Material(color: Colors.transparent, child: SizedBox(width: _kTeamColumnWidth - 16, child: card)),
+              childWhenDragging: Opacity(opacity: 0.3, child: card),
+              child: card,
+            ),
     );
   }
 }
@@ -1544,10 +1580,11 @@ class _HistorySheet extends StatelessWidget {
 // ────────────────────────────────────────────────
 
 class _ChantierDetailSheet extends StatefulWidget {
-  const _ChantierDetailSheet({required this.workspaceId, required this.unit, required this.accentColor});
+  const _ChantierDetailSheet({required this.workspaceId, required this.unit, required this.accentColor, this.readOnly = false});
   final String workspaceId;
   final _PlanUnit unit;
   final Color accentColor;
+  final bool readOnly;
 
   @override
   State<_ChantierDetailSheet> createState() => _ChantierDetailSheetState();
@@ -1731,30 +1768,53 @@ class _ChantierDetailSheetState extends State<_ChantierDetailSheet> {
             ),
           ],
           const SizedBox(height: 16),
-          _stepper('Durée estimée (jours)', _duration, (v) => setState(() => _duration = v)),
-          _stepper('Poseurs requis', _poseurCount, (v) => setState(() => _poseurCount = v), max: 10),
-          _dateRow('Livraison fournisseur', _deliveryDate, true),
-          _dateRow('Date souhaitée client', _desiredDate, false),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _materielCtrl,
-            maxLines: 2,
-            decoration: InputDecoration(
-              labelText: 'Matériel requis',
-              filled: true,
-              fillColor: AppColors.surface,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          if (widget.readOnly) ...[
+            Text('Durée estimée : $_duration jour${_duration > 1 ? 's' : ''}',
+                style: const TextStyle(color: AppColors.grey700, fontSize: 13)),
+            const SizedBox(height: 4),
+            Text('Poseurs requis : $_poseurCount',
+                style: const TextStyle(color: AppColors.grey700, fontSize: 13)),
+            if (_deliveryDate != null) ...[
+              const SizedBox(height: 4),
+              Text('Livraison fournisseur : ${_formatShortDate(_deliveryDate!)}',
+                  style: const TextStyle(color: AppColors.grey700, fontSize: 13)),
+            ],
+            if (_desiredDate != null) ...[
+              const SizedBox(height: 4),
+              Text('Date souhaitée client : ${_formatShortDate(_desiredDate!)}',
+                  style: const TextStyle(color: AppColors.grey700, fontSize: 13)),
+            ],
+            if (widget.unit.materielRequis.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text('Matériel requis : ${widget.unit.materielRequis}',
+                  style: const TextStyle(color: AppColors.grey700, fontSize: 13)),
+            ],
+          ] else ...[
+            _stepper('Durée estimée (jours)', _duration, (v) => setState(() => _duration = v)),
+            _stepper('Poseurs requis', _poseurCount, (v) => setState(() => _poseurCount = v), max: 10),
+            _dateRow('Livraison fournisseur', _deliveryDate, true),
+            _dateRow('Date souhaitée client', _desiredDate, false),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _materielCtrl,
+              maxLines: 2,
+              decoration: InputDecoration(
+                labelText: 'Matériel requis',
+                filled: true,
+                fillColor: AppColors.surface,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _saving ? null : _save,
-              style: ElevatedButton.styleFrom(backgroundColor: widget.accentColor, foregroundColor: Colors.white),
-              child: const Text('Enregistrer'),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(backgroundColor: widget.accentColor, foregroundColor: Colors.white),
+                child: const Text('Enregistrer'),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

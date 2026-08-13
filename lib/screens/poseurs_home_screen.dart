@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'chantier_chat_screen.dart';
+import 'planner_screen.dart';
 import 'settings_screen.dart';
 import 'sign_in_screen.dart';
 import '../core/models/wi_devis_summary.dart';
@@ -219,6 +220,32 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
               icon: const Icon(Icons.refresh, color: _poseurAccent),
               tooltip: 'Actualiser',
               onPressed: _loadChantiers,
+            ),
+            IconButton(
+              icon: const Icon(Icons.calendar_month_outlined, color: AppColors.grey600),
+              tooltip: 'Agenda',
+              onPressed: () {
+                if (_workspaceId == null || _userId == null) return;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => Scaffold(
+                      backgroundColor: AppColors.background,
+                      appBar: AppBar(
+                        backgroundColor: AppColors.surface,
+                        elevation: 0,
+                        title: const Text('Agenda', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
+                        iconTheme: const IconThemeData(color: AppColors.grey600),
+                      ),
+                      body: PlannerScreen(
+                        workspaceId: _workspaceId!,
+                        accentColor: AppColors.rolePoseur,
+                        readOnly: true,
+                        filterPoseurId: _userId!,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
             IconButton(
               icon: const Icon(Icons.settings_outlined, color: AppColors.grey600),

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../core/dictionary_service.dart';
+import '../core/theme/app_colors.dart';
 import '../services/document_engine.dart';
 
-const Color _bg = Color(0xFF07090D);
-const Color _accent = Color(0xFF00E676); // Metreur Green
-const Color _cardBg = Color(0xFF13161C);
+const Color _bg = AppColors.background;
+const Color _accent = AppColors.roleMetteur;
+const Color _cardBg = AppColors.surface;
 
 class MeasurementFormScreen extends StatefulWidget {
   const MeasurementFormScreen({
@@ -241,12 +242,12 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
+          icon: const Icon(Icons.close, color: AppColors.grey900),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           'Prise de mesure (${_currentIndex + 1}/${_products.length})',
-          style: const TextStyle(fontWeight: FontWeight.w800, color: Colors.white),
+          style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.grey900),
         ),
         centerTitle: true,
         actions: [
@@ -259,14 +260,14 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
                   height: 20,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Colors.white70,
+                    color: AppColors.grey500,
                   ),
                 ),
               ),
             )
           else
             IconButton(
-              icon: const Icon(Icons.print_outlined, color: Colors.white70),
+              icon: const Icon(Icons.print_outlined, color: AppColors.grey500),
               onPressed: _generateAndPrintPdf,
             ),
         ],
@@ -305,7 +306,7 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
                 final error = _validateProduct(_currentIndex);
                 if (error != null) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(error), backgroundColor: Colors.red),
+                    SnackBar(content: Text(error), backgroundColor: AppColors.danger),
                   );
                   return;
                 }
@@ -438,7 +439,7 @@ class _MeasurementEditor extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: _cardBg,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white12),
+                    border: Border.all(color: AppColors.cardBorder),
                   ),
                   child: Row(
                     children: [
@@ -458,7 +459,7 @@ class _MeasurementEditor extends StatelessWidget {
                             Text(
                               title.toUpperCase(),
                               style: const TextStyle(
-                                color: Colors.white,
+                                color: AppColors.grey900,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: 0.5,
                               ),
@@ -466,7 +467,7 @@ class _MeasurementEditor extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               'Prévu: $wPrev x $hPrev mm',
-                              style: const TextStyle(color: Colors.white54, fontSize: 13),
+                              style: const TextStyle(color: AppColors.grey500, fontSize: 13),
                             ),
                             if ((product['_splitRef'] as String?) != null) ...[
                               const SizedBox(height: 2),
@@ -485,18 +486,18 @@ class _MeasurementEditor extends StatelessWidget {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                             decoration: BoxDecoration(
-                              color: Colors.orangeAccent.withOpacity(0.15),
+                              color: AppColors.warning.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.orangeAccent.withOpacity(0.5)),
+                              border: Border.all(color: AppColors.warning.withOpacity(0.5)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.call_split, color: Colors.orangeAccent, size: 14),
+                                const Icon(Icons.call_split, color: AppColors.warning, size: 14),
                                 const SizedBox(width: 4),
                                 Text(
                                   'Scinder ×${product['quantite']}',
-                                  style: const TextStyle(color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.w700),
+                                  style: const TextStyle(color: AppColors.warning, fontSize: 12, fontWeight: FontWeight.w700),
                                 ),
                               ],
                             ),
@@ -522,7 +523,7 @@ class _MeasurementEditor extends StatelessWidget {
                           height: frameSize,
                           decoration: BoxDecoration(
                             color: _cardBg,
-                            border: Border.all(color: Colors.white24, width: 2),
+                            border: Border.all(color: AppColors.grey300, width: 2),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Center(
@@ -531,18 +532,18 @@ class _MeasurementEditor extends StatelessWidget {
                               children: [
                                 const Text('NOTE',
                                     style: TextStyle(
-                                        color: Colors.white30,
+                                        color: AppColors.grey400,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 10)),
                                 const SizedBox(height: 4),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
                                   child: TextField(
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                                    style: const TextStyle(color: AppColors.grey900, fontSize: 12),
                                     textAlign: TextAlign.center,
                                     decoration: const InputDecoration(
                                       hintText: 'Ajouter une note...',
-                                      hintStyle: TextStyle(color: Colors.white12),
+                                      hintStyle: TextStyle(color: AppColors.grey300),
                                       border: InputBorder.none,
                                       isDense: true,
                                     ),
@@ -626,7 +627,7 @@ class _MeasurementEditor extends StatelessWidget {
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: Text(
                       'Aucun champ de métré spécifique pour cet élément — utilisez la note ci-dessous.',
-                      style: TextStyle(color: Colors.white38, fontSize: 13),
+                      style: TextStyle(color: AppColors.grey400, fontSize: 13),
                     ),
                   ),
 
@@ -675,14 +676,14 @@ class _SchematicInput extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(color: AppColors.grey500, fontSize: 10, fontWeight: FontWeight.bold)),
         const SizedBox(height: 2),
         Container(
           width: 60,
           height: 34,
           decoration: BoxDecoration(
-            color: Colors.black,
-            border: Border.all(color: Colors.white24),
+            color: AppColors.grey50,
+            border: Border.all(color: AppColors.grey300),
             borderRadius: BorderRadius.circular(6),
           ),
           child: TextField(
@@ -717,16 +718,16 @@ class _MainDimensionInput extends StatelessWidget {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: _cardBg,
-        border: Border.all(color: Colors.white, width: 1),
+        border: Border.all(color: AppColors.grey300, width: 1),
         boxShadow: [
-           BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 4, offset: const Offset(0, 2)),
+           BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2)),
         ]
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           Text(label.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+           Text(label.toUpperCase(), style: const TextStyle(color: AppColors.grey900, fontSize: 10, fontWeight: FontWeight.bold)),
            const SizedBox(height: 4),
            SizedBox(
              width: 80,
@@ -736,14 +737,14 @@ class _MainDimensionInput extends StatelessWidget {
                 onChanged: onChanged,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: AppColors.grey900,
                   fontWeight: FontWeight.w900,
                   fontSize: 18,
                 ),
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   hintText: '0',
-                  hintStyle: TextStyle(color: Colors.white12),
+                  hintStyle: TextStyle(color: AppColors.grey300),
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -777,22 +778,22 @@ class _FooterInput extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        Text(label, style: const TextStyle(color: AppColors.grey500, fontSize: 12)),
         const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
+            color: AppColors.grey50,
             borderRadius: BorderRadius.circular(8),
-             border: Border.all(color: Colors.white12),
+             border: Border.all(color: AppColors.cardBorder),
           ),
           child: TextField(
             controller: controller,
             onChanged: onChanged,
             keyboardType: keyboardType,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: AppColors.grey900),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: const TextStyle(color: Colors.white24),
+              hintStyle: const TextStyle(color: AppColors.grey300),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
@@ -822,22 +823,22 @@ class _GenericDropdownField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+        Text(label, style: const TextStyle(color: AppColors.grey500, fontSize: 12)),
         const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
+            color: AppColors.grey50,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white12),
+            border: Border.all(color: AppColors.cardBorder),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: effectiveValue,
               isExpanded: true,
               dropdownColor: _cardBg,
-              hint: const Text('Choisir…', style: TextStyle(color: Colors.white24)),
-              style: const TextStyle(color: Colors.white),
+              hint: const Text('Choisir…', style: TextStyle(color: AppColors.grey300)),
+              style: const TextStyle(color: AppColors.grey900),
               items: choices
                   .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
@@ -862,14 +863,14 @@ class _GenericSwitchField extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: AppColors.grey50,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Row(
         children: [
           Expanded(
-            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13)),
+            child: Text(label, style: const TextStyle(color: AppColors.grey900, fontSize: 13)),
           ),
           Switch(
             value: value,
@@ -902,7 +903,7 @@ class _BottomNav extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: _bg,
-        border: const Border(top: BorderSide(color: Colors.white12)),
+        border: const Border(top: BorderSide(color: AppColors.cardBorder)),
       ),
       child: Row(
         children: [
@@ -911,9 +912,9 @@ class _BottomNav extends StatelessWidget {
               padding: const EdgeInsets.only(right: 12),
               child: IconButton(
                 onPressed: onPrev,
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                icon: const Icon(Icons.arrow_back_ios, color: AppColors.grey900),
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withOpacity(0.1),
+                  backgroundColor: AppColors.grey100,
                   padding: const EdgeInsets.all(12),
                 ),
               ),
@@ -921,8 +922,8 @@ class _BottomNav extends StatelessWidget {
           Expanded(
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: isLast ? _accent : Colors.white,
-                foregroundColor: Colors.black,
+                backgroundColor: isLast ? _accent : AppColors.grey100,
+                foregroundColor: isLast ? Colors.white : AppColors.grey900,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,

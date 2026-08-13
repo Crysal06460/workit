@@ -14,9 +14,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../admin_home_screen.dart';
-import '../agenda_screen.dart';
 import '../chantier_chat_screen.dart';
 import '../entry_screen.dart';
+import '../planner_screen.dart';
 import '../sign_in_screen.dart';
 import '../settings_screen.dart';
 import '../widgets/dynamic_dropdown_field.dart';
@@ -118,6 +118,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
     return DefaultTabController(
       length: 7,
       child: WiAppShell(
@@ -148,9 +149,14 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                 ),
               ),
               StreamBuilder<QuerySnapshot>(
-                stream: _workspaceId == null
+                stream: (_workspaceId == null || uid == null)
                     ? const Stream.empty()
-                    : _firestore.collection('workspaces').doc(_workspaceId).collection('devis').snapshots(),
+                    : _firestore
+                        .collection('workspaces')
+                        .doc(_workspaceId)
+                        .collection('devis')
+                        .where('userId', isEqualTo: uid)
+                        .snapshots(),
                 builder: (_, snap) {
                   final total = (snap.data?.docs.length ?? 0) +
                       _kDemoDevis.where((d) => d.status != 'Terminé' && d.status != 'Clôturé').length;
@@ -205,13 +211,13 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
               padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
               child: SizedBox(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: _workspaceId == null
+                  stream: (_workspaceId == null || uid == null)
                       ? const Stream.empty()
                       : _firestore
                           .collection('workspaces')
                           .doc(_workspaceId)
                           .collection('devis')
-                          // Removed redundant where clause to avoid index requirement
+                          .where('userId', isEqualTo: uid)
                           .orderBy('createdAt', descending: true)
                           .snapshots(),
                   builder: (context, snapshot) {
@@ -311,50 +317,86 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
             children: [
               // ── Stats row ────────────────────────────────────
               StreamBuilder<QuerySnapshot>(
-                stream: _workspaceId == null
+                stream: (_workspaceId == null || uid == null)
                     ? const Stream.empty()
-                    : _firestore.collection('workspaces').doc(_workspaceId).collection('devis').snapshots(),
+                    : _firestore
+                        .collection('workspaces')
+                        .doc(_workspaceId)
+                        .collection('devis')
+                        .where('userId', isEqualTo: uid)
+                        .snapshots(),
                 builder: (context, snap) {
                   final docs = snap.data?.docs ?? [];
-                  final newDocs = <_QuoteItem>[], activeDocs = <_QuoteItem>[], doneDocs = <_QuoteItem>[];
+                  // 6 catégories distinctes (décidées avec Christophe) — voir
+                  // admin_dashboard_tab.dart pour le même découpage.
+                  final attenteDocs = <_QuoteItem>[], commanderDocs = <_QuoteItem>[],
+                      planifierDocs = <_QuoteItem>[], poseDocs = <_QuoteItem>[],
+                      termineDocs = <_QuoteItem>[], savDocs = <_QuoteItem>[];
                   for (final doc in docs) {
                     final raw = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
                     raw['id'] = doc.id;
                     final s = (raw['status'] ?? raw['metreurStatus'])?.toString();
                     final item = _QuoteItem.fromMap(raw);
-                    if (s == null || s == 'Nouvelle demande' || s == 'Acceptée') {
-                      newDocs.add(item);
-                    } else if (s == 'Terminé' || s == 'Clôturé' || s == 'À clôturer') {
-                      doneDocs.add(item);
+                    if (s == null || s == 'Nouvelle demande' || s == 'Acceptée' || s == 'En cours') {
+                      attenteDocs.add(item);
+                    } else if (s == 'À commander' || s == 'Commande en cours') {
+                      commanderDocs.add(item);
+                    } else if (s == 'À planifier') {
+                      planifierDocs.add(item);
+                    } else if (s == 'En pose' || s == 'À clôturer') {
+                      poseDocs.add(item);
+                    } else if (s == 'SAV') {
+                      savDocs.add(item);
                     } else {
-                      activeDocs.add(item);
+                      termineDocs.add(item);
                     }
                   }
-                  final demoNew = _kDemoDevis.where((d) => d.status == null || d.status == 'Nouvelle demande').toList();
-                  final demoActive = _kDemoDevis.where((d) => d.status != null && d.status != 'Nouvelle demande' && d.status != 'Terminé' && d.status != 'Clôturé').toList();
-                  final demoDone = _kDemoDevis.where((d) => d.status == 'Terminé' || d.status == 'Clôturé').toList();
-                  final allNew = [...newDocs, ...demoNew];
-                  final allActive = [...activeDocs, ...demoActive];
-                  final allDone = [...doneDocs, ...demoDone];
+                  final demoAttente = _kDemoDevis.where((d) => d.status == null || d.status == 'Nouvelle demande' || d.status == 'Acceptée' || d.status == 'En cours').toList();
+                  final demoCommander = _kDemoDevis.where((d) => d.status == 'À commander' || d.status == 'Commande en cours').toList();
+                  final demoPlanifier = _kDemoDevis.where((d) => d.status == 'À planifier').toList();
+                  final demoPose = _kDemoDevis.where((d) => d.status == 'En pose' || d.status == 'À clôturer').toList();
+                  final demoSav = _kDemoDevis.where((d) => d.status == 'SAV').toList();
+                  final demoTermine = _kDemoDevis.where((d) => d.status == 'Terminé' || d.status == 'Clôturé').toList();
+                  final allAttente = [...attenteDocs, ...demoAttente];
+                  final allCommander = [...commanderDocs, ...demoCommander];
+                  final allPlanifier = [...planifierDocs, ...demoPlanifier];
+                  final allPose = [...poseDocs, ...demoPose];
+                  final allTermine = [...termineDocs, ...demoTermine];
+                  final allSav = [...savDocs, ...demoSav];
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: WiStatRow(
                       compactOnDesktop: true,
                       stats: [
                         WiStat(
-                          value: '${allNew.length}', label: 'En attente', color: AppColors.warning,
+                          value: '${allAttente.length}', label: 'En attente', color: AppColors.warning,
                           onTap: () => WiDevisListModal.show(context,
-                              title: 'En attente', items: allNew.map((e) => _toSummary(context, e)).toList()),
+                              title: 'En attente', items: allAttente.map((e) => _toSummary(context, e)).toList()),
                         ),
                         WiStat(
-                          value: '${allActive.length}', label: 'En cours', color: AppColors.primary,
+                          value: '${allCommander.length}', label: 'À commander', color: AppColors.amber,
                           onTap: () => WiDevisListModal.show(context,
-                              title: 'En cours', items: allActive.map((e) => _toSummary(context, e)).toList()),
+                              title: 'À commander', items: allCommander.map((e) => _toSummary(context, e)).toList()),
                         ),
                         WiStat(
-                          value: '${allDone.length}', label: 'Terminés', color: AppColors.success,
+                          value: '${allPlanifier.length}', label: 'À planifier', color: AppColors.primary,
                           onTap: () => WiDevisListModal.show(context,
-                              title: 'Terminés', items: allDone.map((e) => _toSummary(context, e)).toList()),
+                              title: 'À planifier', items: allPlanifier.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                        WiStat(
+                          value: '${allPose.length}', label: 'En pose', color: AppColors.purple,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'En pose', items: allPose.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                        WiStat(
+                          value: '${allTermine.length}', label: 'Terminé', color: AppColors.success,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'Terminé', items: allTermine.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                        WiStat(
+                          value: '${allSav.length}', label: 'SAV', color: AppColors.danger,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'SAV', items: allSav.map((e) => _toSummary(context, e)).toList()),
                         ),
                       ],
                     ),
@@ -363,9 +405,14 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
               ),
               const SizedBox(height: 12),
               StreamBuilder<QuerySnapshot>(
-                stream: _workspaceId == null
+                stream: (_workspaceId == null || uid == null)
                     ? const Stream.empty()
-                    : _firestore.collection('workspaces').doc(_workspaceId).collection('devis').snapshots(),
+                    : _firestore
+                        .collection('workspaces')
+                        .doc(_workspaceId)
+                        .collection('devis')
+                        .where('userId', isEqualTo: uid)
+                        .snapshots(),
                 builder: (context, snap) {
                   final docs = snap.data?.docs ?? [];
                   final items = [
@@ -416,12 +463,13 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: StreamBuilder<QuerySnapshot>(
-                    stream: _workspaceId == null
+                    stream: (_workspaceId == null || uid == null)
                         ? const Stream.empty()
                         : _firestore
                             .collection('workspaces')
                             .doc(_workspaceId)
                             .collection('devis')
+                            .where('userId', isEqualTo: uid)
                             .orderBy('createdAt', descending: true)
                             .snapshots(),
                     builder: (context, snapshot) {
@@ -635,7 +683,19 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
   void _onNavTap(int index) {
     setState(() => _bottomNavIndex = index);
     if (index == 1) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AgendaScreen()));
+      if (_workspaceId == null) return;
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AppBar(
+            backgroundColor: AppColors.surface,
+            elevation: 0,
+            title: const Text('Agenda', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
+            iconTheme: const IconThemeData(color: AppColors.grey600),
+          ),
+          body: PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleCommercial),
+        ),
+      ));
     } else if (index == 2) {
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
     }

@@ -384,25 +384,40 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
 
         final docs = snapshot.data!.docs;
 
+        // 6 catégories distinctes (décidées avec Christophe) : En attente
+        // regroupe tout ce qui précède le métré (y compris "En cours",
+        // fusionné ici pour ne pas multiplier les pastilles avant l'étape
+        // métier réelle) ; En pose inclut "À clôturer" (rapport soumis, pas
+        // encore validé) ; Terminé et SAV restent bien distincts — c'est le
+        // point explicitement demandé (ne plus perdre "terminé propre" vs
+        // "problème").
         bool isEnAttente(Map<String, dynamic> d) {
           final s = (d['status'] ?? d['metreurStatus'] ?? '').toString();
-          return s == 'Nouvelle demande' || s == 'Acceptée' || s.isEmpty;
+          return s == 'Nouvelle demande' || s == 'Acceptée' || s == 'En cours' || s.isEmpty;
         }
-        bool isMetreEnCours(Map<String, dynamic> d) =>
-            (d['status'] ?? d['metreurStatus'] ?? '').toString() == 'En cours';
-        bool isCommandePose(Map<String, dynamic> d) {
+        bool isACommander(Map<String, dynamic> d) {
           final s = (d['status'] ?? d['metreurStatus'] ?? '').toString();
-          return s == 'À commander' || s == 'Commande en cours' || s == 'À planifier' || s == 'En pose';
+          return s == 'À commander' || s == 'Commande en cours';
+        }
+        bool isAPlanifier(Map<String, dynamic> d) =>
+            (d['status'] ?? d['metreurStatus'] ?? '').toString() == 'À planifier';
+        bool isEnPose(Map<String, dynamic> d) {
+          final s = (d['status'] ?? d['metreurStatus'] ?? '').toString();
+          return s == 'En pose' || s == 'À clôturer';
         }
         bool isTermine(Map<String, dynamic> d) {
           final s = (d['status'] ?? d['metreurStatus'] ?? '').toString();
-          return s == 'Terminé' || s == 'À clôturer' || s == 'Clôturé' || s == 'SAV';
+          return s == 'Terminé' || s == 'Clôturé';
         }
+        bool isSav(Map<String, dynamic> d) =>
+            (d['status'] ?? d['metreurStatus'] ?? '').toString() == 'SAV';
 
         final enAttenteDocs = docs.where((d) => isEnAttente(d.data() as Map<String, dynamic>)).toList();
-        final metreEnCoursDocs = docs.where((d) => isMetreEnCours(d.data() as Map<String, dynamic>)).toList();
-        final commandePoseDocs = docs.where((d) => isCommandePose(d.data() as Map<String, dynamic>)).toList();
+        final aCommanderDocs = docs.where((d) => isACommander(d.data() as Map<String, dynamic>)).toList();
+        final aPlanifierDocs = docs.where((d) => isAPlanifier(d.data() as Map<String, dynamic>)).toList();
+        final enPoseDocs = docs.where((d) => isEnPose(d.data() as Map<String, dynamic>)).toList();
         final termineDocs = docs.where((d) => isTermine(d.data() as Map<String, dynamic>)).toList();
+        final savDocs = docs.where((d) => isSav(d.data() as Map<String, dynamic>)).toList();
 
         final allSummaries = docs.map((d) => _toSummary(context, d)).toList();
         final recentSummaries = mergeRecentChantiers(allSummaries);
@@ -441,7 +456,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                           title: 'En attente',
                           count: enAttenteDocs.length,
                           icon: Icons.hourglass_empty_rounded,
-                          color: AppColors.primary,
+                          color: AppColors.warning,
                           onTap: () => WiDevisListModal.show(
                             context,
                             title: 'En attente',
@@ -449,36 +464,58 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                           ),
                         ),
                         _StatCard(
-                          title: 'Métré en cours',
-                          count: metreEnCoursDocs.length,
-                          icon: Icons.architecture_outlined,
-                          color: AppColors.warning,
+                          title: 'À commander',
+                          count: aCommanderDocs.length,
+                          icon: Icons.shopping_cart_outlined,
+                          color: AppColors.amber,
                           onTap: () => WiDevisListModal.show(
                             context,
-                            title: 'Métré en cours',
-                            items: metreEnCoursDocs.map((d) => _toSummary(context, d)).toList(),
+                            title: 'À commander',
+                            items: aCommanderDocs.map((d) => _toSummary(context, d)).toList(),
                           ),
                         ),
                         _StatCard(
-                          title: 'Commande / Pose',
-                          count: commandePoseDocs.length,
+                          title: 'À planifier',
+                          count: aPlanifierDocs.length,
+                          icon: Icons.calendar_month_outlined,
+                          color: AppColors.primary,
+                          onTap: () => WiDevisListModal.show(
+                            context,
+                            title: 'À planifier',
+                            items: aPlanifierDocs.map((d) => _toSummary(context, d)).toList(),
+                          ),
+                        ),
+                        _StatCard(
+                          title: 'En pose',
+                          count: enPoseDocs.length,
                           icon: Icons.home_repair_service_outlined,
                           color: AppColors.purple,
                           onTap: () => WiDevisListModal.show(
                             context,
-                            title: 'Commande / Pose',
-                            items: commandePoseDocs.map((d) => _toSummary(context, d)).toList(),
+                            title: 'En pose',
+                            items: enPoseDocs.map((d) => _toSummary(context, d)).toList(),
                           ),
                         ),
                         _StatCard(
-                          title: 'Terminés',
+                          title: 'Terminé',
                           count: termineDocs.length,
                           icon: Icons.check_circle_outline,
                           color: AppColors.success,
                           onTap: () => WiDevisListModal.show(
                             context,
-                            title: 'Terminés',
+                            title: 'Terminé',
                             items: termineDocs.map((d) => _toSummary(context, d)).toList(),
+                          ),
+                        ),
+                        _StatCard(
+                          title: 'SAV',
+                          count: savDocs.length,
+                          icon: Icons.report_problem_outlined,
+                          color: AppColors.danger,
+                          onTap: () => WiDevisListModal.show(
+                            context,
+                            title: 'SAV',
+                            items: savDocs.map((d) => _toSummary(context, d)).toList(),
                           ),
                         ),
                       ],

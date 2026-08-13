@@ -365,40 +365,86 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // Stats row
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Row(
-                  children: [
-                    _StatChip(
-                      label: 'Urgent',
-                      count: _newRequests.length,
-                      color: AppColors.danger,
-                      bg: AppColors.dangerLight,
-                      onTap: () => WiDevisListModal.show(context,
-                          title: 'Urgent', items: _newRequests.map((e) => _toSummary(context, e)).toList()),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatChip(
-                      label: 'À commander',
-                      count: _toOrder.length,
-                      color: AppColors.warning,
-                      bg: AppColors.warningLight,
-                      onTap: () => WiDevisListModal.show(context,
-                          title: 'À commander', items: _toOrder.map((e) => _toSummary(context, e)).toList()),
-                    ),
-                    const SizedBox(width: 8),
-                    _StatChip(
-                      label: 'À planifier',
-                      count: _toPlan.length,
-                      color: AppColors.purple,
-                      bg: AppColors.purpleLight,
-                      onTap: () => WiDevisListModal.show(context,
-                          title: 'À planifier', items: _toPlan.map((e) => _toSummary(context, e)).toList()),
-                    ),
-                  ],
-                ),
-              ),
+              // Stats row — 6 catégories distinctes (décidées avec Christophe,
+              // voir admin_dashboard_tab.dart pour le même découpage). Calculées
+              // sur allItems (fusion des 5 listes de statut déjà chargées) sans
+              // toucher aux tabs/listes existantes, qui gardent leur propre
+              // regroupement pour la navigation.
+              Builder(builder: (context) {
+                bool isEnAttente(_MeasureCardData d) {
+                  final s = d.status;
+                  return s == null || s == 'Nouvelle demande' || s == 'Acceptée' || s == 'En cours';
+                }
+                bool isACommander(_MeasureCardData d) =>
+                    d.status == 'À commander' || d.status == 'Commande en cours';
+                bool isAPlanifier(_MeasureCardData d) => d.status == 'À planifier';
+                bool isEnPose(_MeasureCardData d) => d.status == 'En pose' || d.status == 'À clôturer';
+                bool isTermine(_MeasureCardData d) => d.status == 'Terminé' || d.status == 'Clôturé';
+                bool isSav(_MeasureCardData d) => d.status == 'SAV';
+
+                final attente = allItems.where(isEnAttente).toList();
+                final commander = allItems.where(isACommander).toList();
+                final planifier = allItems.where(isAPlanifier).toList();
+                final pose = allItems.where(isEnPose).toList();
+                final termine = allItems.where(isTermine).toList();
+                final sav = allItems.where(isSav).toList();
+
+                Widget chipRow(List<Widget> chips) => Row(
+                      children: chips
+                          .expand((c) => [c, const SizedBox(width: 8)])
+                          .toList()
+                        ..removeLast(),
+                    );
+
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Column(
+                    children: [
+                      chipRow([
+                        _StatChip(
+                          label: 'En attente', count: attente.length,
+                          color: AppColors.warning, bg: AppColors.warningLight,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'En attente', items: attente.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                        _StatChip(
+                          label: 'À commander', count: commander.length,
+                          color: AppColors.amber, bg: AppColors.warningLight,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'À commander', items: commander.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                        _StatChip(
+                          label: 'À planifier', count: planifier.length,
+                          color: AppColors.primary, bg: AppColors.primaryLight,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'À planifier', items: planifier.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                      ]),
+                      const SizedBox(height: 8),
+                      chipRow([
+                        _StatChip(
+                          label: 'En pose', count: pose.length,
+                          color: AppColors.purple, bg: AppColors.purpleLight,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'En pose', items: pose.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                        _StatChip(
+                          label: 'Terminé', count: termine.length,
+                          color: AppColors.success, bg: AppColors.successLight,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'Terminé', items: termine.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                        _StatChip(
+                          label: 'SAV', count: sav.length,
+                          color: AppColors.danger, bg: AppColors.dangerLight,
+                          onTap: () => WiDevisListModal.show(context,
+                              title: 'SAV', items: sav.map((e) => _toSummary(context, e)).toList()),
+                        ),
+                      ]),
+                    ],
+                  ),
+                );
+              }),
               Builder(builder: (context) {
                 final recent = mergeRecentChantiers(allItems.map((e) => _toSummary(context, e)).toList());
                 if (recent.isEmpty) return const SizedBox.shrink();
@@ -467,6 +513,12 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
     ));
   }
 
+  void _openSettings() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => const SettingsScreen(),
+    ));
+  }
+
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
@@ -488,7 +540,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
               _MetNavItem(icon: Icons.home_rounded, label: 'Accueil', active: _bottomNavIndex == 0, onTap: () => setState(() => _bottomNavIndex = 0)),
               _MetNavItem(icon: Icons.straighten_rounded, label: 'Chantiers', active: _bottomNavIndex == 1, onTap: () => setState(() => _bottomNavIndex = 1)),
               _MetNavItem(icon: Icons.calendar_month_outlined, label: 'Agenda', active: false, onTap: _openPlanner),
-              _MetNavItem(icon: Icons.settings_outlined, label: 'Réglages', active: _bottomNavIndex == 3, onTap: () => setState(() => _bottomNavIndex = 3)),
+              _MetNavItem(icon: Icons.settings_outlined, label: 'Réglages', active: false, onTap: _openSettings),
             ],
           ),
         ),

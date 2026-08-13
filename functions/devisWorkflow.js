@@ -72,7 +72,9 @@ const TRANSITIONS = {
       allowPermission: "canPlaceOrders", extraFields: ["updated"]},
   ],
   "À planifier": [
-    {to: "En pose", roles: ["metreur", "admin"],
+    // Commercial ajouté pour l'agenda par équipe (Planner) : il peut aussi
+    // glisser-déposer un chantier depuis le backlog, comme métreur/admin.
+    {to: "En pose", roles: ["metreur", "admin", "commercial"],
       extraFields: [
         "teamId", "poseDate", "poseurIds", "poseurNames", "updated",
       ],
@@ -86,8 +88,9 @@ const TRANSITIONS = {
   "En pose": [
     // Réaffectation (déplacer un chantier déjà planifié vers une autre
     // équipe/jour depuis le Planner — glisser-déposer libre comme avant
-    // l'introduction du moteur de transitions).
-    {to: "En pose", roles: ["metreur", "admin"],
+    // l'introduction du moteur de transitions). Commercial ajouté pour
+    // l'agenda par équipe, même raison que ci-dessus.
+    {to: "En pose", roles: ["metreur", "admin", "commercial"],
       extraFields: [
         "teamId", "poseDate", "poseurIds", "poseurNames", "updated",
       ],

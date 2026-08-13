@@ -1,11 +1,120 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-07 (suite) — Christophe part 4 jours (long week-end), continuera sur le
-Mac avec un simulateur. Avant de partir, il a demandé un audit complet du code réel face à son récap (voir
-section tout en haut, la plus récente) et un `git push` de tout le travail accumulé — **fait, tout est sur
-`origin/main`**. Ce commit couvre à la fois la refonte responsive du 06/08 (jamais commitée jusqu'ici) et
-les 3 chantiers du 07/08 (restriction commande métreur, relances, popup+récents). **Rien n'est encore
-déployé sur Firebase** (uniquement des dry-run) — décision à prendre avec Christophe à son retour.
+**Dernière mise à jour :** 2026-08-13 — 5 chantiers du plan de reprise post-audit (voir section 2026-08-07
+suite ci-dessous) traités un par un avec Christophe : bug de scope Commercial corrigé, décisions produit
+tranchées (+ 2 d'entre elles codées : équipe métreur, agenda par équipe Commercial/Poseur), dashboards à 6
+catégories, refonte design de l'écran de métré. **Tout vérifié (flutter analyze, lint, dry-run Firebase),
+commité et poussé sur `origin/main`. Rien n'est déployé sur Firebase** (uniquement des dry-run) — comme pour
+les sessions précédentes, décision de déploiement à prendre avec Christophe. Reste à faire en priorité : le
+test en direct (bloqué la session du 07/08 par une page blanche Chrome persistante, jamais résolu).
+
+## 🆕 Session 2026-08-13 — Scope Commercial, équipe métreur, agenda par équipe, dashboards 6 catégories, refonte design métré
+
+Reprise du plan laissé par l'audit du 07/08 (voir section ci-dessous), traité étape par étape à la demande de
+Christophe : "occupe-toi une étape après l'autre de : 1) bug de scope Commercial, 2) décisions produit en
+attente, 3) dashboards à 6 catégories, 4) refonte design measurement_form_screen, 5) tester en direct".
+
+### 1 — Bug critique : fuite de données Commercial (voir bug du 07/08)
+`lib/screens/commercial/commercial_home_screen.dart` : les 5 requêtes Firestore qui alimentent les
+pastilles/popup/récents du Commercial filtrent désormais par `.where('userId', isEqualTo: uid)`, comme
+`agenda_screen.dart` le faisait déjà pour le même rôle. Un filtre avait été explicitement retiré par le passé
+(commentaire "Removed redundant where clause to avoid index requirement") — l'index composite manquant
+(`devis` : `userId` ASC + `createdAt` DESC) a été ajouté dans `firestore.indexes.json`. Vérifié par les
+règles Firestore que la lecture large (tout membre du workspace peut lire tous les devis, nécessaire pour
+métreur/admin) n'était pas le problème : c'est bien un filtre client manquant, pas une faille de règles.
+
+### 2 — Décisions produit tranchées avec Christophe (AskUserQuestion)
+- **Clôture métreur** : reste réservée à Commercial/Admin (Phase 5 confirmée) — le récap était imprécis sur
+  ce point, pas de code à changer.
+- **Acceptation poseur** : pas de nouveau flux Accepter/Refuser — l'affichage automatique en "À faire" est
+  confirmé suffisant, le récap décrivait juste maladroitement ce qui existe déjà.
+- **Équipe métreur** (codé) : `canManageTeam`/`manageableRoles` étaient déjà génériques côté données, règles
+  Firestore et Cloud Function `provisionAccounts` (un admin pouvait déjà déléguer ce droit à un métreur) —
+  il manquait juste le branchement client. `lib/screens/metreur_home_screen.dart` : l'onglet "Réglages" ne
+  faisait que changer une variable d'état locale lue nulle part (n'ouvrait donc rien) ; corrigé pour naviguer
+  vers `SettingsScreen`, qui affiche déjà conditionnellement "Gérer l'équipe" si `canManageTeam` est vrai.
+  Import `settings_screen.dart` qui était mort devient utilisé (−1 issue analyze au passage).
+- **Agenda par équipe Commercial/Poseur** (codé) : Commercial avec droits d'édition complets comme
+  Métreur/Admin, Poseur en lecture seule filtrée à ses propres poses (choix précisés avec Christophe via
+  AskUserQuestion après avoir signalé que le drag-and-drop du Planner passe par des Cloud Functions
+  server-gated metreur/admin uniquement).
+  - `functions/devisWorkflow.js` : `commercial` ajouté aux rôles autorisés sur les transitions
+    "À planifier→En pose" et "En pose→En pose" (glisser-déposer).
+  - `functions/index.js` : `commercial` ajouté aux rôles autorisés dans `updateLotPlanningFields` et
+    `setLotDependencies`.
+  - `lib/screens/commercial/commercial_home_screen.dart` : l'onglet "Agenda" ouvre le vrai `PlannerScreen`
+    au lieu du simple `AgendaScreen` chronologique (import mort retiré).
+  - `lib/screens/planner_screen.dart` : `PlannerScreen` gagne 2 paramètres optionnels — `readOnly` (masque
+    création d'équipe/congés, désactive le glisser-déposer, affiche les détails en texte statique sans
+    bouton Enregistrer) et `filterPoseurId` (limite aux équipes dont le poseur est membre et aux chantiers où
+    il est assigné, masque le backlog). Admin/Métreur/Commercial inchangés (valeurs par défaut).
+  - `lib/screens/poseurs_home_screen.dart` : nouvelle icône "Agenda" dans l'AppBar, ouvre le Planner en
+    lecture seule filtré à lui (`readOnly: true, filterPoseurId: _userId`).
+
+### 3 — Dashboards à 6 catégories (Admin/Commercial/Métreur)
+Le texte exact du récap de Christophe sur les "6 catégories" n'était pas retrouvable dans les fichiers du
+projet (collé dans une conversation passée, jamais sauvegardé) — répartition confirmée avec lui via
+AskUserQuestion plutôt que devinée : **En attente** (Nouvelle demande + Acceptée + En cours) / **À commander**
+(+ Commande en cours) / **À planifier** / **En pose** (+ À clôturer, rapport en attente de validation) /
+**Terminé** / **SAV** — ce dernier point étant explicitement la distinction que le récap reprochait de voir
+perdue ("terminé propre" vs "problème").
+- `lib/screens/admin_dashboard_tab.dart` : grille 4→6 `_StatCard`.
+- `lib/screens/commercial/commercial_home_screen.dart` : ligne de stats 3→6 `WiStat`.
+- `lib/core/widgets/wi_stat_row.dart` (composant partagé) : bascule en rangée défilante horizontale
+  au-delà de 3 pastilles, pour éviter que 6 cartes s'écrasent sur mobile (seul appelant : Commercial).
+- `lib/screens/metreur_home_screen.dart` : 3 `_StatChip`→6 sur 2 rangées de 3, calculées séparément à partir
+  de `allItems` **sans toucher** aux tabs/listes de navigation existants (À faire/En cours/etc., utilisés par
+  les flux d'acceptation de chantier) — restructurer ce modèle de données pour coller à 100% aux 6 catégories
+  aurait été risqué pour un gain purement visuel.
+- **Non touché volontairement** : le Kanban desktop du Commercial (vue de navigation détaillée différente des
+  pastilles de résumé) a encore une colonne "Terminés" qui mélange Terminé/Clôturé/SAV — même défaut que
+  l'ancien dashboard, mais hors du périmètre demandé cette fois. À reprendre si Christophe le souhaite.
+
+### 4 — Refonte design measurement_form_screen.dart (écran "noir/vert")
+Thème sombre autonome (`_bg`/`_accent`/`_cardBg` en `Color(0xFF...)` codés en dur, ~40 usages de
+`Colors.white*`/`Colors.black`) remplacé par `AppColors` : `_bg`→`AppColors.background`,
+`_accent`→`AppColors.roleMetteur` (violet, cohérent avec l'identité couleur du métreur ailleurs dans l'app —
+le vert d'origine n'avait pas de sens sémantique), `_cardBg`→`AppColors.surface`. Chaque couleur convertie
+selon son rôle (texte principal/label/bordure/fond de champ), pas juste son opacité d'origine.
+`Colors.orangeAccent`→`AppColors.warning`, `Colors.red`→`AppColors.danger` au passage pour cohérence palette.
+
+### Vérifications faites cette session
+- `flutter analyze` après chaque étape : **0 erreur** tout du long, 138→137→137→137→**133** issues (baisse
+  nette sur la dernière étape : plusieurs `.withOpacity` dépréciés disparus en simplifiant les couleurs de
+  measurement_form_screen.dart).
+- `npm run lint` (functions) + `node -c` sur `index.js`/`devisWorkflow.js` : 0 erreur.
+- `firebase deploy --only functions,firestore --dry-run` : réussi (règles + nouvel index + Cloud Functions
+  modifiées compilés et packagés sans erreur).
+
+### Git : commité et poussé sur `origin/main`
+10 fichiers modifiés (`firestore.indexes.json`, `functions/devisWorkflow.js`, `functions/index.js`,
+`lib/core/widgets/wi_stat_row.dart`, `lib/screens/admin_dashboard_tab.dart`,
+`lib/screens/commercial/commercial_home_screen.dart`, `lib/screens/measurement_form_screen.dart`,
+`lib/screens/metreur_home_screen.dart`, `lib/screens/planner_screen.dart`,
+`lib/screens/poseurs_home_screen.dart`). Un seul commit regroupant les 4 chantiers de cette session, poussé
+sur `origin/main`.
+
+### ⚠️ Pas fait cette session
+- **Pas déployé sur Firebase** — uniquement des dry-run, comme toutes les sessions précédentes. Décision à
+  prendre avec Christophe.
+- **Pas testé en direct** — étape 5 du plan, volontairement reportée. Le blocage Chrome (page blanche
+  persistante malgré modules DDC chargés en succès) qui avait interrompu le test du 07/08 n'a jamais été
+  résolu ni recreusé cette session.
+
+### Reste à faire (prochaine session)
+1. **Tester en direct** tous les chantiers de cette session (scope commercial, accès équipe métreur, agenda
+   Commercial/Poseur en édition/lecture seule, dashboards 6 catégories, design measurement_form_screen) —
+   rien n'a encore été vérifié visuellement à l'écran. Si le blocage Chrome/web-server persiste : essayer un
+   profil Chrome différent, `-d chrome` au lieu de `-d web-server`, ou le test manuel de Christophe sur son
+   poste (Mac).
+2. Décider du déploiement (`firebase deploy --only functions,firestore`) une fois testé et validé.
+3. Optionnel : corriger la colonne "Terminés" du Kanban Commercial (mélange encore Terminé/Clôturé/SAV, même
+   défaut que l'ancien dashboard, non traité cette session — signalé mais pas demandé explicitement).
+4. Les points du plan du 07/08 pas encore repris : dette design restante (`poseurs_home_screen.dart` le plus
+   chargé en couleurs en dur + mauvaise couleur d'accent, `admin_team_tab.dart`, `admin_dashboard_tab.dart`,
+   `planner_screen.dart`), notification admin "nouveau chantier" pas écrite en in-app (asymétrie push/in-app).
+
+---
 
 ## 🆕 Session 2026-08-07 (suite) — Audit complet vs récap + git push avant les 4 jours d'absence
 
