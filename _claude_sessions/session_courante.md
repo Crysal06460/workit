@@ -1,15 +1,66 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-13 (suite) — Après les 5 chantiers du plan de reprise (bug scope Commercial,
-équipe métreur, agenda par équipe, dashboards 6 catégories, refonte design métré) et leur test en direct
-réussi dans Chrome (voir section dédiée ci-dessous), Christophe a demandé d'enchaîner sur les 5 points
-identifiés comme restants : dette design poseur/admin/planner, notification admin manquante en in-app, 2 bugs
-préexistants (Kanban SAV, nav Métreur), migration Node.js 20→22. **Tout fait, vérifié, commité, poussé sur
-`origin/main`, ET déployé sur Firebase** (`firebase deploy --only functions,firestore`, décidé explicitement
-avec Christophe) — **c'est le premier vrai déploiement en production depuis plusieurs sessions**, tout ce qui
-était accumulé en dry-run depuis le 05/08 (Phases 3-6) est donc maintenant potentiellement actif aussi.
-**Priorité absolue pour la prochaine session : tester en direct que rien n'a régressé en prod**, en particulier
-les Phases 3-6 jamais vérifiées visuellement jusqu'ici.
+**Dernière mise à jour :** 2026-08-13 (suite 3) — Après le déploiement en prod et le tour de vérification en
+direct (voir sections ci-dessous, glisser-déposer Commercial confirmé fonctionnel), Christophe a demandé de
+faire `npm install --save firebase-functions@latest` (recommandé par le CLI depuis plusieurs sessions, jamais
+fait par prudence jusqu'ici). **Fait** : bonne surprise, la dernière version (7.3.2) restait dans la même
+version majeure que l'existante (`^7.0.0`) — upgrade mineur/patch, donc bien moins risqué qu'anticipé. Lint,
+syntaxe et dry-run de déploiement tous propres, le warning "version obsolète" a disparu. **Pas déployé** —
+volontairement laissé en dry-run, décision de déploiement à reprendre avec Christophe séparément (pattern
+établi cette session : ne jamais déployer sans confirmation explicite dédiée).
+
+## 🆕 Session 2026-08-13 (suite 3) — Mise à jour firebase-functions
+
+`npm install --save firebase-functions@latest` exécuté dans `functions/`. Résultat : `firebase-functions`
+passe de `^7.0.0` à `^7.3.2` — reste dans la même version majeure, donc pas de rupture d'API attendue (et
+confirmée : aucune erreur au chargement). `firebase-admin` a aussi été légèrement bougé par npm au passage
+(résolution de dépendances). `npm audit` signale 30 vulnérabilités (2 low/13 moderate/12 high/3 critical) sur
+l'arbre de dépendances complet — **pas investigué cette session** (probablement pré-existant, propre aux
+nombreuses dépendances transitives d'un projet Cloud Functions ; `npm audit fix --force` non lancé pour
+éviter des ruptures à l'aveugle).
+
+### Vérifications faites
+`node -c` sur tous les fichiers `functions/*.js` : 0 erreur. `npm run lint` : 0 erreur.
+`firebase deploy --only functions,firestore --dry-run` : réussi, le warning "package.json indicates an
+outdated version of firebase-functions" a disparu.
+
+### Reste à faire (prochaine session)
+1. Décider du déploiement de cette mise à jour (`firebase deploy --only functions`) avec Christophe.
+2. Éventuellement investiguer les vulnérabilités `npm audit` si Christophe le souhaite (pas fait, hors
+   scope de cette demande ponctuelle).
+
+---
+
+## 🆕 Session 2026-08-13 (suite 2) — Vérification en direct contre la prod après déploiement
+
+Après le déploiement Firebase de la session précédente (voir section ci-dessous), Christophe a demandé un
+tour de vérification en direct dans Chrome, cette fois contre le vrai backend prod (pas dry-run).
+
+### Vérifié avec succès
+- **Glisser-déposer Planner par un Commercial** (le point le plus critique — nouvelle permission serveur sur
+  `transitionDevisStatus`/`updateLotPlanningFields`/`setLotDependencies`, jamais invoquée en conditions
+  réelles avant ce test) : un devis réel (`##634 - Claude TestDesign`) créé côté Commercial, métré saisi et
+  validé côté Métreur (transition automatique vers "À commander"), commande confirmée ("À planifier"), puis
+  glissé avec succès dans une cellule du Planner en tant que Commercial. Confirmé par `firebase functions:log`
+  : appels `transitionDevisStatus` avec `"auth":"VALID"`, aucune erreur après le déploiement.
+- **Nav Métreur** : confirmé 3 onglets (Accueil/Agenda/Réglages), l'onglet fantôme "Chantiers" a bien disparu.
+- **Dashboards 6 catégories** : reconfirmés visuellement (Métreur et Admin, vue desktop cette fois).
+- **Aucune erreur** dans les logs Cloud Functions depuis le déploiement (`firebase functions:log`), à part
+  des erreurs anciennes datant de tests précédant le déploiement (`Chantier introuvable` sur des IDs de démo,
+  sans rapport).
+
+### Non vérifié
+- **Notification admin "nouveau chantier" en in-app** : pas trouvé rapidement l'UI de notifications côté
+  admin dans le temps imparti pour ce tour de vérification. Le code est déployé (`writeInAppNotification`
+  ajouté dans `onDevisStatusChange`) et suit exactement le même pattern que 3 autres notifications déjà
+  fonctionnelles (`devisWorkflow.js`) — risque résiduel jugé faible, mais pas de confirmation visuelle.
+
+### Repères pour reprendre le test
+Workspace "WorkIt Test CPO" (comptes `admin.cpo.test@/commercial.cpo.test@/metreur.cpo.test@workit-test.fr`,
+mdp `Workit2026!`) a un vrai compte admin utilisable pour tester les notifications — contrairement à
+"Ambiance Alu" où Christophe n'a pas de compte admin de test.
+
+---
 
 ## 🆕 Session 2026-08-13 (suite) — Dette design restante, 2 bugs préexistants, migration Node 22, déploiement
 
