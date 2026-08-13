@@ -503,7 +503,7 @@ class _PlannerBody extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur de planification : $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Erreur de planification : $e'), backgroundColor: AppColors.danger),
         );
       }
     }
@@ -1400,7 +1400,7 @@ class _UnavailabilityFormSheetState extends State<_UnavailabilityFormSheet> {
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.danger),
         );
       }
     }
@@ -1661,7 +1661,7 @@ class _ChantierDetailSheetState extends State<_ChantierDetailSheet> {
       if (mounted) {
         setState(() => _saving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.danger),
         );
       }
     }

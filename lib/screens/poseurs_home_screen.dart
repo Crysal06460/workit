@@ -23,7 +23,7 @@ import '../services/document_engine.dart';
 // ─── Palette ────────────────────────────────────────────────────────────────
 const Color _poseurBg = AppColors.background;
 const Color _poseurCard = AppColors.surface;
-const Color _poseurAccent = AppColors.primary;
+const Color _poseurAccent = AppColors.rolePoseur;
 
 // ─── SharedPreferences keys ─────────────────────────────────────────────────
 const String _workspaceIdKey = 'workit_workspace_id';
@@ -82,13 +82,12 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
   Color _summaryStatusColor(String? status) {
     switch (status) {
       case 'Terminé':
-        return Colors.greenAccent;
       case 'Clôturé':
-        return Colors.tealAccent;
+        return AppColors.success;
       case 'À clôturer':
-        return Colors.orangeAccent;
+        return AppColors.amber;
       case 'SAV':
-        return Colors.deepOrangeAccent;
+        return AppColors.danger;
       case 'En pose':
       default:
         return _poseurAccent;
@@ -288,8 +287,8 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: TabBar(
-                  labelColor: AppColors.primary,
-                  unselectedLabelColor: Colors.white70,
+                  labelColor: _poseurAccent,
+                  unselectedLabelColor: AppColors.grey400,
                   indicatorSize: TabBarIndicatorSize.tab,
                   indicator: BoxDecoration(
                     color: AppColors.grey50,
@@ -479,15 +478,14 @@ class _ChantierCard extends StatelessWidget {
   Color _statusColor(String? status) {
     switch (status) {
       case 'Terminé':
-        return Colors.greenAccent;
       case 'Clôturé':
-        return Colors.tealAccent;
+        return AppColors.success;
       // Phase 5 : À clôturer = rapport soumis, en attente de validation par
       // le responsable (plus un état définitif du poseur).
       case 'À clôturer':
-        return Colors.orangeAccent;
+        return AppColors.amber;
       case 'SAV':
-        return Colors.deepOrangeAccent;
+        return AppColors.danger;
       case 'En pose':
       default:
         return _poseurAccent;
@@ -564,13 +562,13 @@ class _ChantierCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(Icons.reply, size: 13, color: Colors.orangeAccent),
+                    const Icon(Icons.reply, size: 13, color: AppColors.warning),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         'Retourné : ${data.retourCommentaire}',
                         style: const TextStyle(
-                            color: Colors.orangeAccent,
+                            color: AppColors.warning,
                             fontSize: 11,
                             fontWeight: FontWeight.w600),
                         maxLines: 1,
@@ -739,16 +737,16 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.orangeAccent.withOpacity(0.1),
+                          color: AppColors.warning.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: Colors.orangeAccent.withOpacity(0.4)),
+                              color: AppColors.warning.withOpacity(0.4)),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(Icons.reply,
-                                color: Colors.orangeAccent, size: 18),
+                                color: AppColors.warning, size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
@@ -757,7 +755,7 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                                   const Text(
                                     'Retourné par le responsable',
                                     style: TextStyle(
-                                        color: Colors.orangeAccent,
+                                        color: AppColors.warning,
                                         fontWeight: FontWeight.w700,
                                         fontSize: 13),
                                   ),
@@ -1019,9 +1017,9 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                         Expanded(
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.orangeAccent,
+                              foregroundColor: AppColors.warning,
                               side: const BorderSide(
-                                  color: Colors.orangeAccent, width: 1.5),
+                                  color: AppColors.warning, width: 1.5),
                               padding:
                                   const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
@@ -1041,7 +1039,7 @@ class _PoseurChantierDetailState extends State<_PoseurChantierDetail> {
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _poseurAccent,
-                              foregroundColor: Colors.black,
+                              foregroundColor: Colors.white,
                               padding:
                                   const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
@@ -1306,7 +1304,7 @@ class _DevisButton extends StatelessWidget {
     return ElevatedButton.icon(
       style: ElevatedButton.styleFrom(
         backgroundColor: _poseurAccent,
-        foregroundColor: Colors.black,
+        foregroundColor: Colors.white,
         padding:
             const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         shape: RoundedRectangleBorder(
@@ -1579,7 +1577,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.close,
-                            color: AppColors.grey900, size: 18),
+                            color: Colors.white, size: 18),
                       ),
                     ),
                   ),
@@ -1591,7 +1589,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                   foregroundColor: _poseurAccent,
                   side: BorderSide(
                     color: _showAttestationError
-                        ? Colors.redAccent
+                        ? AppColors.danger
                         : _poseurAccent,
                   ),
                   shape: RoundedRectangleBorder(
@@ -1607,7 +1605,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                 padding: EdgeInsets.only(top: 6),
                 child: Text(
                   'L\'attestation signée est obligatoire pour clôturer.',
-                  style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                  style: TextStyle(color: AppColors.danger, fontSize: 12),
                 ),
               ),
 
@@ -1635,7 +1633,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                   style: TextStyle(
                     color: _reglementEffectue
                         ? _poseurAccent
-                        : Colors.white54,
+                        : AppColors.grey400,
                     fontSize: 12,
                   ),
                 ),
@@ -1682,7 +1680,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(Icons.close,
-                                color: AppColors.grey900, size: 16),
+                                color: Colors.white, size: 16),
                           ),
                         ),
                       ),
@@ -1694,7 +1692,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
             ],
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white70,
+                foregroundColor: AppColors.grey700,
                 side: const BorderSide(color: AppColors.grey200),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -1715,7 +1713,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _poseurAccent,
-                  foregroundColor: Colors.black,
+                  foregroundColor: Colors.white,
                   padding:
                       const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -1728,7 +1726,7 @@ class _RapportFinChantierState extends State<_RapportFinChantier> {
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                          color: Colors.black,
+                          color: Colors.white,
                           strokeWidth: 2,
                         ),
                       )
@@ -1853,7 +1851,7 @@ class _RapportProblemeState extends State<_RapportProbleme> {
             Row(
               children: const [
                 Icon(Icons.warning_amber_rounded,
-                    color: Colors.orangeAccent, size: 22),
+                    color: AppColors.warning, size: 22),
                 SizedBox(width: 8),
                 Text(
                   'Chantier pas terminé',
@@ -1884,7 +1882,7 @@ class _RapportProblemeState extends State<_RapportProbleme> {
                   value: _cause,
                   isExpanded: true,
                   hint: const Text('Choisir une cause',
-                      style: TextStyle(color: Colors.white38)),
+                      style: TextStyle(color: AppColors.grey400)),
                   dropdownColor: _poseurCard,
                   style: const TextStyle(color: AppColors.grey900),
                   items: _kNonConformiteCauses
@@ -1913,7 +1911,7 @@ class _RapportProblemeState extends State<_RapportProbleme> {
               child: SwitchListTile(
                 value: _reglementEffectue,
                 onChanged: (v) => setState(() => _reglementEffectue = v),
-                activeColor: Colors.orangeAccent,
+                activeColor: AppColors.warning,
                 title: const Text(
                   'Chantier payé par le client',
                   style: TextStyle(color: AppColors.grey900, fontSize: 14),
@@ -1922,8 +1920,8 @@ class _RapportProblemeState extends State<_RapportProbleme> {
                   _reglementEffectue ? 'Payé' : 'Pas payé',
                   style: TextStyle(
                     color: _reglementEffectue
-                        ? Colors.orangeAccent
-                        : Colors.white54,
+                        ? AppColors.warning
+                        : AppColors.grey400,
                     fontSize: 12,
                   ),
                 ),
@@ -1935,7 +1933,7 @@ class _RapportProblemeState extends State<_RapportProbleme> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orangeAccent,
+                  backgroundColor: AppColors.warning,
                   foregroundColor: Colors.black,
                   padding:
                       const EdgeInsets.symmetric(vertical: 14),
@@ -1997,7 +1995,7 @@ class _ProblemeField extends StatelessWidget {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle:
-                const TextStyle(color: Colors.white38),
+                const TextStyle(color: AppColors.grey400),
             filled: true,
             fillColor: AppColors.grey50,
             border: OutlineInputBorder(
@@ -2013,7 +2011,7 @@ class _ProblemeField extends StatelessWidget {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide:
-                  const BorderSide(color: Colors.orangeAccent),
+                  const BorderSide(color: AppColors.warning),
             ),
           ),
         ),
@@ -2064,11 +2062,11 @@ class _GlassCard extends StatelessWidget {
         color: AppColors.grey50,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.grey100),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Colors.black54,
-            blurRadius: 20,
-            offset: Offset(0, 10),
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -2248,7 +2246,7 @@ class _PointageSectionState extends State<_PointageSection> {
                 style: const TextStyle(color: AppColors.grey900, fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Commentaire (joint au pointage "Fin")',
-                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                  hintStyle: const TextStyle(color: AppColors.grey400, fontSize: 13),
                   filled: true,
                   fillColor: AppColors.grey100,
                   contentPadding:
@@ -2836,7 +2834,7 @@ Future<void> _callNumber(BuildContext context, String number) async {
       SnackBar(
         content: Text('Impossible d\'appeler $number'),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.redAccent,
+        backgroundColor: AppColors.danger,
       ),
     );
   }

@@ -51,7 +51,6 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
   String? _userId;
   String? _userFirstName;
   String? _userLastName;
-  int _bottomNavIndex = 0;
   // Défaut = comportement historique (le métreur peut commander) tant que
   // users/{uid} n'a pas encore été lu ou n'a pas de restriction explicite.
   bool _canPlaceOrders = true;
@@ -537,8 +536,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
           height: 64,
           child: Row(
             children: [
-              _MetNavItem(icon: Icons.home_rounded, label: 'Accueil', active: _bottomNavIndex == 0, onTap: () => setState(() => _bottomNavIndex = 0)),
-              _MetNavItem(icon: Icons.straighten_rounded, label: 'Chantiers', active: _bottomNavIndex == 1, onTap: () => setState(() => _bottomNavIndex = 1)),
+              _MetNavItem(icon: Icons.home_rounded, label: 'Accueil', active: true, onTap: () {}),
               _MetNavItem(icon: Icons.calendar_month_outlined, label: 'Agenda', active: false, onTap: _openPlanner),
               _MetNavItem(icon: Icons.settings_outlined, label: 'Réglages', active: false, onTap: _openSettings),
             ],

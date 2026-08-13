@@ -209,7 +209,7 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 40),
+                      const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 40),
                       const SizedBox(height: 12),
                       const Text(
                         'Erreur de chargement',
@@ -767,7 +767,7 @@ class _AddMemberSheetState extends State<_AddMemberSheet> {
                             height: 22,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
-                              color: Colors.black,
+                              color: Colors.white,
                             ),
                           )
                         : const Text(
@@ -1003,7 +1003,7 @@ class _PermissionsFields extends StatelessWidget {
               padding: EdgeInsets.only(top: 8),
               child: Text(
                 'Sélectionnez au moins un rôle.',
-                style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                style: TextStyle(color: AppColors.danger, fontSize: 12),
               ),
             ),
         ],

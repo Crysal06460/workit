@@ -290,7 +290,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.amber.withOpacity(0.1),
+                            color: AppColors.amber.withOpacity(0.1),
                             border: Border.all(color: AppColors.amber.withOpacity(0.4)),
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -319,7 +319,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.08),
+                            color: AppColors.danger.withOpacity(0.08),
                             border: Border.all(color: AppColors.danger.withOpacity(0.3)),
                             borderRadius: BorderRadius.circular(12),
                           ),

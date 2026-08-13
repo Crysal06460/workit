@@ -1382,6 +1382,8 @@ exports.onDevisStatusChange = onDocumentWritten(
             await getTokenByUid(assignedMetreurId) :
             await getTokensByRole(workspaceId, "metreur");
           const adminTokens = await getTokensByRole(workspaceId, "admin");
+          const adminTitle = "🔔 Nouveau chantier";
+          const adminBody = `Nouveau chantier ajouté : ${client}`;
           await Promise.all([
             sendNotification(
                 metreurTokens,
@@ -1391,10 +1393,14 @@ exports.onDevisStatusChange = onDocumentWritten(
             ),
             sendNotification(
                 adminTokens,
-                "🔔 Nouveau chantier",
-                `Nouveau chantier ajouté : ${client}`,
+                adminTitle,
+                adminBody,
                 {...baseData, type: "status"},
             ),
+            writeInAppNotification(db, {
+              workspaceId, devisId, targetRole: "admin",
+              type: "nouveau_chantier", title: adminTitle, body: adminBody,
+            }),
           ]);
           return null;
         }

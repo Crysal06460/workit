@@ -622,10 +622,20 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                           ),
                           WiKanbanColumn(
                             id: 'termines', label: 'Terminés', color: AppColors.grey500,
-                            cards: terminesItems.map((i) => kanbanCard(
+                            // Ne garde ici que "terminé propre"/"en attente de
+                            // validation" — SAV a sa propre colonne (voir
+                            // ci-dessous) pour ne plus mélanger les deux, comme
+                            // pour les pastilles du dashboard.
+                            cards: terminesItems.where((i) => i.status != 'SAV').map((i) => kanbanCard(
                               i,
-                              i.status == 'À clôturer' ? 'À valider' : i.status == 'SAV' ? 'SAV' : 'Terminé',
-                              i.status == 'À clôturer' ? Colors.orangeAccent : i.status == 'SAV' ? Colors.deepOrangeAccent : AppColors.grey500,
+                              i.status == 'À clôturer' ? 'À valider' : 'Terminé',
+                              i.status == 'À clôturer' ? Colors.orangeAccent : AppColors.grey500,
+                            )).toList(),
+                          ),
+                          WiKanbanColumn(
+                            id: 'sav', label: 'SAV', color: AppColors.danger,
+                            cards: terminesItems.where((i) => i.status == 'SAV').map((i) => kanbanCard(
+                              i, 'SAV', AppColors.danger,
                             )).toList(),
                           ),
                         ]);

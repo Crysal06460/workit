@@ -1,12 +1,101 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-13 — 5 chantiers du plan de reprise post-audit (voir section 2026-08-07
-suite ci-dessous) traités un par un avec Christophe : bug de scope Commercial corrigé, décisions produit
-tranchées (+ 2 d'entre elles codées : équipe métreur, agenda par équipe Commercial/Poseur), dashboards à 6
-catégories, refonte design de l'écran de métré. **Tout vérifié (flutter analyze, lint, dry-run Firebase),
-commité et poussé sur `origin/main`. Rien n'est déployé sur Firebase** (uniquement des dry-run) — comme pour
-les sessions précédentes, décision de déploiement à prendre avec Christophe. Reste à faire en priorité : le
-test en direct (bloqué la session du 07/08 par une page blanche Chrome persistante, jamais résolu).
+**Dernière mise à jour :** 2026-08-13 (suite) — Après les 5 chantiers du plan de reprise (bug scope Commercial,
+équipe métreur, agenda par équipe, dashboards 6 catégories, refonte design métré) et leur test en direct
+réussi dans Chrome (voir section dédiée ci-dessous), Christophe a demandé d'enchaîner sur les 5 points
+identifiés comme restants : dette design poseur/admin/planner, notification admin manquante en in-app, 2 bugs
+préexistants (Kanban SAV, nav Métreur), migration Node.js 20→22. **Tout fait, vérifié, commité, poussé sur
+`origin/main`, ET déployé sur Firebase** (`firebase deploy --only functions,firestore`, décidé explicitement
+avec Christophe) — **c'est le premier vrai déploiement en production depuis plusieurs sessions**, tout ce qui
+était accumulé en dry-run depuis le 05/08 (Phases 3-6) est donc maintenant potentiellement actif aussi.
+**Priorité absolue pour la prochaine session : tester en direct que rien n'a régressé en prod**, en particulier
+les Phases 3-6 jamais vérifiées visuellement jusqu'ici.
+
+## 🆕 Session 2026-08-13 (suite) — Dette design restante, 2 bugs préexistants, migration Node 22, déploiement
+
+Après le test en direct réussi (section ci-dessous), Christophe a demandé de traiter les 5 points identifiés
+en fin d'audit : dette design poseur/admin/planner, notification admin manquante en in-app, Kanban
+Commercial (SAV mélangé), nav Métreur cassée, migration runtime Node.js.
+
+### Design — poseurs_home_screen.dart (le plus gros chantier)
+`_poseurAccent` était câblé sur `AppColors.primary` (bleu) au lieu de `AppColors.rolePoseur` (vert) — un seul
+changement de constante qui corrige l'identité couleur partout dans l'écran d'un coup. Puis ~40 couleurs
+`Colors.white*`/`Colors.black*`/`Colors.orangeAccent`/`Colors.redAccent`/`Colors.greenAccent`/`Colors.tealAccent`
+codées en dur remplacées par `AppColors`, rôle par rôle (texte/bordure/fond), comme pour
+`measurement_form_screen.dart` la session précédente. Plusieurs vrais bugs de contraste corrigés au passage
+(hérités du thème sombre jamais adapté) : texte des onglets non sélectionnés invisible (blanc sur fond
+blanc), icônes de suppression de photo invisibles (gris foncé sur cercle semi-transparent noir), libellé
+"Pas payé" invisible, ombre de carte beaucoup trop lourde (`black54`, blur 20) pour un fond clair. Fonctions
+`_statusColor`/`_summaryStatusColor` (mapping statut→couleur) réalignées sur la palette `AppColors` déjà
+utilisée ailleurs (Terminé=success, À clôturer=amber, SAV=danger).
+
+### Design — dette légère (admin_team_tab, admin_dashboard_tab, planner_screen)
+Confirmée légère comme attendu : quelques `Colors.*` bruts isolés remplacés par `AppColors` équivalents
+(spinner noir invisible sur bouton bleu, icône d'erreur orange non alignée sur la palette, fond de bloc
+"problème" utilisant `Colors.red` au lieu de `AppColors.danger` alors que sa bordure l'utilisait déjà — 3
+SnackBar d'erreur dans `planner_screen.dart` alignées sur `AppColors.danger`).
+
+### Bug — notification admin "nouveau chantier" pas écrite en in-app
+`functions/index.js` (`onDevisStatusChange`, cas création de devis) : `writeInAppNotification` ajouté à côté
+du push existant pour l'admin, même pattern que les autres notifications déjà correctes.
+
+### Bugs préexistants découverts pendant le test en direct de la session précédente
+- **Kanban Commercial** : la colonne "Terminés" scindée en "Terminés" (Terminé/Clôturé/À clôturer) et "SAV"
+  séparée — sans toucher aux listes mobiles partagées (`terminesItems` inchangé, filtré uniquement au moment
+  du rendu des colonnes Kanban).
+- **Nav Métreur** : l'onglet "Chantiers" (qui affichait exactement le même contenu qu'"Accueil", `_bottomNavIndex`
+  jamais branché au corps de l'écran) retiré — 3 items restants (Accueil/Agenda/Réglages), cohérent avec le
+  nav Commercial.
+
+### Migration runtime Cloud Functions Node.js 20 → 22
+`functions/package.json` : `engines.node` passé de `"20"` à `"22"` (Node 20 décommissionné le 2026-10-30 par
+Firebase). Le warning de dépréciation a disparu du dry-run après ce changement. **Volontairement pas touché** :
+la version de la lib `firebase-functions` elle-même (`^7.0.0`, un `npm install --save firebase-functions@latest`
+est recommandé par le CLI mais reste une dépendance majeure plus risquée à bump à l'aveugle sans test réel —
+laissé en l'état, à reprendre séparément si besoin).
+
+### Vérifications faites cette session
+`flutter analyze` : 0 erreur tout du long (133→134 issues, stable). `npm run lint` (functions) : 0 erreur.
+`firebase deploy --only functions,firestore --dry-run` : réussi après le passage à Node 22 (warning runtime
+disparu, seul le warning firebase-functions outdated reste, attendu).
+
+### ✅ Déployé sur Firebase (décidé explicitement avec Christophe)
+`firebase deploy --only functions,firestore` exécuté avec succès sur `workit-1daa1` : règles et index publiés,
+9 Cloud Functions déployées sur Node.js 22 (2nd Gen) — `sendRelance` (créée, jamais déployée depuis le 07/08),
+`updateLotPlanningFields`, `analyzeDevis`, `logTimeEntry`, `onChantierMessageCreated`, `transitionDevisStatus`,
+`setLotDependencies`, `onDevisStatusChange`, `provisionAccounts` (mises à jour). **C'est le premier vrai
+déploiement depuis le 05/08** — tout ce qui s'était accumulé en dry-run depuis (Phases 3 à 6 de la roadmap,
+jamais testées en direct) est donc désormais potentiellement actif en prod, en plus des chantiers de cette
+session et de la précédente.
+
+### Reste à faire (prochaine session)
+1. **Tester en direct en prod** — priorité absolue, vu l'ampleur de ce qui vient d'être déployé d'un coup
+   (5+ sessions de travail jamais vérifiées ensemble). En particulier les Phases 3-6 (multi-lots, Planner v2,
+   expérience terrain, KPIs) et les chantiers de cette session/la précédente (scope Commercial, agenda par
+   équipe, dashboards 6 catégories, design poseur/métreur).
+2. Décider si `npm install --save firebase-functions@latest` doit être fait (recommandé par le CLI, pas fait
+   cette session par prudence).
+3. Phase 7 de la roadmap (validation des 12 métiers) — phase produit, pas de dev, toujours pas commencée.
+
+---
+
+## 🆕 Session 2026-08-13 (suite) — Test en direct dans Chrome des 4 chantiers ci-dessous
+
+Le blocage "page blanche" qui avait interrompu le test du 07/08 **ne s'est pas reproduit** — juste un temps de
+compilation DDC plus long qu'anticipé (patience suffisante, pas de vraie cause identifiée ni corrigée, à garder
+en tête si ça se reproduit). Testé avec les comptes `commercial@/metreur@/poseur@workit-test.fr` :
+- **Scope Commercial** : confirmé, Marie (commercial) ne voit que ses propres chantiers.
+- **Accès équipe Métreur** : l'onglet Réglages ouvre bien Paramètres désormais (avant : n'ouvrait rien).
+- **Agenda par équipe** : Commercial → Planner complet (Congés/+Équipe visibles) ; Métreur → inchangé ; Poseur →
+  lecture seule, sans Congés/+Équipe, limité à sa seule équipe.
+- **Dashboards 6 catégories** : vérifiés visuellement pour Commercial (ligne de 6) et Métreur (2×3).
+- **Refonte design measurement_form_screen.dart** : confirmée en conditions réelles — un vrai devis test créé
+  côté Commercial, accepté côté Métreur, écran de métré ouvert : fond clair, accent violet métreur, texte
+  lisible, focus bleu sur les champs. Le "noir/vert" a disparu.
+
+Aucune erreur console sur tout le parcours (hors avertissements App Check debug déjà connus).
+
+---
 
 ## 🆕 Session 2026-08-13 — Scope Commercial, équipe métreur, agenda par équipe, dashboards 6 catégories, refonte design métré
 
