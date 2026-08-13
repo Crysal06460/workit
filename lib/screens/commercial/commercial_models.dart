@@ -379,6 +379,7 @@ final _kDemoDevis = <_QuoteItem>[
     client: 'Dupont Jean', address: '14 rue Ledru-Rollin, Paris 15e',
     number: '#5001', date: 'Il y a 2 jours', tag: 'Nouvelle demande', status: null,
     phone: '06 12 34 56 78', email: 'dupont@email.fr',
+    assignedMetreurName: 'Pascal M.',
   ),
   _QuoteItem(
     client: 'Martin Sophie', address: '8 avenue des Arts, Lyon 3e',
@@ -395,6 +396,9 @@ final _kDemoDevis = <_QuoteItem>[
     client: 'Laurent Céline', address: '5 impasse des Pins, Toulouse',
     number: '#5004', date: 'Il y a 10 jours', tag: 'Commande en cours', status: 'Commande en cours',
     assignedMetreurName: 'Pascal M.',
+    metreurNote: 'Grille d\'aération à retirer de la commande : le conduit de VMC '
+        'passe déjà par là, pas besoin.',
+    metreurNoteName: 'Pascal M.',
   ),
   _QuoteItem(
     client: 'Petit Thomas', address: '3 allée des Roses, Bordeaux',
@@ -406,5 +410,15 @@ final _kDemoDevis = <_QuoteItem>[
   _QuoteItem(
     client: 'Moreau Julie', address: '17 rue du Moulin, Strasbourg',
     number: '#5006', date: 'Il y a 20 jours', tag: 'Terminé', status: 'Terminé',
+    assignedMetreurName: 'Pascal M.',
+    poseurNames: 'Équipe A',
+    rapportFin: {
+      'reglementEffectue': true,
+      'photoUrls': [
+        'https://picsum.photos/seed/workit-chantier-1/300',
+        'https://picsum.photos/seed/workit-chantier-2/300',
+      ],
+      'attestationUrl': 'https://picsum.photos/seed/workit-attestation/300',
+    },
   ),
 ];

@@ -94,6 +94,10 @@ class _ChantierDetailBody extends StatelessWidget {
     final photoUrls = (rapport?['photoUrls'] as List?)
         ?.whereType<String>()
         .toList() ?? [];
+    // Distincte des photos de chantier ci-dessous : uploadée séparément par
+    // le poseur (`attestations_fin_travaux`), c'est le vrai justificatif
+    // de fin de travaux, pas une simple photo de rendu.
+    final attestationUrl = rapport?['attestationUrl'] as String?;
 
     return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,11 +171,39 @@ class _ChantierDetailBody extends StatelessWidget {
           if (item.phone?.isNotEmpty == true || item.email?.isNotEmpty == true)
             const SizedBox(height: 12),
 
-          if (item.assignedMetreurName?.isNotEmpty == true)
+          // Même champ `assignedMetreurName` tout du long, mais un libellé
+          // différent selon l'étape : la question qui intéresse le
+          // commercial change ("à qui c'est envoyé" → "qui l'a fait"), pas
+          // besoin d'un nouveau champ. Rien avant qu'un métreur ait
+          // effectivement accepté la demande (nom pas encore renseigné).
+          if (item.assignedMetreurName?.isNotEmpty == true &&
+              (status.isEmpty ||
+                  status == 'Nouvelle demande' ||
+                  status == 'Acceptée' ||
+                  status == 'À classer'))
             _DetailRow(
               icon: Icons.person_outline,
-              label: 'Métreur : ${item.assignedMetreurName}',
+              label: 'Demande de métré envoyée à : ${item.assignedMetreurName}',
+            )
+          else if (item.assignedMetreurName?.isNotEmpty == true &&
+              (status == 'À commander' || status == 'Commande en cours'))
+            _DetailRow(
+              icon: Icons.person_outline,
+              label: 'Métré réalisé par : ${item.assignedMetreurName}',
             ),
+
+          // La date de RDV ne concerne que l'étape "Métré prog." (En
+          // cours) — une fois le métré fait, c'est "Métré réalisé par"
+          // ci-dessus qui prend le relais, pas la date du rendez-vous.
+          if (status == 'En cours' && item.meetingAt != null) ...[
+            const SizedBox(height: 12),
+            const _SectionHeader(label: 'Métré programmé'),
+            const SizedBox(height: 8),
+            _DetailRow(
+              icon: Icons.calendar_today_outlined,
+              label: _formatDateTime(item.meetingAt!),
+            ),
+          ],
 
           if (item.uploadUrl?.isNotEmpty == true) ...[
             const SizedBox(height: 12),
@@ -286,10 +318,44 @@ class _ChantierDetailBody extends StatelessWidget {
                   ? _commercialAccent
                   : Colors.redAccent,
             ),
+            if (attestationUrl?.isNotEmpty == true) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Déclaration de fin de travaux',
+                style: const TextStyle(color: AppColors.grey500, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              GestureDetector(
+                onTap: () => showDialog(
+                  context: context,
+                  builder: (_) => Dialog(
+                    backgroundColor: Colors.black87,
+                    child: InteractiveViewer(
+                      child: Image.network(attestationUrl),
+                    ),
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    attestationUrl!,
+                    width: 140,
+                    height: 140,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 140,
+                      height: 140,
+                      color: AppColors.grey100,
+                      child: const Icon(Icons.broken_image, color: AppColors.grey400),
+                    ),
+                  ),
+                ),
+              ),
+            ],
             if (photoUrls.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(
-                'Photos (${photoUrls.length})',
+                'Photos du chantier (${photoUrls.length})',
                 style: const TextStyle(color: AppColors.grey500, fontSize: 13),
               ),
               const SizedBox(height: 8),

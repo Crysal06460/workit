@@ -44,14 +44,21 @@ class WiStatRow extends StatelessWidget {
     // sur mobile (6 catégories) — bascule sur une rangée défilante à largeur
     // de carte fixe plutôt que de compresser illisiblement chaque carte.
     if (stats.length > 3) {
+      // `clipBehavior: none` + un peu de marge sous la Row : par défaut
+      // SingleChildScrollView clippe pile à la hauteur de son contenu, ce qui
+      // rognait l'ombre portée des cartes (boxShadow) tout en bas.
       return SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: Row(
-          children: stats
-              .map((s) => SizedBox(width: 104, child: _StatCard(stat: s)))
-              .expand((w) => [w, const SizedBox(width: 8)])
-              .toList()
-            ..removeLast(),
+        clipBehavior: Clip.none,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            children: stats
+                .map((s) => SizedBox(width: 104, child: _StatCard(stat: s)))
+                .expand((w) => [w, const SizedBox(width: 8)])
+                .toList()
+              ..removeLast(),
+          ),
         ),
       );
     }

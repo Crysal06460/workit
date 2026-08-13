@@ -297,7 +297,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                           tabs: [
                             _PillTab(label: 'Tous', count: totalAll, isSelected: sel == 0),
                             _PillTab(label: 'En attente', count: newItems.length + demoNew, isSelected: sel == 1),
-                            _PillTab(label: 'Devis prog.', count: scheduledItems.length + demoSched, isSelected: sel == 2),
+                            _PillTab(label: 'Métré prog.', count: scheduledItems.length + demoSched, isSelected: sel == 2),
                             _PillTab(label: 'À commander', count: commandeItems.length + demoCmd, isSelected: sel == 3),
                             _PillTab(label: 'À planifier', count: planifierItems.length + demoPlan, isSelected: sel == 4),
                             _PillTab(label: 'En pose', count: poseItems.length + demoPose, isSelected: sel == 5),
@@ -403,62 +403,11 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 12),
-              StreamBuilder<QuerySnapshot>(
-                stream: (_workspaceId == null || uid == null)
-                    ? const Stream.empty()
-                    : _firestore
-                        .collection('workspaces')
-                        .doc(_workspaceId)
-                        .collection('devis')
-                        .where('userId', isEqualTo: uid)
-                        .snapshots(),
-                builder: (context, snap) {
-                  final docs = snap.data?.docs ?? [];
-                  final items = [
-                    ..._kDemoDevis,
-                    ...docs.map((doc) {
-                      final raw = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
-                      raw['id'] = doc.id;
-                      return _QuoteItem.fromMap(raw);
-                    }),
-                  ];
-                  final recent = mergeRecentChantiers(items.map((e) => _toSummary(context, e)).toList());
-                  if (recent.isEmpty) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    child: WiRecentChantiersSection(
-                      title: 'Chantiers récemment ajoutés',
-                      items: recent,
-                    ),
-                  );
-                },
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                child: _SearchBar(
-                  onChanged: (q) => setState(() => _searchQuery = q),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: _AddQuoteButton(
-                  onPressed: () async {
-                    await showWiAdaptiveModal<_QuoteItem>(
-                      context,
-                      builder: (_) => const _AddQuoteScreen(),
-                    );
-                  },
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                child: const Text(
-                  'Affaires récentes',
-                  style: TextStyle(color: AppColors.grey900, fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-              ),
+              const SizedBox(height: 8),
+              // ── Résultats du filtre sélectionné (onglets pills) ─────────
+              // Placé juste sous les stats pour un lien direct pill tapée →
+              // résultats affichés, plutôt qu'après recherche/bouton/récents
+              // (ancien ordre où le contenu utile était relégué tout en bas).
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -605,8 +554,8 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                             cards: [...demoAttente, ...newItems].map((i) => kanbanCard(i, 'En attente', AppColors.warning)).toList(),
                           ),
                           WiKanbanColumn(
-                            id: 'prog', label: 'Devis prog.', color: AppColors.purple,
-                            cards: [...demoProg, ...scheduledItems].map((i) => kanbanCard(i, 'Devis prog.', AppColors.purple)).toList(),
+                            id: 'prog', label: 'Métré prog.', color: AppColors.purple,
+                            cards: [...demoProg, ...scheduledItems].map((i) => kanbanCard(i, 'Métré prog.', AppColors.purple)).toList(),
                           ),
                           WiKanbanColumn(
                             id: 'commander', label: 'À commander', color: AppColors.amber,
@@ -683,6 +632,56 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: _SearchBar(
+                  onChanged: (q) => setState(() => _searchQuery = q),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: _AddQuoteButton(
+                  onPressed: () async {
+                    await showWiAdaptiveModal<_QuoteItem>(
+                      context,
+                      builder: (_) => const _AddQuoteScreen(),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 4),
+              StreamBuilder<QuerySnapshot>(
+                stream: (_workspaceId == null || uid == null)
+                    ? const Stream.empty()
+                    : _firestore
+                        .collection('workspaces')
+                        .doc(_workspaceId)
+                        .collection('devis')
+                        .where('userId', isEqualTo: uid)
+                        .snapshots(),
+                builder: (context, snap) {
+                  final docs = snap.data?.docs ?? [];
+                  final items = [
+                    ..._kDemoDevis,
+                    ...docs.map((doc) {
+                      final raw = Map<String, dynamic>.from(doc.data() as Map<String, dynamic>);
+                      raw['id'] = doc.id;
+                      return _QuoteItem.fromMap(raw);
+                    }),
+                  ];
+                  final recent = mergeRecentChantiers(items.map((e) => _toSummary(context, e)).toList());
+                  if (recent.isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: WiRecentChantiersSection(
+                      title: 'Chantiers récemment ajoutés',
+                      items: recent,
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -691,7 +690,11 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
   }
 
   void _onNavTap(int index) {
-    setState(() => _bottomNavIndex = index);
+    // "Agenda"/"Réglages" sont des écrans poussés par-dessus (Navigator.push),
+    // pas un contenu affiché dans cet onglet — ne pas les marquer comme actifs
+    // ici, sinon l'onglet reste surligné à tort après un retour en arrière
+    // (bug constaté en test réel : "Agenda" restait bleu sur l'écran Devis).
+    if (index == 0) setState(() => _bottomNavIndex = index);
     if (index == 1) {
       if (_workspaceId == null) return;
       Navigator.of(context).push(MaterialPageRoute(

@@ -27,7 +27,7 @@ class WiDevisListModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Material(
       color: AppColors.surface,
       child: SafeArea(
         child: Column(

@@ -1,13 +1,235 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-13 (suite 3) — Après le déploiement en prod et le tour de vérification en
-direct (voir sections ci-dessous, glisser-déposer Commercial confirmé fonctionnel), Christophe a demandé de
-faire `npm install --save firebase-functions@latest` (recommandé par le CLI depuis plusieurs sessions, jamais
-fait par prudence jusqu'ici). **Fait** : bonne surprise, la dernière version (7.3.2) restait dans la même
-version majeure que l'existante (`^7.0.0`) — upgrade mineur/patch, donc bien moins risqué qu'anticipé. Lint,
-syntaxe et dry-run de déploiement tous propres, le warning "version obsolète" a disparu. **Pas déployé** —
-volontairement laissé en dry-run, décision de déploiement à reprendre avec Christophe séparément (pattern
-établi cette session : ne jamais déployer sans confirmation explicite dédiée).
+**Dernière mise à jour :** 2026-08-13 (suite 4) — Longue session de test en direct dans le simulateur iOS,
+uniquement côté **Commercial**, à la demande de Christophe qui voulait enfin voir l'app tourner sur mobile.
+Un vrai crash trouvé et corrigé en tout début (popup de pastille invisible sur mobile — `Material` manquant),
+puis une longue série d'allers-retours UX pilotés en direct par Christophe pointant du doigt ce qui n'allait
+pas à l'écran : libellé de statut confus, listes qui s'écrasaient l'une l'autre, ombres de cartes coupées,
+barre du Planner qui débordait de 186px, panneau backlog qui ne laissait presque plus de place à la grille sur
+téléphone, choix Jour/Semaine trop serré sur mobile, écran Réglages resté dans l'ancien thème sombre parallèle
+(même famille de bug que `measurement_form_screen.dart` déjà traité le 07/08), et enfin le popup de détail
+chantier enrichi pas-à-pas avec les infos utiles par statut (métreur assigné, date de RDV, note du métreur,
+photo de déclaration de fin de travaux — ce dernier champ existait déjà en base côté poseur mais n'était
+**jamais affiché** côté Commercial). Un bug backend plus large a aussi été trouvé et corrigé au passage : les
+Cloud Functions levaient des `Error` JS classiques au lieu de `HttpsError`, donc **aucun message d'erreur
+serveur n'a jamais été visible côté client** depuis le début du projet (juste `[firebase_functions/internal]
+INTERNAL`) — corrigé sur les 66 occurrences de `functions/index.js` et **déployé en prod** (confirmation
+explicite de Christophe). Testé exclusivement avec le rôle Commercial cette session — Métreur/Poseur/Admin
+partagent plusieurs des composants touchés (pastilles, "chantiers récents") mais n'ont pas été revérifiés à
+l'écran. **Tout commité et poussé sur `origin/main`** à la fin (voir section dédiée avec le detail du commit).
+
+## 🆕 Session 2026-08-13 (suite 4) — Test en direct Commercial : série de bugs UI/UX + backend, popup détail enrichi
+
+Session longue, entièrement pilotée par des retours visuels de Christophe en train de manipuler l'app dans le
+simulateur iOS (iPhone 17 Pro). Contrairement aux sessions précédentes, quasiment rien n'était pré-planifié —
+chaque correctif a été déclenché par un "regarde, il y a une erreur" ou "ça, c'est pas terrible" au fil de la
+navigation. Résumé dans l'ordre chronologique.
+
+### 1 — Setup : premier lancement réel de l'app dans un simulateur
+`flutter run -d <iPhone 17 Pro>` lancé depuis ce poste (jamais fait depuis ce Mac avant cette session). Build
+iOS ~97s, app démarrée avec succès. Screenshots pris via `xcrun simctl io booted screenshot` pour inspection
+visuelle à chaque étape (pas d'outil de tap automatisé disponible — `idb` non installé — donc chaque
+interaction/navigation a été faite par Christophe lui-même dans le simulateur, moi je lisais les captures et
+les logs `flutter run`/`firebase functions:log` pour diagnostiquer).
+
+### 2 — Crash trouvé au premier tour : popup de pastille illisible
+Écran rouge "No Material widget found" en ouvrant le popup "En attente" depuis une pastille du dashboard
+Commercial. Cause : `lib/core/widgets/wi_devis_list_modal.dart` enveloppait son contenu dans un `Container`
+au lieu d'un `Material` — un `ListTile` a besoin d'un ancêtre `Material` pour peindre son fond/ink splash.
+Sur desktop ça passait (le `Dialog` fournit déjà un `Material`), pas sur mobile où la modale est poussée en
+plein écran via `MaterialPageRoute`. **Fix** : `Container` → `Material` (1 ligne). Widget partagé par les 4
+rôles, donc corrige potentiellement le même crash partout, pas seulement pour le Commercial.
+
+### 3 — Libellé de statut confus : "Devis prog." → "Métré prog."
+Christophe ne comprenait pas ce que voulait dire l'onglet "Devis prog." (statut serveur `'En cours'` = le
+rendez-vous de métré est planifié). Le badge partagé `wi_status_badge.dart` utilise déjà "Métré prog." pour
+ce même statut ailleurs dans l'app — incohérence de libellé, pas un vrai choix produit. Renommé aux 4 endroits
+où "Devis prog." apparaissait (onglet pilule, colonne Kanban desktop, 2 badges de carte dans
+`commercial_quote_list.dart`).
+
+### 4 — "Affaires récentes" quasi invisible : bande "récents" transformée en horizontal
+Juste en dessous des pastilles, la section "Chantiers récemment ajoutés" (`WiRecentChantiersSection`) empilait
+**verticalement** jusqu'à 6 cartes pleine largeur (jusqu'à ~570px) dans une `Column` non scrollable, juste
+au-dessus de la vraie liste filtrée par onglet — qui elle héritait seulement de l'espace `Expanded` restant,
+quasi nul sur mobile. Transformée en **bande horizontale défilante à hauteur fixe** (~110-160px selon les
+variantes ci-dessous), plus jamais dictée par le nombre d'items. Composant partagé par les 4 rôles → même bug
+probablement présent ailleurs, corrigé pour tous en même temps.
+
+### 5 — Ombre des pastilles coupée
+Les cartes de stats (`WiStatRow`, variante horizontale à 4+ pastilles) avaient leur `boxShadow` légèrement
+rognée en bas — la `SingleChildScrollView` horizontale clippe par défaut (`Clip.hardEdge`) pile à la hauteur
+de son contenu, et l'ombre déborde de quelques pixels sous cette limite. Fix : `clipBehavior: Clip.none` +
+un peu de marge basse.
+
+### 6 — Réordonnancement de l'écran Commercial (demande UX explicite)
+Christophe : quand on tape un onglet ("Métré prog.", "En attente"...), le résultat filtré devrait apparaître
+en haut, pas tout en bas de l'écran après recherche/bouton/récents. Colonne `Column` de
+`commercial_home_screen.dart` réordonnée : **stats → liste filtrée par onglet (Expanded) → barre de recherche
+→ bouton "Ajouter un devis" → bande "Chantiers récemment ajoutés" en bas**. Le titre "Affaires récentes"
+(devenu redondant/mal placé après ce changement) a été retiré à la demande de Christophe.
+
+### 7 — Bug de navigation trouvé en testant : "Relancer" fonctionne, mais l'onglet actif reste faux
+Christophe a confirmé en direct que le bouton "Relancer" d'une carte devis déclenche bien la notification côté
+métreur (fonctionnalité de la session du 07/08, jamais testée en conditions réelles jusqu'ici — **confirmée
+fonctionnelle**). Repéré au passage sur la même capture : l'onglet "Agenda" restait surligné en bleu après un
+retour en arrière depuis le Planner, alors que l'écran affiché était bien "Devis". Cause :
+`_onNavTap` marquait l'onglet actif de façon permanente (`setState`) avant de pousser Agenda/Réglages en
+`Navigator.push` — jamais remis à "Devis" au retour. Fix : ne marquer l'onglet actif que pour l'index 0
+(Devis), qui est le seul contenu réellement affiché dans cet onglet (Agenda/Réglages sont des écrans poussés
+par-dessus, pas un contenu de cet onglet).
+
+### 8 — Planner : `RenderFlex` overflow de 186px dans la barre du haut
+Vraie erreur (log complet capturé via `flutter run`) : le `Row` de `_TopBar` (`planner_screen.dart:814`)
+débordait de 186px sur la droite dès que les boutons "Congés" et "+ Équipe" apparaissaient (droits complets
+donnés au Commercial la session précédente, jamais testés en conditions réelles sur téléphone). Fix : ces deux
+actions secondaires regroupées dans un menu "⋮" (`PopupMenuButton`) au lieu de boutons texte côte à côte —
+garantit qu'il n'y aura plus jamais de débordement quel que soit le nombre d'actions ou la largeur d'écran.
+Composant partagé Commercial/Métreur/Admin.
+
+### 9 — Planner mobile : panneau backlog repensé (2 itérations)
+Constat de Christophe : sur mobile, le panneau backlog (260pt fixe) prenait presque toute la largeur, ne
+laissant qu'un filet à peine visible pour la grille équipes×jours — inutilisable.
+- **Itération 1 (rejetée par Christophe)** : tiroir superposé (`Stack`), replié par défaut derrière un badge
+  "Backlog (N)", ouvrable en tiroir latéral par-dessus la grille. Problème signalé immédiatement : impossible
+  de voir le backlog ET la grille en même temps → glisser-déposer d'une carte vers une cellule devenait
+  impraticable (il faut voir la cible pour y glisser quelque chose).
+- **Itération 2 (retenue)** : bande horizontale défilante (même principe que "Chantiers récemment ajoutés",
+  point 4) fixée **au-dessus** de la grille, toujours visible en même temps qu'elle. Nouveaux widgets
+  `_MobileBacklogStrip`/`_MobileBacklogCard`. Le glisser-déposer fonctionne : Flutter fait remonter le
+  `Draggable` au niveau de l'`Overlay` pendant le drag, donc la carte peut être lâchée sur une cellule de la
+  grille juste en dessous sans problème.
+
+### 10 — Bug révélé par le test du drag-and-drop : erreur serveur illisible
+Christophe a testé le glisser-déposer d'une carte "Bloquée" (statut `'À commander'`, pas encore commandée) sur
+une cellule de la grille : `[firebase_functions/internal] INTERNAL` affiché en plein écran. Investigation via
+`firebase functions:log` (logs prod réels) : la vraie cause était `Error: Transition non autorisée : À
+commander → En pose` — refus légitime du serveur (on ne peut pas planifier un chantier pas encore commandé),
+mais le message ne remontait jamais côté client. Deux corrections :
+- **Client** (garde-fou immédiat, sans déploiement) : `onWillAcceptWithDetails` du `DragTarget` vérifie
+  désormais `details.data.isReady` (même règle exacte que le serveur : statut `'À planifier'` + dépendances
+  satisfaites + livraison fournisseur passée) — une carte "Bloquée" rebondit simplement à sa place au lieu de
+  déclencher un appel serveur voué à l'échec.
+- **Serveur** (le vrai fond du problème, bien plus large) : voir section 11 ci-dessous.
+
+### 11 — Bug backend systémique : 66 `Error` → `HttpsError` dans `functions/index.js`
+Cloud Functions (callable) ne transmet le message d'erreur au client **que** pour un `HttpsError` — un
+`Error` JS classique renvoie toujours un code générique `internal` sans aucun détail, par sécurité (évite de
+fuiter des stacktraces arbitraires). `functions/index.js` levait des `Error` classiques partout (66 occurrences
+recensées) depuis le tout début du projet — **chaque erreur serveur de toute l'app, tous rôles confondus,
+n'a donc jamais affiché son vrai message aux utilisateurs**, uniquement `[firebase_functions/internal]
+INTERNAL`. Corrigé les 66 occurrences avec un code sémantique par cas (`not-found`, `permission-denied`,
+`invalid-argument`, `failed-precondition`, `unauthenticated`, `resource-exhausted`) via un script de
+remplacement ciblé (`throw new Error(` → `throw new HttpsError("<code>", `, sans toucher au reste du message,
+donc sans risque de casser les messages multi-lignes existants). Import `HttpsError` ajouté à
+`firebase-functions/v2/https`. Reformatage manuel des lignes dépassant 80 caractères (règle ESLint `max-len`)
+après le remplacement mécanique.
+
+**✅ Déployé sur Firebase** (confirmation explicite de Christophe, "vas-y déploie") : `firebase deploy --only
+functions` réussi sur `workit-1daa1`, 9 fonctions mises à jour sur Node.js 22 (2nd Gen) — `analyzeDevis`,
+`provisionAccounts`, `transitionDevisStatus`, `sendRelance`, `setLotDependencies`, `updateLotPlanningFields`,
+`logTimeEntry`, `onDevisStatusChange`, `onChantierMessageCreated`. Toutes les instances ont démarré proprement
+(`STARTUP TCP probe succeeded`) après déploiement, aucune erreur de boot dans les logs.
+
+### 12 — Planner mobile : 3 ajustements supplémentaires demandés par Christophe
+Après un nouveau test en direct (2e équipe créée pour l'occasion) :
+- **Libellés de jour collés au bord de l'écran** ("Lun 10/08"...) : petit gutter de 8px ajouté à gauche de la
+  grille (`padding: EdgeInsets.only(left: 8)` sur la `SingleChildScrollView` horizontale).
+- **Plusieurs équipes = illisible sur mobile** : nouveau **sélecteur d'équipe** mobile
+  (`_MobileTeamPicker`, menu "Afficher Équipe X ▾") qui n'apparaît que si 2+ équipes existent — une seule
+  équipe à la fois occupe alors toute la largeur de la grille (le filtrage se fait en amont dans
+  `_PlannerScreenState`, qui ne passe qu'une liste d'1 équipe à `_PlannerBody`, réutilisant tel quel le code
+  de grille existant sans le modifier). Desktop inchangé (toutes les équipes restent visibles côte à côte).
+- **Choix Jour/Semaine trop serré sur mobile** : le sélecteur "Semaine" retiré sur mobile (uniquement "Jour"
+  disponible), desktop inchangé. `_PlannerScreenState` force `effectiveWeekMode = false` sur mobile sans
+  toucher au champ `_weekMode` sous-jacent (inoffensif, juste ignoré tant qu'on est sur petit écran).
+
+### 13 — Écran Réglages : thème sombre parallèle jamais migré + 2 liens légaux ajoutés
+Christophe : "dans Réglages c'est noir, fais comme le reste" + demande d'ajouter des liens Conditions
+Générales de Vente / Politique de Confidentialité (contenu fictif pour l'instant). `settings_screen.dart`
+avait exactement le même défaut que `measurement_form_screen.dart` traité le 07/08 : thème sombre autonome
+codé en dur (`Color(0xFF07090D)` + accent vert néon `Color(0xFF00E676)`, jamais branché sur `AppColors`).
+Refonte complète en `AppColors` (fond clair, cartes blanches à bordure fine, accent bleu `primary`). Nouvelle
+section "Légal" avec 2 entrées ("Conditions générales de vente", "Politique de confidentialité"), chacune
+ouvrant un écran placeholder "Contenu à venir" — navigation fonctionnelle dès maintenant, vrai texte
+juridique à fournir plus tard par Christophe.
+
+**Bug auto-introduit puis corrigé dans la foulée** : la première version de la refonte enveloppait le
+`ListTile`/`SwitchListTile` dans un `Container` à fond coloré — exactement le même anti-pattern que le point 2
+(Material manquant), reproduit sous les nouvelles couleurs. Repéré via les logs `flutter run`
+("ListTile background color or ink splashes may be invisible"), corrigé en remplaçant le `Container` par un
+vrai `Material` avec `shape`/`side` pour la bordure + les coins arrondis.
+
+### 14 — Popup de détail chantier : enrichi pas-à-pas, par statut, à la demande de Christophe
+Christophe a listé précisément ce qu'il voulait voir apparaître dans le popup (`_ChantierDetailBody`,
+`commercial_chantier_detail.dart`) selon le statut du chantier :
+
+| Statut | Demandé | Résultat |
+|---|---|---|
+| En attente | Nom du métreur à qui la demande a été envoyée | Ajouté : "Demande de métré envoyée à : X" |
+| Métré prog. | Date du métré programmé | Ajouté : le champ `meetingAt` existait déjà sur `_QuoteItem` mais n'était jamais affiché |
+| À commander | Note libre du métreur (ex. "grille d'aération à retirer") | Déjà fonctionnel — champ `metreurNote`/`metreurNoteName`, écrit via le bouton "Demander des informations" côté métreur (`metreur_home_screen.dart`), déjà affiché inconditionnellement côté Commercial. Juste relabellisé "Métré réalisé par : X" pour le nom du métreur à cette étape (au lieu de "envoyée à", qui n'a plus de sens une fois le métré fait) |
+| À planifier | Rien de spécial | Confirmé par Christophe, aucun changement |
+| En pose | Date de pose + équipe assignée | Déjà fonctionnel, aucun changement |
+| Terminé | Photo de la déclaration de fin de travaux | Ajouté : `rapportFin.attestationUrl` existait déjà côté poseur (`poseurs_home_screen.dart`, upload séparé dans `attestations_fin_travaux/`, distinct des photos de chantier classiques) mais n'était **jamais affiché** côté Commercial — seules les photos de chantier génériques (`photoUrls`) l'étaient |
+
+Un seul champ `assignedMetreurName` réutilisé avec un libellé différent selon le groupe de statuts (plutôt
+qu'un nouveau champ) : "Demande de métré envoyée à" pour {vide, Nouvelle demande, Acceptée, À classer},
+"Métré réalisé par" pour {À commander, Commande en cours}, rien pour Métré prog. (En cours, où c'est la date
+du RDV qui prime) ni au-delà.
+
+**Aller-retour sur les données de démo** : Christophe testait avec "Dupont Jean", une fiche de démo codée en
+dur (`_kDemoDevis` dans `commercial_models.dart`) sans `assignedMetreurName` renseigné — code déjà correct,
+juste rien à afficher faute de donnée. Ajouté `assignedMetreurName: 'Pascal M.'` sur cette fiche, puis
+enrichi les autres fiches de démo pour couvrir chaque nouveau bloc (Laurent Céline → note métreur, Moreau
+Julie → `rapportFin` avec photos + attestation, images placeholder `picsum.photos` pour que ça charge
+visuellement en test). **Point d'apprentissage noté pour la suite** : `_kDemoDevis` est une liste top-level
+`final` — un hot **reload** ne réexécute pas son initialisation (limitation connue de Flutter), il faut un hot
+**restart** pour voir les changements de données de démo. Premier essai raté pour cette raison précise
+(Christophe : "toujours pas..."), diagnostiqué et corrigé.
+
+### Vérifications faites cette session
+`flutter analyze` après quasiment chaque modification : **0 erreur** tout du long (seulement les infos
+`withOpacity` dépréciées déjà tolérées ailleurs, et les warnings d'imports morts déjà présents avant cette
+session). `npm run lint` (functions) + `node -c index.js` : 0 erreur après le remplacement massif
+`Error`→`HttpsError`. `firebase deploy --only functions --dry-run` réussi avant le déploiement réel.
+
+### ✅ Déployé sur Firebase
+Uniquement `functions` (pas de changement Firestore rules/index cette session) — voir détail section 11.
+C'est le 2e déploiement de la journée (après celui de la session "(suite 3)" ci-dessous, qui lui concernait
+Phases 3-6 + chantiers du 13/08 matin).
+
+### ⚠️ Pas fait cette session
+- **Testé uniquement le rôle Commercial** — Métreur/Poseur/Admin partagent plusieurs composants touchés
+  (`WiRecentChantiersSection`, `WiStatRow`, le fix Material du popup) mais n'ont pas été revérifiés à l'écran.
+- **Contenu légal toujours fictif** (CGV/Politique de confidentialité) — juste la navigation, pas le texte.
+- **Images placeholder** (`picsum.photos`) dans les données de démo enrichies — à remplacer par de vraies
+  URLs Firebase Storage si ces fiches de démo doivent un jour ressembler à de vraies données.
+- **`npm audit`** : 30 vulnérabilités toujours pas investiguées (reporté depuis la session "(suite 3)").
+
+### 📌 Nouvelle demande produit à traiter (pas commencée) — Messagerie interne scoping fin
+Christophe veut une **messagerie interne entre les membres concernés d'un chantier**, mais avec un scoping
+précis : **pas de broadcast à tout le rôle**, seulement aux personnes réellement impliquées sur CE chantier
+précis. Exemples donnés :
+- Pas "tous les métreurs" → seulement **le métreur assigné** à ce chantier (`assignedMetreurName`/uid).
+- Pas "tous les poseurs" → seulement **les membres de l'équipe assignée** à la pose de ce chantier
+  (`team.memberIds`/`poseurIds`, pas tout le rôle poseur du workspace).
+- Vraisemblablement aussi le commercial créateur + l'admin par défaut (à confirmer avec Christophe).
+
+Il existe déjà un point d'entrée de chat par chantier (`ChatEntryButton`/`chantier_chat_screen.dart`,
+`onChantierMessageCreated` côté Cloud Functions) — à vérifier en priorité si l'infra actuelle est déjà
+scoping-aware (liste de participants par chantier) ou si c'est un chat ouvert à tout le workspace/tout le rôle
+qu'il faudrait restreindre. Pas commencé — juste noté à la demande explicite de Christophe pour la prochaine
+session.
+
+### Reste à faire (prochaine session)
+1. **Messagerie interne scoping fin** (voir ci-dessus) — nouvelle demande produit, pas commencée.
+2. **Tester Métreur/Poseur/Admin** avec le même niveau de rigueur que le Commercial cette session — plusieurs
+   composants partagés ont été corrigés à l'aveugle pour ces rôles (jamais revérifiés à l'écran).
+3. Fournir le vrai contenu CGV/Politique de confidentialité (juste la navigation existe).
+4. `npm audit` (30 vulnérabilités, reporté depuis plusieurs sessions).
+5. Phase 7 de la roadmap (validation des 12 métiers) — toujours pas commencée.
+
+---
 
 ## 🆕 Session 2026-08-13 (suite 3) — Mise à jour firebase-functions
 

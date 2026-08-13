@@ -14,6 +14,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../core/responsive/responsive_context.dart';
 import '../core/theme/app_colors.dart';
 import '../services/devis_service.dart';
 
@@ -77,13 +78,11 @@ class _PlannerScreenState extends State<PlannerScreen> {
 
   bool _weekMode = false;
   DateTime _anchor = _startOfWeek(DateTime.now());
-
-  List<DateTime> get _visibleDates {
-    if (_weekMode) {
-      return List.generate(4, (i) => _anchor.add(Duration(days: i * 7)));
-    }
-    return List.generate(7, (i) => _anchor.add(Duration(days: i)));
-  }
+  // Sur mobile, une seule équipe à la fois est affichée (sélecteur) plutôt
+  // que toutes les colonnes côte à côte — trop étroit pour glisser-déposer
+  // confortablement dès qu'il y a 2+ équipes. Bidon sur desktop (toutes les
+  // équipes restent visibles ensemble comme avant).
+  String? _mobileSelectedTeamId;
 
   void _shiftAnchor(int direction) {
     final step = _weekMode ? 28 : 7;
@@ -156,17 +155,44 @@ class _PlannerScreenState extends State<PlannerScreen> {
                         .where((u) => u.status == 'En pose')
                         .where((u) => widget.filterPoseurId == null || u.poseurIds.contains(widget.filterPoseurId))
                         .toList();
+
+                    // Sélecteur d'équipe mobile : par défaut la première,
+                    // recalé si l'équipe choisie a disparu (désactivée...).
+                    final isMobileMultiTeam = context.isMobile && teams.length > 1;
+                    if (isMobileMultiTeam &&
+                        (_mobileSelectedTeamId == null ||
+                            !teams.any((t) => t.id == _mobileSelectedTeamId))) {
+                      _mobileSelectedTeamId = teams.first.id;
+                    }
+                    final visibleTeams = isMobileMultiTeam
+                        ? teams.where((t) => t.id == _mobileSelectedTeamId).toList()
+                        : teams;
+
+                    // Semaine retirée sur mobile (colonnes bien trop
+                    // étroites pour rester lisibles) — seule la vue Jour y
+                    // est proposée, le champ `_weekMode` sous-jacent n'est
+                    // pas remis à zéro (inoffensif, juste ignoré ici).
+                    final effectiveWeekMode = context.isMobile ? false : _weekMode;
+                    final visibleDates = effectiveWeekMode
+                        ? List.generate(4, (i) => _anchor.add(Duration(days: i * 7)))
+                        : List.generate(7, (i) => _anchor.add(Duration(days: i)));
+
                     return _PlannerBody(
                       workspaceId: widget.workspaceId,
                       accentColor: widget.accentColor,
                       readOnly: widget.readOnly,
-                      teams: teams,
+                      teams: visibleTeams,
+                      allTeams: isMobileMultiTeam ? teams : null,
+                      selectedTeamId: isMobileMultiTeam ? _mobileSelectedTeamId : null,
+                      onSelectTeam: isMobileMultiTeam
+                          ? (id) => setState(() => _mobileSelectedTeamId = id)
+                          : null,
                       poseurs: poseurs,
                       unavailabilities: unavailabilities,
                       backlog: backlog,
                       scheduled: scheduled,
-                      weekMode: _weekMode,
-                      visibleDates: _visibleDates,
+                      weekMode: effectiveWeekMode,
+                      visibleDates: visibleDates,
                       onToggleWeekMode: (v) => setState(() => _weekMode = v),
                       onShiftAnchor: _shiftAnchor,
                     );
@@ -437,6 +463,9 @@ class _PlannerBody extends StatelessWidget {
     required this.visibleDates,
     required this.onToggleWeekMode,
     required this.onShiftAnchor,
+    this.allTeams,
+    this.selectedTeamId,
+    this.onSelectTeam,
   });
 
   final String workspaceId;
@@ -451,6 +480,12 @@ class _PlannerBody extends StatelessWidget {
   final List<DateTime> visibleDates;
   final ValueChanged<bool> onToggleWeekMode;
   final void Function(int direction) onShiftAnchor;
+  // Sélecteur d'équipe mobile (non-null seulement sur mobile avec 2+
+  // équipes) : `allTeams` liste tout le monde pour le menu, `teams`
+  // ci-dessus ne contient déjà que l'équipe sélectionnée pour la grille.
+  final List<_PlanningTeam>? allTeams;
+  final String? selectedTeamId;
+  final ValueChanged<String>? onSelectTeam;
 
   _PoseurOption? _findPoseur(String uid) {
     for (final p in poseurs) {
@@ -512,6 +547,26 @@ class _PlannerBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final overloadCount = _overloadedCellCount();
+    final grid = SingleChildScrollView(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        // Petit gutter à gauche — sans lui, les libellés de jour ("Lun
+        // 10/08"...) collaient pile au bord de l'écran sur mobile.
+        padding: const EdgeInsets.only(left: 8),
+        child: SizedBox(
+          width: _kDayLabelWidth + teams.length * _kTeamColumnWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeaderRow(context),
+              ...visibleDates.map((day) => weekMode
+                  ? _buildWeekRow(context, day)
+                  : _buildDayRow(context, day)),
+            ],
+          ),
+        ),
+      ),
+    );
     return Column(
       children: [
         _TopBar(
@@ -533,38 +588,46 @@ class _PlannerBody extends StatelessWidget {
               style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (!readOnly) ...[
-                SizedBox(
-                  width: _kBacklogWidth,
-                  child: _BacklogPanel(workspaceId: workspaceId, backlog: backlog),
-                ),
-                const VerticalDivider(width: 1, color: AppColors.cardBorder),
-              ],
-              Expanded(
-                child: SingleChildScrollView(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: _kDayLabelWidth + teams.length * _kTeamColumnWidth,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeaderRow(context),
-                          ...visibleDates.map((day) => weekMode
-                              ? _buildWeekRow(context, day)
-                              : _buildDayRow(context, day)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+        // Sur mobile, le backlog (260pt) à côté de la grille (day-label 88pt
+        // + 220pt par équipe) ne laisse presque plus de place pour la
+        // grille. Un tiroir superposé casse le glisser-déposer (il faut
+        // voir la grille ET le backlog en même temps pour glisser de l'un
+        // vers l'autre) — le backlog devient donc une bande horizontale
+        // défilante au-dessus de la grille, plutôt qu'un panneau qui lui
+        // vole la largeur ou un tiroir qui la masque.
+        if (!readOnly && context.isMobile) ...[
+          _MobileBacklogStrip(workspaceId: workspaceId, backlog: backlog),
+          const Divider(height: 1, color: AppColors.cardBorder),
+        ],
+        // Sélecteur d'équipe mobile : avec 2+ équipes, les colonnes
+        // côte à côte deviennent trop étroites pour glisser-déposer
+        // confortablement — une seule équipe s'affiche à la fois,
+        // choisie ici (la grille ci-dessous ne contient déjà que
+        // l'équipe sélectionnée, voir `_PlannerScreenState`).
+        if (allTeams != null && allTeams!.length > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+            child: _MobileTeamPicker(
+              teams: allTeams!,
+              selectedTeamId: selectedTeamId,
+              accentColor: accentColor,
+              onChanged: onSelectTeam!,
+            ),
           ),
+        Expanded(
+          child: readOnly || context.isMobile
+              ? grid
+              : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: _kBacklogWidth,
+                          child: _BacklogPanel(workspaceId: workspaceId, backlog: backlog),
+                        ),
+                        const VerticalDivider(width: 1, color: AppColors.cardBorder),
+                        Expanded(child: grid),
+                      ],
+                    ),
         ),
       ],
     );
@@ -638,7 +701,14 @@ class _PlannerBody extends StatelessWidget {
           return SizedBox(
             width: _kTeamColumnWidth,
             child: DragTarget<_PlanUnit>(
-              onWillAcceptWithDetails: (details) => !readOnly,
+              // `isReady` reflète exactement la règle serveur (statut
+              // "À planifier" + dépendances satisfaites) — refuser ici les
+              // chantiers "Bloqué" évite un aller-retour serveur voué à
+              // échouer ("Transition non autorisée : À commander → En
+              // pose") qui remontait comme une erreur générique illisible
+              // côté client (Cloud Functions ne propage pas le message des
+              // `Error` non-`HttpsError`, seulement un code "internal").
+              onWillAcceptWithDetails: (details) => !readOnly && details.data.isReady,
               onAcceptWithDetails: (details) => _assignToCell(context, details.data, team, day),
               builder: (context, candidateData, rejectedData) {
                 final highlighted = candidateData.isNotEmpty;
@@ -809,43 +879,145 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Capturées en local pour que Dart promeuve leur type en non-nullable
+    // dans les blocs `if` ci-dessous (ce sont des champs, pas des variables).
+    final conges = onOpenConges;
+    final createTeam = onCreateTeam;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
           const Text('Planner', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.grey900)),
-          const SizedBox(width: 16),
-          IconButton(onPressed: onPrev, icon: const Icon(Icons.chevron_left, color: AppColors.grey600)),
-          IconButton(onPressed: onNext, icon: const Icon(Icons.chevron_right, color: AppColors.grey600)),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: onPrev,
+            icon: const Icon(Icons.chevron_left, color: AppColors.grey600),
+            iconSize: 20,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+          IconButton(
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right, color: AppColors.grey600),
+            iconSize: 20,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
           const Spacer(),
-          _SegmentButton(label: 'Jour', selected: !weekMode, accentColor: accentColor, onTap: () => onToggleWeekMode(false)),
-          const SizedBox(width: 4),
-          _SegmentButton(label: 'Semaine', selected: weekMode, accentColor: accentColor, onTap: () => onToggleWeekMode(true)),
-          if (onOpenConges != null) ...[
-            const SizedBox(width: 16),
-            TextButton.icon(
-              onPressed: onOpenConges,
-              style: TextButton.styleFrom(foregroundColor: AppColors.grey700),
-              icon: const Icon(Icons.beach_access_outlined, size: 18),
-              label: const Text('Congés'),
-            ),
+          // Choix Jour/Semaine retiré sur mobile : les colonnes de la vue
+          // Semaine sont bien trop étroites pour rester lisibles sur un
+          // écran de téléphone — seule la vue Jour y est proposée
+          // (`_PlannerScreenState` force déjà `weekMode` à false).
+          if (!context.isMobile) ...[
+            _SegmentButton(label: 'Jour', selected: !weekMode, accentColor: accentColor, onTap: () => onToggleWeekMode(false)),
+            const SizedBox(width: 4),
+            _SegmentButton(label: 'Semaine', selected: weekMode, accentColor: accentColor, onTap: () => onToggleWeekMode(true)),
           ],
-          if (onCreateTeam != null) ...[
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: onCreateTeam,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: accentColor,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Équipe'),
+          // Congés/Créer équipe : actions secondaires regroupées dans un menu
+          // "plus" plutôt qu'en boutons texte côte à côte — avec le titre, la
+          // navigation et le switch Jour/Semaine déjà présents, les afficher
+          // en clair faisait déborder la barre de 186px sur un écran de
+          // téléphone (RenderFlex overflow constaté en test réel).
+          if (conges != null || createTeam != null) ...[
+            const SizedBox(width: 4),
+            PopupMenuButton<VoidCallback>(
+              tooltip: 'Plus d\'actions',
+              icon: const Icon(Icons.more_vert, color: AppColors.grey600),
+              padding: EdgeInsets.zero,
+              onSelected: (action) => action(),
+              itemBuilder: (context) => [
+                if (conges != null)
+                  PopupMenuItem<VoidCallback>(
+                    value: conges,
+                    child: const Row(
+                      children: [
+                        Icon(Icons.beach_access_outlined, size: 18, color: AppColors.grey700),
+                        SizedBox(width: 10),
+                        Text('Congés'),
+                      ],
+                    ),
+                  ),
+                if (createTeam != null)
+                  PopupMenuItem<VoidCallback>(
+                    value: createTeam,
+                    child: Row(
+                      children: [
+                        Icon(Icons.add, size: 18, color: accentColor),
+                        const SizedBox(width: 10),
+                        const Text('Créer une équipe'),
+                      ],
+                    ),
+                  ),
+              ],
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Sélecteur "Afficher Équipe X" — mobile uniquement, 2+ équipes. Remplace
+/// les colonnes équipes côte à côte (illisibles/trop étroites en dessous de
+/// 2 équipes sur un écran de téléphone) par un choix explicite d'une seule
+/// équipe à la fois, sans rien perdre du glisser-déposer sur la grille.
+class _MobileTeamPicker extends StatelessWidget {
+  const _MobileTeamPicker({
+    required this.teams,
+    required this.selectedTeamId,
+    required this.accentColor,
+    required this.onChanged,
+  });
+  final List<_PlanningTeam> teams;
+  final String? selectedTeamId;
+  final Color accentColor;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = teams.firstWhere(
+      (t) => t.id == selectedTeamId,
+      orElse: () => teams.first,
+    );
+    return PopupMenuButton<String>(
+      tooltip: 'Changer d\'équipe',
+      onSelected: onChanged,
+      itemBuilder: (context) => teams
+          .map((t) => PopupMenuItem<String>(
+                value: t.id,
+                child: Row(
+                  children: [
+                    Icon(
+                      t.id == selectedTeamId ? Icons.check_circle : Icons.circle_outlined,
+                      size: 16,
+                      color: t.id == selectedTeamId ? accentColor : AppColors.grey300,
+                    ),
+                    const SizedBox(width: 10),
+                    Text('Afficher ${t.name}'),
+                  ],
+                ),
+              ))
+          .toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: accentColor.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: accentColor.withOpacity(0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.groups_outlined, size: 16, color: accentColor),
+            const SizedBox(width: 8),
+            Text(
+              'Afficher ${selected.name}',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: accentColor),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.expand_more, size: 18, color: accentColor),
+          ],
+        ),
       ),
     );
   }
@@ -920,6 +1092,120 @@ class _DependencyChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────
+// LAYOUT MOBILE — backlog en bande horizontale
+// ────────────────────────────────────────────────
+
+/// Sur mobile, le backlog et la grille ne peuvent pas se partager la largeur
+/// comme sur desktop (voir commentaire dans `_PlannerBody.build`), et un
+/// tiroir qui masque la grille casse le glisser-déposer (il faut voir les
+/// deux en même temps pour glisser l'un vers l'autre). Le backlog devient
+/// donc une bande horizontale défilante fixée au-dessus de la grille — même
+/// principe que "Chantiers récemment ajoutés" sur les dashboards.
+class _MobileBacklogStrip extends StatelessWidget {
+  const _MobileBacklogStrip({required this.workspaceId, required this.backlog});
+  final String workspaceId;
+  final List<_PlanUnit> backlog;
+
+  @override
+  Widget build(BuildContext context) {
+    if (backlog.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
+        child: Text('Backlog vide — aucun chantier en attente de planification.',
+            style: TextStyle(color: AppColors.grey400, fontSize: 12)),
+      );
+    }
+    // Prêts d'abord (actionnables tout de suite), bloqués ensuite.
+    final ordered = [
+      ...backlog.where((c) => c.isReady),
+      ...backlog.where((c) => !c.isReady),
+    ];
+    return SizedBox(
+      height: 158,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        scrollDirection: Axis.horizontal,
+        itemCount: ordered.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) => _MobileBacklogCard(workspaceId: workspaceId, unit: ordered[i]),
+      ),
+    );
+  }
+}
+
+class _MobileBacklogCard extends StatelessWidget {
+  const _MobileBacklogCard({required this.workspaceId, required this.unit});
+  final String workspaceId;
+  final _PlanUnit unit;
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = unit.isReady;
+    final statusColor = ready ? AppColors.success : AppColors.warning;
+    final card = Container(
+      width: 192,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: statusColor.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(ready ? 'Prêt' : 'Bloqué',
+                style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w700)),
+          ),
+          const SizedBox(height: 6),
+          Text(unit.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppColors.grey900)),
+          const SizedBox(height: 2),
+          Text(unit.address,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 11, color: AppColors.grey500)),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.schedule, size: 12, color: AppColors.grey400),
+              const SizedBox(width: 3),
+              Text('${unit.estimatedDurationDays}j · ${unit.poseurCountRequired} poseur(s)',
+                  style: const TextStyle(fontSize: 11, color: AppColors.grey500)),
+            ],
+          ),
+          _DependencyChip(unit: unit),
+        ],
+      ),
+    );
+
+    return GestureDetector(
+      onTap: () => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: AppColors.surface,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        builder: (_) => _ChantierDetailSheet(workspaceId: workspaceId, unit: unit, accentColor: AppColors.primary),
+      ),
+      child: Draggable<_PlanUnit>(
+        data: unit,
+        feedback: Material(color: Colors.transparent, child: Opacity(opacity: 0.9, child: card)),
+        childWhenDragging: Opacity(opacity: 0.3, child: card),
+        child: card,
       ),
     );
   }

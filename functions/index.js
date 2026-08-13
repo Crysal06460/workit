@@ -8,7 +8,7 @@
  */
 
 const {setGlobalOptions} = require("firebase-functions");
-const {onCall} = require("firebase-functions/v2/https");
+const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentWritten, onDocumentCreated} =
   require("firebase-functions/v2/firestore");
 const {initializeApp} = require("firebase-admin/app");
@@ -66,7 +66,7 @@ async function checkAndIncrementAiQuota(workspaceId) {
     const data = snap.exists ? snap.data() : {};
     const currentCount = data.monthKey === monthKey ? (data.count || 0) : 0;
     if (currentCount >= MONTHLY_AI_QUOTA) {
-      throw new Error(
+      throw new HttpsError("resource-exhausted",
           `Quota mensuel d'analyses IA atteint (${MONTHLY_AI_QUOTA}/mois). ` +
           "Contactez le support pour l'augmenter.",
       );
@@ -100,16 +100,18 @@ exports.analyzeDevis = onCall(
     {region: "europe-west1", secrets: ["OPENAI_API_KEY"]},
     async (request) => {
       const caller = request.auth && request.auth.uid;
-      if (!caller) throw new Error("Non autorisé");
+      if (!caller) throw new HttpsError("unauthenticated", "Non autorisé");
       const fileUrl = request.data && request.data.fileUrl;
       if (!fileUrl) {
-        throw new Error("fileUrl manquant");
+        throw new HttpsError("invalid-argument", "fileUrl manquant");
       }
 
       const callerDoc = await db.collection("users").doc(caller).get();
       const callerWorkspaceId = callerDoc.exists ?
         (callerDoc.data().workspaceId || callerDoc.data().companyId) : null;
-      if (!callerWorkspaceId) throw new Error("Espace de travail introuvable");
+      if (!callerWorkspaceId) {
+        throw new HttpsError("not-found", "Espace de travail introuvable");
+      }
       await checkAndIncrementAiQuota(callerWorkspaceId);
 
       const openai = getOpenAIClient();
@@ -154,7 +156,7 @@ Si une info manque, ignore-la.`;
         return {text};
       } catch (error) {
         logger.error("Erreur OpenAI", error);
-        throw new Error(`Analyse échouée: ${error.message}`);
+        throw new HttpsError("internal", `Analyse échouée: ${error.message}`);
       }
     },
 );
@@ -166,7 +168,7 @@ Si une info manque, ignore-la.`;
 function getOpenAIClient() {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY non configurée");
+    throw new HttpsError("internal", "OPENAI_API_KEY non configurée");
   }
   return new OpenAI({apiKey});
 }
@@ -201,7 +203,7 @@ async function sendEmail({to, subject, html, text, fromName = "WorkIt"}) {
       return true;
     } catch (err) {
       logger.error("Mailjet send failed", {error: err});
-      throw new Error("Envoi Mailjet impossible");
+      throw new HttpsError("internal", "Envoi Mailjet impossible");
     }
   } else {
     try {
@@ -226,7 +228,7 @@ async function sendEmail({to, subject, html, text, fromName = "WorkIt"}) {
       return true;
     } catch (err) {
       logger.error("SMTP send failed", {error: err});
-      throw new Error("Envoi SMTP impossible");
+      throw new HttpsError("internal", "Envoi SMTP impossible");
     }
   }
 }
@@ -251,10 +253,10 @@ exports.provisionAccounts = onCall(
     },
     async (request) => {
       const caller = request.auth && request.auth.uid;
-      if (!caller) throw new Error("Non autorisé");
+      if (!caller) throw new HttpsError("unauthenticated", "Non autorisé");
       const accounts = request.data && request.data.accounts;
       if (!Array.isArray(accounts) || accounts.length === 0) {
-        throw new Error("accounts requis");
+        throw new HttpsError("invalid-argument", "accounts requis");
       }
 
       // ── Autorisation : admin (tous droits) ou membre délégué
@@ -262,7 +264,9 @@ exports.provisionAccounts = onCall(
       // manageableRoles. Un délégué ne peut jamais créer d'admin, ni
       // provisionner en dehors de son propre workspace.
       const callerDoc = await db.collection("users").doc(caller).get();
-      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      if (!callerDoc.exists) {
+        throw new HttpsError("not-found", "Utilisateur inconnu");
+      }
       const callerData = callerDoc.data();
       const callerIsAdmin = callerData.role === "admin";
       const callerCanManageTeam = callerData.canManageTeam === true;
@@ -271,7 +275,7 @@ exports.provisionAccounts = onCall(
       const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
 
       if (!callerIsAdmin && !callerCanManageTeam) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             "Non autorisé : vous n'avez pas les droits pour ajouter des " +
             "membres à l'équipe.",
         );
@@ -486,7 +490,7 @@ exports.transitionDevisStatus = onCall(
     {region: "europe-west1"},
     async (request) => {
       const callerUid = request.auth && request.auth.uid;
-      if (!callerUid) throw new Error("Non autorisé");
+      if (!callerUid) throw new HttpsError("unauthenticated", "Non autorisé");
 
       const data = request.data || {};
       const workspaceId = data.workspaceId;
@@ -500,7 +504,10 @@ exports.transitionDevisStatus = onCall(
       const origin = data.origin || "app";
 
       if (!workspaceId || !devisId || !newStatus) {
-        throw new Error("workspaceId, devisId et newStatus sont requis");
+        throw new HttpsError(
+            "invalid-argument",
+            "workspaceId, devisId et newStatus sont requis",
+        );
       }
 
       // Phase 5 : la cause de non-conformité est une liste fermée — refus
@@ -511,14 +518,16 @@ exports.transitionDevisStatus = onCall(
         const cause = extraFields.rapportProbleme &&
           extraFields.rapportProbleme.cause;
         if (!cause || !NON_CONFORMITE_CAUSES.includes(cause)) {
-          throw new Error(
+          throw new HttpsError("invalid-argument",
               "Cause de non-conformité invalide ou manquante",
           );
         }
       }
 
       const callerDoc = await db.collection("users").doc(callerUid).get();
-      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      if (!callerDoc.exists) {
+        throw new HttpsError("not-found", "Utilisateur inconnu");
+      }
       const callerData = callerDoc.data();
       const callerRole = callerData.role;
       const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
@@ -526,11 +535,11 @@ exports.transitionDevisStatus = onCall(
       const workspaceDoc =
         await db.collection("workspaces").doc(workspaceId).get();
       if (!workspaceDoc.exists) {
-        throw new Error("Espace de travail introuvable");
+        throw new HttpsError("not-found", "Espace de travail introuvable");
       }
       const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
       if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             "Non autorisé : ce chantier n'appartient pas à votre espace " +
             "de travail",
         );
@@ -555,13 +564,15 @@ exports.transitionDevisStatus = onCall(
         // ── Lectures (toutes avant la moindre écriture, exigé par
         // l'API transaction Firestore) ──────────────────────────────────
         const devisSnap = await tx.get(devisRef);
-        if (!devisSnap.exists) throw new Error("Chantier introuvable");
+        if (!devisSnap.exists) {
+          throw new HttpsError("not-found", "Chantier introuvable");
+        }
         const devisData = devisSnap.data();
         const existingLotIds =
           Array.isArray(devisData.lotIds) ? devisData.lotIds : [];
 
         if (!lotId && existingLotIds.length > 0) {
-          throw new Error(
+          throw new HttpsError("failed-precondition",
               "Ce chantier a des lots : indiquez lotId pour cette " +
               "transition (Planner et clôture poseur pas encore adaptés " +
               "aux lots — utilisez l'écran métreur).",
@@ -573,7 +584,9 @@ exports.transitionDevisStatus = onCall(
         let lotSnap = null;
         if (lotId) {
           lotSnap = await tx.get(devisRef.collection("lots").doc(lotId));
-          if (!lotSnap.exists) throw new Error("Lot introuvable");
+          if (!lotSnap.exists) {
+            throw new HttpsError("not-found", "Lot introuvable");
+          }
           current = lotSnap.data();
           fromStatus = current.status || null;
           targetRef = lotSnap.ref;
@@ -585,7 +598,7 @@ exports.transitionDevisStatus = onCall(
 
         const transition = findTransition(fromStatus, newStatus);
         if (!transition) {
-          throw new Error(
+          throw new HttpsError("failed-precondition",
               `Transition non autorisée : ${fromStatus || "(aucun statut)"} ` +
               `→ ${newStatus}`,
           );
@@ -603,7 +616,7 @@ exports.transitionDevisStatus = onCall(
           else if (override === false) allowed = false;
         }
         if (!allowed) {
-          throw new Error(
+          throw new HttpsError("permission-denied",
               `Non autorisé : le rôle ${callerRole} ne peut pas effectuer ` +
               "cette transition",
           );
@@ -612,7 +625,7 @@ exports.transitionDevisStatus = onCall(
           const poseurIds =
             Array.isArray(current.poseurIds) ? current.poseurIds : [];
           if (!poseurIds.includes(callerUid)) {
-            throw new Error(
+            throw new HttpsError("permission-denied",
                 "Non autorisé : vous n'êtes pas assigné à ce chantier",
             );
           }
@@ -630,7 +643,7 @@ exports.transitionDevisStatus = onCall(
             const depStatus = depData ? depData.status : null;
             if (!LOT_TERMINAL_STATUSES.has(depStatus)) {
               const depLabel = (depData && depData.label) || depId;
-              throw new Error(
+              throw new HttpsError("failed-precondition",
                   `Bloqué par le lot "${depLabel}" (pas encore terminé)`,
               );
             }
@@ -640,7 +653,7 @@ exports.transitionDevisStatus = onCall(
         const rejectedKeys = Object.keys(extraFields)
             .filter((k) => !transition.extraFields.includes(k));
         if (rejectedKeys.length > 0) {
-          throw new Error(
+          throw new HttpsError("invalid-argument",
               "Champ(s) non autorisé(s) pour cette transition : " +
               rejectedKeys.join(", "),
           );
@@ -885,7 +898,7 @@ exports.sendRelance = onCall(
     {region: "europe-west1"},
     async (request) => {
       const callerUid = request.auth && request.auth.uid;
-      if (!callerUid) throw new Error("Non autorisé");
+      if (!callerUid) throw new HttpsError("unauthenticated", "Non autorisé");
 
       const data = request.data || {};
       const workspaceId = data.workspaceId;
@@ -894,15 +907,23 @@ exports.sendRelance = onCall(
       const relanceType = data.relanceType;
 
       if (!workspaceId || !devisId || !relanceType) {
-        throw new Error("workspaceId, devisId et relanceType sont requis");
+        throw new HttpsError(
+            "invalid-argument",
+            "workspaceId, devisId et relanceType sont requis",
+        );
       }
       const config = getRelanceConfig(relanceType);
       if (!config) {
-        throw new Error(`Type de relance inconnu : ${relanceType}`);
+        throw new HttpsError(
+            "invalid-argument",
+            `Type de relance inconnu : ${relanceType}`,
+        );
       }
 
       const callerDoc = await db.collection("users").doc(callerUid).get();
-      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      if (!callerDoc.exists) {
+        throw new HttpsError("not-found", "Utilisateur inconnu");
+      }
       const callerData = callerDoc.data();
       const callerRole = callerData.role;
       const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
@@ -910,17 +931,17 @@ exports.sendRelance = onCall(
       const workspaceDoc =
         await db.collection("workspaces").doc(workspaceId).get();
       if (!workspaceDoc.exists) {
-        throw new Error("Espace de travail introuvable");
+        throw new HttpsError("not-found", "Espace de travail introuvable");
       }
       const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
       if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             "Non autorisé : ce chantier n'appartient pas à votre espace " +
             "de travail",
         );
       }
       if (!config.fromRoles.includes(callerRole) && callerRole !== "admin") {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             `Non autorisé : le rôle ${callerRole} ne peut pas envoyer ` +
             "cette relance",
         );
@@ -929,20 +950,24 @@ exports.sendRelance = onCall(
       const devisRef = db.collection("workspaces").doc(workspaceId)
           .collection("devis").doc(devisId);
       const devisSnap = await devisRef.get();
-      if (!devisSnap.exists) throw new Error("Chantier introuvable");
+      if (!devisSnap.exists) {
+        throw new HttpsError("not-found", "Chantier introuvable");
+      }
       const devisData = devisSnap.data();
 
       let current = devisData;
       let targetRef = devisRef;
       if (lotId) {
         const lotSnap = await devisRef.collection("lots").doc(lotId).get();
-        if (!lotSnap.exists) throw new Error("Lot introuvable");
+        if (!lotSnap.exists) {
+          throw new HttpsError("not-found", "Lot introuvable");
+        }
         current = lotSnap.data();
         targetRef = lotSnap.ref;
       }
       const currentStatus = current.status || current.metreurStatus || null;
       if (!config.applicableStatuses.includes(currentStatus)) {
-        throw new Error(
+        throw new HttpsError("failed-precondition",
             "Ce chantier n'est plus dans un état où cette relance a du sens",
         );
       }
@@ -958,7 +983,7 @@ exports.sendRelance = onCall(
         const lastAt = lastRelanceSnap.docs[0].data().at;
         const cooldownMs = (config.cooldownMinutes || 15) * 60 * 1000;
         if (lastAt && Date.now() - lastAt.toMillis() < cooldownMs) {
-          throw new Error(
+          throw new HttpsError("failed-precondition",
               "Relance déjà envoyée il y a moins de " +
               `${config.cooldownMinutes} minutes`,
           );
@@ -1038,7 +1063,7 @@ exports.setLotDependencies = onCall(
     {region: "europe-west1"},
     async (request) => {
       const callerUid = request.auth && request.auth.uid;
-      if (!callerUid) throw new Error("Non autorisé");
+      if (!callerUid) throw new HttpsError("unauthenticated", "Non autorisé");
 
       const data = request.data || {};
       const workspaceId = data.workspaceId;
@@ -1047,21 +1072,29 @@ exports.setLotDependencies = onCall(
       const dependsOn = Array.isArray(data.dependsOn) ? data.dependsOn : [];
 
       if (!workspaceId || !devisId || !lotId) {
-        throw new Error("workspaceId, devisId et lotId sont requis");
+        throw new HttpsError(
+            "invalid-argument",
+            "workspaceId, devisId et lotId sont requis",
+        );
       }
       if (dependsOn.includes(lotId)) {
-        throw new Error("Un lot ne peut pas dépendre de lui-même");
+        throw new HttpsError(
+            "invalid-argument",
+            "Un lot ne peut pas dépendre de lui-même",
+        );
       }
 
       const callerDoc = await db.collection("users").doc(callerUid).get();
-      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      if (!callerDoc.exists) {
+        throw new HttpsError("not-found", "Utilisateur inconnu");
+      }
       const callerData = callerDoc.data();
       const callerRole = callerData.role;
       const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
       // Commercial ajouté pour l'agenda par équipe (Planner) — voir
       // devisWorkflow.js pour le même ajout sur les transitions de statut.
       if (!["metreur", "admin", "commercial"].includes(callerRole)) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             `Non autorisé : le rôle ${callerRole} ne peut pas modifier les ` +
             "dépendances de lots",
         );
@@ -1070,11 +1103,11 @@ exports.setLotDependencies = onCall(
       const workspaceDoc =
         await db.collection("workspaces").doc(workspaceId).get();
       if (!workspaceDoc.exists) {
-        throw new Error("Espace de travail introuvable");
+        throw new HttpsError("not-found", "Espace de travail introuvable");
       }
       const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
       if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             "Non autorisé : ce chantier n'appartient pas à votre espace " +
             "de travail",
         );
@@ -1083,14 +1116,16 @@ exports.setLotDependencies = onCall(
       const devisRef = db.collection("workspaces").doc(workspaceId)
           .collection("devis").doc(devisId);
       const devisSnap = await devisRef.get();
-      if (!devisSnap.exists) throw new Error("Chantier introuvable");
+      if (!devisSnap.exists) {
+        throw new HttpsError("not-found", "Chantier introuvable");
+      }
       const lotIds = devisSnap.data().lotIds || [];
       if (!lotIds.includes(lotId)) {
-        throw new Error("Lot introuvable sur ce chantier");
+        throw new HttpsError("not-found", "Lot introuvable sur ce chantier");
       }
       const invalidIds = dependsOn.filter((id) => !lotIds.includes(id));
       if (invalidIds.length > 0) {
-        throw new Error(
+        throw new HttpsError("invalid-argument",
             `Lot(s) inconnu(s) sur ce chantier : ${invalidIds.join(", ")}`,
         );
       }
@@ -1116,7 +1151,10 @@ exports.setLotDependencies = onCall(
         return false;
       };
       if (hasCycle(lotId, new Set())) {
-        throw new Error("Dépendance cyclique détectée entre lots");
+        throw new HttpsError(
+            "failed-precondition",
+            "Dépendance cyclique détectée entre lots",
+        );
       }
 
       await devisRef.collection("lots").doc(lotId).update({
@@ -1141,7 +1179,7 @@ exports.updateLotPlanningFields = onCall(
     {region: "europe-west1"},
     async (request) => {
       const callerUid = request.auth && request.auth.uid;
-      if (!callerUid) throw new Error("Non autorisé");
+      if (!callerUid) throw new HttpsError("unauthenticated", "Non autorisé");
 
       const data = request.data || {};
       const workspaceId = data.workspaceId;
@@ -1149,18 +1187,23 @@ exports.updateLotPlanningFields = onCall(
       const lotId = data.lotId;
 
       if (!workspaceId || !devisId || !lotId) {
-        throw new Error("workspaceId, devisId et lotId sont requis");
+        throw new HttpsError(
+            "invalid-argument",
+            "workspaceId, devisId et lotId sont requis",
+        );
       }
 
       const callerDoc = await db.collection("users").doc(callerUid).get();
-      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      if (!callerDoc.exists) {
+        throw new HttpsError("not-found", "Utilisateur inconnu");
+      }
       const callerData = callerDoc.data();
       const callerRole = callerData.role;
       const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
       // Commercial ajouté pour l'agenda par équipe (Planner) — voir
       // devisWorkflow.js pour le même ajout sur les transitions de statut.
       if (!["metreur", "admin", "commercial"].includes(callerRole)) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             `Non autorisé : le rôle ${callerRole} ne peut pas modifier les ` +
             "champs de planification d'un lot",
         );
@@ -1169,11 +1212,11 @@ exports.updateLotPlanningFields = onCall(
       const workspaceDoc =
         await db.collection("workspaces").doc(workspaceId).get();
       if (!workspaceDoc.exists) {
-        throw new Error("Espace de travail introuvable");
+        throw new HttpsError("not-found", "Espace de travail introuvable");
       }
       const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
       if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             "Non autorisé : ce chantier n'appartient pas à votre espace " +
             "de travail",
         );
@@ -1182,10 +1225,12 @@ exports.updateLotPlanningFields = onCall(
       const devisRef = db.collection("workspaces").doc(workspaceId)
           .collection("devis").doc(devisId);
       const devisSnap = await devisRef.get();
-      if (!devisSnap.exists) throw new Error("Chantier introuvable");
+      if (!devisSnap.exists) {
+        throw new HttpsError("not-found", "Chantier introuvable");
+      }
       const lotIds = devisSnap.data().lotIds || [];
       if (!lotIds.includes(lotId)) {
-        throw new Error("Lot introuvable sur ce chantier");
+        throw new HttpsError("not-found", "Lot introuvable sur ce chantier");
       }
 
       const patch = {};
@@ -1200,7 +1245,7 @@ exports.updateLotPlanningFields = onCall(
         patch.materielRequis = data.materielRequis;
       }
       if (Object.keys(patch).length === 0) {
-        throw new Error("Aucun champ à mettre à jour");
+        throw new HttpsError("invalid-argument", "Aucun champ à mettre à jour");
       }
 
       await devisRef.collection("lots").doc(lotId).update({
@@ -1227,7 +1272,7 @@ exports.logTimeEntry = onCall(
     {region: "europe-west1"},
     async (request) => {
       const callerUid = request.auth && request.auth.uid;
-      if (!callerUid) throw new Error("Non autorisé");
+      if (!callerUid) throw new HttpsError("unauthenticated", "Non autorisé");
 
       const data = request.data || {};
       const workspaceId = data.workspaceId;
@@ -1238,19 +1283,27 @@ exports.logTimeEntry = onCall(
       const commentaire = data.commentaire;
 
       if (!workspaceId || !devisId || !type) {
-        throw new Error("workspaceId, devisId et type sont requis");
+        throw new HttpsError(
+            "invalid-argument",
+            "workspaceId, devisId et type sont requis",
+        );
       }
       if (!TIME_ENTRY_TYPES.has(type)) {
-        throw new Error(`Type de pointage inconnu : ${type}`);
+        throw new HttpsError(
+            "invalid-argument",
+            `Type de pointage inconnu : ${type}`,
+        );
       }
 
       const callerDoc = await db.collection("users").doc(callerUid).get();
-      if (!callerDoc.exists) throw new Error("Utilisateur inconnu");
+      if (!callerDoc.exists) {
+        throw new HttpsError("not-found", "Utilisateur inconnu");
+      }
       const callerData = callerDoc.data();
       const callerRole = callerData.role;
       const callerWorkspaceId = callerData.workspaceId || callerData.companyId;
       if (!["poseur", "admin"].includes(callerRole)) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             `Non autorisé : le rôle ${callerRole} ne peut pas pointer`,
         );
       }
@@ -1258,11 +1311,11 @@ exports.logTimeEntry = onCall(
       const workspaceDoc =
         await db.collection("workspaces").doc(workspaceId).get();
       if (!workspaceDoc.exists) {
-        throw new Error("Espace de travail introuvable");
+        throw new HttpsError("not-found", "Espace de travail introuvable");
       }
       const isWorkspaceAdmin = workspaceDoc.data().adminUid === callerUid;
       if (!isWorkspaceAdmin && callerWorkspaceId !== workspaceId) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             "Non autorisé : ce chantier n'appartient pas à votre espace " +
             "de travail",
         );
@@ -1274,11 +1327,14 @@ exports.logTimeEntry = onCall(
         devisRef;
       const targetSnap = await targetRef.get();
       if (!targetSnap.exists) {
-        throw new Error(lotId ? "Lot introuvable" : "Chantier introuvable");
+        throw new HttpsError(
+            "not-found",
+            lotId ? "Lot introuvable" : "Chantier introuvable",
+        );
       }
       const poseurIds = targetSnap.data().poseurIds || [];
       if (callerRole === "poseur" && !poseurIds.includes(callerUid)) {
-        throw new Error(
+        throw new HttpsError("permission-denied",
             "Non autorisé : vous n'êtes pas assigné à ce chantier",
         );
       }

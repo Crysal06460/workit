@@ -256,7 +256,7 @@ class _ScheduledList extends StatelessWidget {
           item,
           workspaceId: workspaceId,
           meta: rdv.isNotEmpty ? '📅 RDV le $rdv' : 'Métré programmé',
-          badge: _quoteBadge('Devis prog.', AppColors.purple),
+          badge: _quoteBadge('Métré prog.', AppColors.purple),
           onTap: () => _showChantierDetail(context, item, workspaceId),
         );
       },
@@ -335,7 +335,7 @@ class _AllItemsList extends StatelessWidget {
           case 'Acceptée':
             badge = 'En attente'; badgeColor = AppColors.warning; break;
           case 'En cours':
-            badge = 'Devis prog.'; badgeColor = AppColors.purple; break;
+            badge = 'Métré prog.'; badgeColor = AppColors.purple; break;
           case 'À commander':
           case 'Commande en cours':
             badge = item.status!; badgeColor = AppColors.amber; break;
