@@ -5,6 +5,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/widgets/wi_swipe_back.dart';
 import 'team_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -88,7 +89,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         centerTitle: true,
       ),
-      body: SafeArea(
+      body: WiSwipeBack(child: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -181,7 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

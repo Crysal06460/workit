@@ -1,6 +1,9 @@
 /**
  * WorkIt — Reset base de données
- * Supprime tous les devis de tous les workspaces
+ * Supprime tous les devis (chantiers) de tous les workspaces, avec leurs
+ * sous-collections (lots, statusHistory, messages), ainsi que les
+ * notifications et stats qui en découlent. Ne touche ni aux workspaces,
+ * ni aux users, ni aux équipes de planning, ni aux audit logs.
  * Usage : node scripts/reset_devis.js
  */
 
@@ -20,7 +23,8 @@ async function main() {
     process.exit(0);
   }
 
-  let totalDeleted = 0;
+  let totalDevis = 0;
+  let totalOther = 0;
 
   for (const wsDoc of workspacesSnap.docs) {
     const wsName = wsDoc.data().companyName ?? wsDoc.id;
@@ -30,30 +34,29 @@ async function main() {
       .collection('devis')
       .get();
 
-    if (devisSnap.empty) {
-      console.log(`  Workspace "${wsName}" — aucun devis.`);
-      continue;
+    for (const doc of devisSnap.docs) {
+      await db.recursiveDelete(doc.ref);
+      totalDevis += 1;
     }
 
-    // Firestore batch delete (max 500 par batch)
-    const chunks = [];
-    for (let i = 0; i < devisSnap.docs.length; i += 400) {
-      chunks.push(devisSnap.docs.slice(i, i + 400));
-    }
-
-    for (const chunk of chunks) {
-      const batch = db.batch();
-      for (const doc of chunk) {
-        batch.delete(doc.ref);
+    let wsOther = 0;
+    for (const sub of ['notifications', 'stats']) {
+      const subSnap = await db
+        .collection('workspaces')
+        .doc(wsDoc.id)
+        .collection(sub)
+        .get();
+      for (const doc of subSnap.docs) {
+        await db.recursiveDelete(doc.ref);
+        wsOther += 1;
       }
-      await batch.commit();
-      totalDeleted += chunk.length;
     }
+    totalOther += wsOther;
 
-    console.log(`  ✅ Workspace "${wsName}" — ${devisSnap.docs.length} devis supprimés`);
+    console.log(`  ✅ Workspace "${wsName}" — ${devisSnap.size} devis + ${wsOther} notifications/stats supprimés`);
   }
 
-  console.log(`\n✅ Done — ${totalDeleted} devis supprimés au total.`);
+  console.log(`\n✅ Done — ${totalDevis} devis et ${totalOther} notifications/stats supprimés au total.`);
   console.log('   La base est vierge. Tu peux créer un nouveau devis côté commercial.\n');
   process.exit(0);
 }

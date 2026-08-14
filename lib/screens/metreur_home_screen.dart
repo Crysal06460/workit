@@ -17,7 +17,9 @@ import '../core/theme/app_colors.dart';
 import '../core/utils/recent_chantiers.dart';
 import '../core/widgets/wi_devis_list_modal.dart';
 import '../core/widgets/wi_recent_chantiers_section.dart';
+import '../core/widgets/wi_swipe_back.dart';
 import '../services/devis_service.dart';
+import '../services/document_engine.dart';
 import '../services/document_engine.dart';
 
 const Color _metreurBg = AppColors.background;
@@ -144,7 +146,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
       }
       final item = _MeasureCardData.fromMap(map);
       final status = item.status;
-      if (status == 'En cours') {
+      if (status == 'Acceptée' || status == 'En cours') {
         accepted.add(item);
       } else if (status == 'À commander' || status == 'Commande en cours') {
         toOrder.add(item);
@@ -280,9 +282,9 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Gestion chantiers',
-                style: TextStyle(
+              Text(
+                _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()} 👋' : 'Bonjour 👋',
+                style: const TextStyle(
                   color: AppColors.grey900,
                   fontWeight: FontWeight.w800,
                   fontSize: 22,
@@ -296,8 +298,29 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
             ],
           ),
           actions: [
-            GestureDetector(
-              onTap: () async {
+            Container(
+              width: 40,
+              height: 40,
+              decoration: const BoxDecoration(
+                color: AppColors.purple,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                _initials(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: AppColors.grey400, size: 22),
+              tooltip: 'Déconnexion',
+              onPressed: () async {
                 await FirebaseAuth.instance.signOut();
                 if (!mounted) return;
                 Navigator.of(context).pushAndRemoveUntil(
@@ -305,25 +328,8 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                   (_) => false,
                 );
               },
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: const BoxDecoration(
-                  color: AppColors.purple,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  _initials(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 10),
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(52),
@@ -402,19 +408,19 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                       chipRow([
                         _StatChip(
                           label: 'En attente', count: attente.length,
-                          color: AppColors.warning, bg: AppColors.warningLight,
+                          color: AppColors.warning,
                           onTap: () => WiDevisListModal.show(context,
                               title: 'En attente', items: attente.map((e) => _toSummary(context, e)).toList()),
                         ),
                         _StatChip(
                           label: 'À commander', count: commander.length,
-                          color: AppColors.amber, bg: AppColors.warningLight,
+                          color: AppColors.amber,
                           onTap: () => WiDevisListModal.show(context,
                               title: 'À commander', items: commander.map((e) => _toSummary(context, e)).toList()),
                         ),
                         _StatChip(
                           label: 'À planifier', count: planifier.length,
-                          color: AppColors.primary, bg: AppColors.primaryLight,
+                          color: AppColors.primary,
                           onTap: () => WiDevisListModal.show(context,
                               title: 'À planifier', items: planifier.map((e) => _toSummary(context, e)).toList()),
                         ),
@@ -423,19 +429,19 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                       chipRow([
                         _StatChip(
                           label: 'En pose', count: pose.length,
-                          color: AppColors.purple, bg: AppColors.purpleLight,
+                          color: AppColors.purple,
                           onTap: () => WiDevisListModal.show(context,
                               title: 'En pose', items: pose.map((e) => _toSummary(context, e)).toList()),
                         ),
                         _StatChip(
                           label: 'Terminé', count: termine.length,
-                          color: AppColors.success, bg: AppColors.successLight,
+                          color: AppColors.success,
                           onTap: () => WiDevisListModal.show(context,
                               title: 'Terminé', items: termine.map((e) => _toSummary(context, e)).toList()),
                         ),
                         _StatChip(
                           label: 'SAV', count: sav.length,
-                          color: AppColors.danger, bg: AppColors.dangerLight,
+                          color: AppColors.danger,
                           onTap: () => WiDevisListModal.show(context,
                               title: 'SAV', items: sav.map((e) => _toSummary(context, e)).toList()),
                         ),
@@ -507,7 +513,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
           title: const Text('Planner', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
           iconTheme: const IconThemeData(color: AppColors.grey600),
         ),
-        body: PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleMetteur),
+        body: WiSwipeBack(child: PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleMetteur)),
       ),
     ));
   }
@@ -644,7 +650,14 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
           onAskInfo: () => _askForInfo(context, data),
           onSchedule: () => _scheduleMeeting(data),
           onConfirmOrder: () => _confirmOrder(context, data),
-          onSchedulePose: () => _schedulePose(context, data),
+          onSchedulePose: () {
+            // Planifier la pose se fait maintenant depuis l'agenda (glisser-
+            // déposer le chantier — encore en backlog "À planifier" — sur la
+            // bonne date), plutôt que via l'ancien sélecteur date/heure/
+            // poseurs autonome (`_schedulePose`, conservé mais plus appelé).
+            Navigator.of(context).pop();
+            _openPlanner();
+          },
           onRefresh: _loadRequests,
         ),
       ),
@@ -1498,18 +1511,20 @@ class _MetPillTab extends StatelessWidget {
   }
 }
 
+// Même design que `WiStat`/`WiStatRow` côté commercial (carte blanche,
+// ombre légère, chiffre centré coloré + libellé gris) — la grille 2x3
+// existante est conservée pour garder les 6 vignettes visibles sans
+// scroll horizontal (contrairement à `WiStatRow` au-delà de 3 stats).
 class _StatChip extends StatelessWidget {
   const _StatChip({
     required this.label,
     required this.count,
     required this.color,
-    required this.bg,
     this.onTap,
   });
   final String label;
   final int count;
   final Color color;
-  final Color bg;
   final VoidCallback? onTap;
 
   @override
@@ -1517,26 +1532,195 @@ class _StatChip extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
           decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.cardBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 '$count',
-                style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 20),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color),
               ),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: AppColors.grey400),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Vue lecture seule du métré déjà réalisé — remplace l'ancien accès direct
+/// au formulaire d'édition une fois le statut passé en "À commander" (voir
+/// `_openMetreDetail`). Le bouton "Imprimer le métré" réutilise le même
+/// moteur de documents (`bon_commande`, mesures incluses) que le bouton
+/// imprimante du formulaire de prise de mesure.
+class _MetreDetailScreen extends StatefulWidget {
+  const _MetreDetailScreen({required this.data, required this.workspaceId});
+  final _MeasureCardData data;
+  final String? workspaceId;
+
+  @override
+  State<_MetreDetailScreen> createState() => _MetreDetailScreenState();
+}
+
+class _MetreDetailScreenState extends State<_MetreDetailScreen> {
+  bool _printing = false;
+
+  Future<void> _printMetre() async {
+    final workspaceId = widget.workspaceId;
+    if (workspaceId == null) return;
+    setState(() => _printing = true);
+    try {
+      await DocumentEngine.generateAndShare(
+        templateId: 'bon_commande',
+        workspaceId: workspaceId,
+        devisId: widget.data.id,
+        devisData: (widget.data.draft ?? const _QuoteDraft()).toMap(),
+        generatedByRole: 'metreur',
+        products: (widget.data.draft?.products ?? const <_ProductFormData>[]).map((e) => e.toMap()).toList(),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Impossible de générer le métré.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _printing = false);
+    }
+  }
+
+  Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label : ', style: const TextStyle(color: AppColors.grey400, fontSize: 13)),
+          Expanded(
+            child: Text(value, style: const TextStyle(color: AppColors.grey900, fontSize: 13, fontWeight: FontWeight.w500)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final products = widget.data.draft?.products ?? const <_ProductFormData>[];
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.grey600),
+        title: Text(
+          'Métré — ${widget.data.title}',
+          style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(widget.data.address, style: const TextStyle(color: AppColors.grey400, fontSize: 13)),
+            const SizedBox(height: 16),
+            ...products.asMap().entries.map((entry) {
+              final i = entry.key;
+              final p = entry.value;
+              final hasMeasurements = (p.largeurReelle?.isNotEmpty == true) ||
+                  (p.hauteurReelle?.isNotEmpty == true) ||
+                  (p.note?.isNotEmpty == true) ||
+                  (p.cjHaut?.isNotEmpty == true);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.grey50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.grey100),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _metreurAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'Élément ${i + 1}',
+                        style: const TextStyle(color: _metreurAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (p.categoryKey != null) _row('Catégorie', p.categoryKey!),
+                    if (p.sousCategorie != null) _row('Type', p.sousCategorie!),
+                    if (p.couleur != null) _row('Couleur', p.couleur!),
+                    if (p.largeur != null || p.hauteur != null)
+                      _row('Dim. prévue', '${p.largeur ?? '-'} x ${p.hauteur ?? '-'} ${p.unite}'),
+                    if (hasMeasurements) ...[
+                      const Divider(height: 20, color: AppColors.grey100),
+                      if (p.largeurReelle?.isNotEmpty == true || p.hauteurReelle?.isNotEmpty == true)
+                        _row('Dim. réelle', '${p.largeurReelle ?? '-'} x ${p.hauteurReelle ?? '-'} ${p.unite}'),
+                      if (p.cjHaut?.isNotEmpty == true) _row('Cote jour haut', p.cjHaut!),
+                      if (p.note?.isNotEmpty == true) _row('Note métreur', p.note!),
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _metreurAccent,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                elevation: 0,
+              ),
+              onPressed: _printing ? null : _printMetre,
+              icon: _printing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                    )
+                  : const Icon(Icons.print_outlined),
+              label: const Text('Imprimer le métré'),
+            ),
           ),
         ),
       ),
@@ -1657,6 +1841,8 @@ class _MetCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
+                        WiUnreadMessageBadge(devisId: data.id, workspaceId: data.workspaceId),
+                        const SizedBox(width: 6),
                         _MetStatusBadge(status: data.status, accent: accent),
                       ],
                     ),
@@ -1705,7 +1891,7 @@ class _MetCard extends StatelessWidget {
                             ),
                             onPressed: onTap,
                             child: const Text(
-                              'Voir devis',
+                              'Voir détails',
                               style: TextStyle(
                                 color: AppColors.grey700,
                                 fontWeight: FontWeight.w600,
@@ -2182,6 +2368,15 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
     }
   }
 
+  void _openMetreDetail(_MeasureCardData data) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => _MetreDetailScreen(
+        data: data,
+        workspaceId: data.workspaceId ?? widget.workspaceId,
+      ),
+    ));
+  }
+
   Future<void> _openMeasurementForm(int initialIndex) async {
     final data = _data;
     // Navigate to Measurement Form and await result
@@ -2628,7 +2823,11 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () => _confirmOrderLot(lot),
-                child: const Text('Confirmer la commande', style: TextStyle(fontSize: 12)),
+                child: const Text(
+                  'Confirmer la commande',
+                  style: TextStyle(fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
               )
             : OutlinedButton(
                 onPressed: null,
@@ -2719,6 +2918,34 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
     );
   }
 
+  // Titre d'en-tête reflétant l'étape réelle du chantier — figé sur
+  // "Demande de métré" jusque-là même une fois la commande passée (bug
+  // constaté en test réel : le métré et la commande étaient faits, l'en-tête
+  // n'avait pas bougé).
+  String _titleForStatus(String? status) {
+    switch (status) {
+      case 'Acceptée':
+      case 'En cours':
+        return 'En attente de métré';
+      case 'À commander':
+      case 'Commande en cours':
+        return 'En attente de commande';
+      case 'À planifier':
+        return 'En attente de plannification';
+      case 'En pose':
+        return 'En attente de pose';
+      case 'À clôturer':
+        return 'En attente de clôture';
+      case 'Terminé':
+      case 'Clôturé':
+        return 'Chantier terminé';
+      case 'SAV':
+        return 'SAV';
+      default:
+        return 'Demande de métré';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = _data;
@@ -2731,9 +2958,9 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
           icon: const Icon(Icons.arrow_back_ios, color: AppColors.grey900, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          'Demande de métré',
-          style: TextStyle(
+        title: Text(
+          _titleForStatus(data.status),
+          style: const TextStyle(
             color: AppColors.grey900,
             fontWeight: FontWeight.w800,
           ),
@@ -2822,18 +3049,43 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                     const SizedBox(height: 12),
                     const SizedBox(height: 12),
                     if (data.draft != null && data.draft!.products.isNotEmpty)
-                      Column(
+                      Builder(builder: (context) {
+                        // Une fois le métré fait (statut au-delà de
+                        // Acceptée/En cours), la section devient "à
+                        // commander" : on n'édite plus élément par élément,
+                        // on consulte/imprime le métré déjà réalisé.
+                        final metreDone = data.status != null &&
+                            data.status != 'Nouvelle demande' &&
+                            data.status != 'Acceptée' &&
+                            data.status != 'En cours';
+                        return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const // Section Title
                           Text(
-                            'Éléments à métrer',
-                            style: TextStyle(
+                            metreDone ? 'Éléments à commander' : 'Éléments à métrer',
+                            style: const TextStyle(
                               color: AppColors.grey900,
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
                             ),
                           ),
+                          if (metreDone) ...[
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(color: _metreurAccent),
+                                  foregroundColor: _metreurAccent,
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                onPressed: () => _openMetreDetail(data),
+                                icon: const Icon(Icons.straighten_outlined),
+                                label: const Text('Voir le métré'),
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 10),
                           ...data.draft!.products.asMap().entries.map((entry) {
                             final i = entry.key;
@@ -2866,7 +3118,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                             return Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                onTap: () => _openMeasurementForm(i),
+                                onTap: metreDone ? () => _openMetreDetail(data) : () => _openMeasurementForm(i),
                                 borderRadius: BorderRadius.circular(16),
                                 child: Container(
                                   margin: const EdgeInsets.only(bottom: 12),
@@ -2918,17 +3170,6 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                                       if (p.couleur != null) _buildRow('Couleur', p.couleur!),
                                       if (p.largeur != null || p.hauteur != null)
                                         _buildRow('Dim', '${p.largeur ?? '-'} x ${p.hauteur ?? '-'} ${p.unite}'),
-                                      
-                                      // Add a subtle hint that it's clickable
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: const [
-                                          Text('Modifier', style: TextStyle(color: _metreurAccent, fontSize: 12, fontWeight: FontWeight.bold)),
-                                          SizedBox(width: 4),
-                                          Icon(Icons.edit, size: 14, color: _metreurAccent),
-                                        ],
-                                      )
                                     ],
                                   ),
                                 ),
@@ -2936,7 +3177,8 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                             );
                           }),
                         ],
-                      )
+                      );
+                      })
                     else if (data.summary.isNotEmpty)
                       _GlassCard(
                         child: Column(
@@ -3017,33 +3259,15 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                 ),
               ),
             ),
-            // Phase 3 (multi-lots) : une fois le métré terminé et les lots
-            // créés, chaque lot avance indépendamment (bouton dédié,
-            // dépendances) plutôt que via le bouton unique ci-dessous.
-            if (data.lotIds.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Lots',
-                      style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800, fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    if (_lots.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text('Chargement des lots…', style: TextStyle(color: AppColors.grey400)),
-                      )
-                    else
-                      ..._lots.map(_lotActionRow),
-                  ],
-                ),
-              ),
+            // Section "Lots" (Phase 3 multi-lots) retirée de cet écran —
+            // sa carte ne rendait rien d'exploitable ici (cas confirmé en
+            // test réel sur un devis mono-lot passé en "En pose" : ligne
+            // vide) et faisait doublon avec le suivi lot par lot déjà
+            // disponible depuis l'agenda. `_lots`/`_lotActionRow` restent
+            // en place, simplement plus affichés depuis cette fiche.
             if (data.status == 'À planifier' || data.status == 'En pose')
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
                 child: SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -3096,6 +3320,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                     }
                     switch (data.status) {
                       case 'Acceptée':
+                      case 'En cours':
                         return Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
@@ -3148,7 +3373,10 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                                     elevation: 0,
                                   ),
                                   onPressed: widget.onConfirmOrder,
-                                  child: const Text('Confirmer la commande'),
+                                  child: const Text(
+                                    'Confirmer la commande',
+                                    textAlign: TextAlign.center,
+                                  ),
                                 )
                               : Container(
                                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -3434,25 +3662,10 @@ class _MetNavItem extends StatelessWidget {
   }
 }
 
-// ─── Données de démonstration ─────────────────────────────────────────────────
-final _kDemoNewRequests = <_MeasureCardData>[
-  _MeasureCardData(id: 'demo1', title: 'Dupont Jean', address: '14 rue Ledru-Rollin, Paris 15e', note: 'Nouvelle demande', status: 'Nouvelle demande', updated: 'Il y a 2 jours', phone: '06 12 34 56 78'),
-  _MeasureCardData(id: 'demo2', title: 'Rousseau Claire', address: '7 bd Victor Hugo, Nice', note: 'Nouveau', status: 'Nouvelle demande', updated: 'Il y a 3 jours', phone: '06 98 76 54 32'),
-];
-
-final _kDemoAccepted = <_MeasureCardData>[
-  _MeasureCardData(id: 'demo3', title: 'Martin Sophie', address: '8 avenue des Arts, Lyon 3e', note: 'RDV Mer 02/07 à 09h00', status: 'En cours', updated: 'RDV programmé', phone: '06 55 44 33 22', meetingAt: DateTime.now().add(const Duration(days: 3))),
-];
-
-final _kDemoToOrder = <_MeasureCardData>[
-  _MeasureCardData(id: 'demo4', title: 'Laurent Céline', address: '5 impasse des Pins, Toulouse', note: 'Métré validé — à commander', status: 'À commander', updated: 'Devis accepté'),
-];
-
-final _kDemoPlan = <_MeasureCardData>[
-  _MeasureCardData(id: 'demo5', title: 'Bernard Marc', address: '22 quai de la Loire, Nantes', note: 'Pose à programmer', status: 'À planifier', updated: 'Commande reçue'),
-  _MeasureCardData(id: 'demo6', title: 'Petit Thomas', address: '3 allée des Roses, Bordeaux', note: 'En cours de pose', status: 'En pose', updated: 'Équipe sur place'),
-];
-
-final _kDemoToClose = <_MeasureCardData>[
-  _MeasureCardData(id: 'demo7', title: 'Moreau Julie', address: '17 rue du Moulin, Strasbourg', note: 'Travaux terminés', status: 'Terminé', updated: 'Terminé le 26/06'),
-];
+// Données de démonstration retirées (2026-08-14) — l'app n'affiche plus que
+// les vrais chantiers Firestore, plus aucune vignette codée en dur.
+final _kDemoNewRequests = <_MeasureCardData>[];
+final _kDemoAccepted = <_MeasureCardData>[];
+final _kDemoToOrder = <_MeasureCardData>[];
+final _kDemoPlan = <_MeasureCardData>[];
+final _kDemoToClose = <_MeasureCardData>[];

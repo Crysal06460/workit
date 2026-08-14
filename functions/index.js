@@ -11,6 +11,7 @@ const {setGlobalOptions} = require("firebase-functions");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const {onDocumentWritten, onDocumentCreated} =
   require("firebase-functions/v2/firestore");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
@@ -23,6 +24,7 @@ const {
   getTokenByUid,
   sendNotification,
   writeInAppNotification,
+  formatFrDateTime,
 } = require("./notifyHelpers");
 const {
   findTransition, notifyTransition,
@@ -1536,4 +1538,68 @@ exports.onChantierMessageCreated = onDocumentCreated(
 
       return null;
     });
+
+// ─── Cloud Function planifiée : checkUpcomingMetres ─────────────────────────
+
+/**
+ * Toutes les 30 minutes, alerte le métreur assigné quand un rendez-vous de
+ * métré (devis en statut "En cours", champ `meetingAt`) approche — une fois
+ * à J-1 (entre 24h et 23h avant) puis une fois à H-2 (entre 2h et 1h30
+ * avant). Un flag sur le document (`metreAlertJ1Sent`/`metreAlertH2Sent`)
+ * évite les doublons si l'exécution est retardée ou relancée.
+ */
+exports.checkUpcomingMetres = onSchedule("every 30 minutes", async () => {
+  const now = Date.now();
+  const workspacesSnap = await db.collection("workspaces").get();
+
+  for (const ws of workspacesSnap.docs) {
+    const devisSnap = await db.collection("workspaces").doc(ws.id)
+        .collection("devis")
+        .where("status", "==", "En cours")
+        .get();
+
+    for (const doc of devisSnap.docs) {
+      const devis = doc.data();
+      if (!devis.meetingAt || !devis.metreurId) continue;
+
+      const meetingAt = new Date(devis.meetingAt);
+      if (Number.isNaN(meetingAt.getTime())) continue;
+      const hoursUntil = (meetingAt.getTime() - now) / 3600000;
+      const client = devis.clientName || devis.client || "un chantier";
+      const {dateTimeStr} = formatFrDateTime(meetingAt);
+
+      const alerts = [
+        {
+          flag: "metreAlertJ1Sent",
+          active: hoursUntil <= 24 && hoursUntil > 23,
+          title: "⏰ Métré demain",
+          body: `Attention, métré du chantier de ${client} ` +
+            `prévu demain ${dateTimeStr}.`,
+        },
+        {
+          flag: "metreAlertH2Sent",
+          active: hoursUntil <= 2 && hoursUntil > 1.5,
+          title: "⏰ Métré dans 2h",
+          body: `Attention, métré du chantier de ${client} ` +
+            `prévu à ${dateTimeStr}.`,
+        },
+      ];
+
+      for (const alert of alerts) {
+        if (!alert.active || devis[alert.flag]) continue;
+        try {
+          const tokens = await getTokenByUid(devis.metreurId);
+          await sendNotification(tokens, alert.title, alert.body, {
+            workspaceId: ws.id, devisId: doc.id, type: "metre_alert",
+          });
+          await doc.ref.update({[alert.flag]: true});
+        } catch (e) {
+          logger.error("checkUpcomingMetres alert error:", e);
+        }
+      }
+    }
+  }
+
+  return null;
+});
 

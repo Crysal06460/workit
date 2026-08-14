@@ -1,6 +1,99 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-13 (suite 5) — Courte session de test en direct sur l'iPhone physique de
+**Dernière mise à jour :** 2026-08-14 — Grosse session de test en direct dans 2 simulateurs iOS en parallèle
+(Commercial sur iPhone 17 Pro Max, Métreur sur iPhone 17 Pro), pilotée par Christophe qui naviguait dans les
+deux apps en même temps. Deux phases : (1) une liste de 14 demandes UI/UX/logique métier données d'un coup en
+début de session, traitées une par une (voir détail ci-dessous) ; (2) du test en direct sur les corrections qui
+a fait remonter 3 bugs supplémentaires, trouvés et corrigés dans la foulée. Avant de commencer, la base
+Firestore a été entièrement vidée (tous les faux chantiers de test + notifications/stats associées, script
+`scripts/reset_devis.js` étendu pour supprimer récursivement) et les vignettes de démo codées en dur
+(`_kDemoDevis` côté commercial, `_kDemo*` côté métreur) ont été mises à zéro — l'app n'affiche plus que du vrai
+Firestore. **Tout commité et poussé sur `origin/main`** à la fin de session (redémarrage Mac de Christophe).
+
+## 🆕 Session 2026-08-14 — 14 demandes UI/UX/métier + 3 bugs trouvés en test réel
+
+### Les 14 demandes initiales (métreur/commercial)
+1. **Agenda ouvrait sur Équipe 2** au lieu d'Équipe 1 — bug de tri : la requête `planningTeams` n'avait pas
+   d'`orderBy`, l'ordre Firestore par défaut (par ID doc) faisait remonter Équipe 2 en premier alors qu'elle
+   a été créée après. Fix : `.orderBy('createdAt')`.
+2. **Renommage des équipes de pose** — la fonctionnalité existait déjà (nom + membres) mais seulement
+   accessible en layout desktop (tap sur l'en-tête de colonne). Exposée sur mobile via une icône crayon à côté
+   du sélecteur d'équipe (`planner_screen.dart`).
+3. **Header métreur aligné sur commercial** — "Bonjour {prénom} 👋" au lieu du titre statique "Gestion
+   chantiers", et un vrai bouton déconnexion visible (avant : il fallait taper sur l'avatar sans aucune icône
+   ni indice visuel).
+4. **Pastilles métreur redessinées** au style commercial (`WiStat`/`WiStatRow`) : carte blanche, ombre légère,
+   chiffre centré coloré 22px, libellé gris — grille 2×3 conservée (au lieu du scroll horizontal de
+   `WiStatRow` au-delà de 3 stats) pour garder les 6 vignettes visibles sans scroll.
+5. Onglet bas commercial **"Devis" → "Accueil"** (icône `home_outlined`/`home_rounded`, alignée sur le libellé
+   déjà utilisé côté métreur).
+6. **Swipe droite pour revenir à l'Accueil** depuis Agenda/Réglages, sur commercial/métreur/poseur (nouveau
+   widget partagé `lib/core/widgets/wi_swipe_back.dart`, zone de déclenchement limitée au bord gauche de
+   l'écran pour ne pas entrer en conflit avec le glisser-déposer de l'agenda). Non appliqué à l'onglet
+   "Planner" de l'admin — c'est un onglet dans un `TabBar`, pas un écran empilé, pas d'"Accueil" à retrouver.
+7. **"Voir le devis" → "Voir détails"** côté métreur (`_MetCard`), pour matcher le libellé déjà utilisé côté
+   commercial.
+8. **Bouton "Modifier" retiré** des cartes "Élément à métrer" côté métreur (hint texte+icône en bas de carte,
+   jugé superflu).
+9. **Alertes J-1/H-2 avant un métré** — nouvelle Cloud Function planifiée `checkUpcomingMetres`
+   (`functions/index.js`, `onSchedule("every 30 minutes")`), **déployée en prod** sur `workit-1daa1`. Scanne
+   les devis en statut "En cours" avec `meetingAt` + `metreurId`, notifie uniquement le métreur assigné (push
+   FCM via `getTokenByUid`) à J-1 puis H-2, avec des flags `metreAlertJ1Sent`/`metreAlertH2Sent` sur le
+   document pour éviter les doublons.
+10. **Bug "Accepter la demande" qui restait affiché** après acceptation — cause racine trouvée : la
+    catégorisation de la liste d'accueil (`_onDevisSnapshot`) ne reconnaissait que le statut `'En cours'` pour
+    la case "acceptées", alors que le bouton "Accepter" écrit `'Acceptée'` — l'écart entre ces deux valeurs
+    faisait retomber le devis fraîchement accepté dans le tas "Nouvelle demande". Fix des deux côtés
+    (catégorisation + switch du bouton dans `_MeasureRequestSummary`) pour traiter `'Acceptée'` et `'En cours'`
+    ensemble, cohérent avec le reste du fichier (`_step`/`_ctaLabel`/`_accentColor` le faisaient déjà).
+11. **Bouton "Confirmer la commande" mal centré sur 2 lignes** — `textAlign: TextAlign.center` ajouté sur les
+    deux occurrences (fiche détail + ligne d'action par lot).
+12. Une fois le métré fait : titre **"Éléments à commander"** (au lieu de "Élément à métrer"), nouveau bouton
+    **"Voir le métré"** ouvrant un écran de lecture dédié (`_MetreDetailScreen`, nouvelle classe) listant
+    toutes les mesures réelles, avec bouton **"Imprimer le métré"** en bas réutilisant le moteur de documents
+    existant (`DocumentEngine.generateAndShare(templateId: 'bon_commande')`, déjà utilisé ailleurs — aucune
+    nouvelle logique PDF à écrire).
+13. **Pastille "messages non lus" visible depuis l'Accueil** — nouveau widget partagé
+    `WiUnreadMessageBadge` (`chantier_chat_screen.dart`), branché sur les cartes commercial (`WiDevisCard`) et
+    métreur (`_MetCard`). Couvre commercial + métreur seulement (poseur/admin pas encore câblés, faute de
+    temps).
+14. **Refonte planification de pose** (le plus gros morceau) : chaque glisser-déposer dans l'agenda (nouveau
+    depuis le backlog, ou déplacement d'une pose déjà planifiée) ouvre désormais un popup
+    (`_PoseAssignmentSheet`, nouvelle classe) pour confirmer date + heure + équipe avant d'écrire dans
+    Firestore — avant, le drop écrivait directement sans étape de confirmation ni choix d'heure. Taper sur une
+    pose déjà planifiée dans la grille affiche "Prévu le X à Xh par équipe X" + bouton "Modifier" (réouvre le
+    même popup, calendrier standard via `showDatePicker`/`showTimePicker`). Le bouton "Programmer la pose"
+    côté métreur redirige maintenant vers l'agenda (le chantier apparaît déjà dans le backlog "À planifier")
+    au lieu de l'ancien sélecteur autonome date/heure/poseurs (`_schedulePose`, laissé en place mais plus
+    appelé — dead code assumé, même précédent que d'autres méthodes déjà non utilisées dans ce fichier).
+
+### 3 bugs trouvés en testant les corrections ci-dessus
+- **Section "Lots" cassée** dans la fiche détail métreur : pour un devis mono-lot passé en "En pose", la
+  carte de lot (`_lotActionRow`) ne rendait quasiment rien (constaté par debug visuel avec couleurs
+  temporaires rouge/vert) — juste le titre "Lots" flottant au-dessus d'un espace vide, gênant la lecture du
+  reste de la fiche. Christophe a préféré **retirer la section entièrement** de cet écran (`_lots`/
+  `_lotActionRow` gardés en code, juste plus affichés) plutôt que déboguer le composant — fait doublon de
+  toute façon avec le suivi lot par lot déjà présent dans l'agenda.
+- **Titre d'en-tête figé sur "Demande de métré"** peu importe l'avancement réel (constaté : métré ET commande
+  faits, toujours "Demande de métré" affiché). Nouveau mapping statut → titre (`_titleForStatus`) : Demande de
+  métré → En attente de métré (Acceptée/En cours) → En attente de commande (À commander/Commande en cours) →
+  En attente de plannification (À planifier) → En attente de pose (En pose), + Terminé/Clôturé/SAV/À clôturer.
+- **Pastille messages non lus qui comptait les messages qu'on a soi-même envoyés** — pas juste ceux reçus non
+  lus, donc le compteur montait sans rapport avec un vrai message non lu pendant les tests en va-et-vient entre
+  les deux simulateurs. Fix : exclusion de `senderId == currentUid` dans `WiUnreadMessageBadge` ET dans le
+  petit point rouge de `ChatEntryButton` (même bug, préexistant, pas ajouté cette session).
+
+### État à la reprise
+Les 3 bugs de test réel ci-dessus sont corrigés et poussés, mais **pas re-testés en live après le dernier
+correctif** (Christophe a dû redémarrer son Mac juste après). À la reprise : relancer les 2 simulateurs
+(iPhone 17 Pro = métreur, iPhone 17 Pro Max = commercial), se reconnecter
+(`metreur@workit-test.fr`/`commercial@workit-test.fr`, mdp `Workit2026!`, workspace "Ambiance Alu"), et
+reprendre le test en direct là où il s'est arrêté — en particulier vérifier que la pastille de messages non
+lus se comporte bien (apparaît côté destinataire seulement, disparaît après ouverture du chat). Les 2 bugs non
+corrigés de la session d'hier soir (App Check qui échoue en boucle, overflow `commercial_home_screen.dart:316`)
+restent ouverts, pas retouchés aujourd'hui.
+
+## 🆕 Session 2026-08-13 (suite 5) — Courte session de test en direct sur l'iPhone physique de
 Christophe (branché USB, `flutter run`). App installée et lancée avec succès (build 98,6s), mais la connexion
 au device a été perdue avant qu'un vrai test de connexion Commercial/Métreur ait pu se faire. Deux pistes
 identifiées dans les logs avant la coupure, **non corrigées** : (1) `App attestation failed` (403,

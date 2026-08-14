@@ -373,52 +373,6 @@ class _QuoteItem {
   }
 }
 
-// ─── Données de démonstration ─────────────────────────────────────────────────
-final _kDemoDevis = <_QuoteItem>[
-  _QuoteItem(
-    client: 'Dupont Jean', address: '14 rue Ledru-Rollin, Paris 15e',
-    number: '#5001', date: 'Il y a 2 jours', tag: 'Nouvelle demande', status: null,
-    phone: '06 12 34 56 78', email: 'dupont@email.fr',
-    assignedMetreurName: 'Pascal M.',
-  ),
-  _QuoteItem(
-    client: 'Martin Sophie', address: '8 avenue des Arts, Lyon 3e',
-    number: '#5002', date: 'Il y a 5 jours', tag: 'En cours', status: 'En cours',
-    assignedMetreurName: 'Pascal M.',
-    meetingAt: DateTime.now().add(const Duration(days: 2)),
-  ),
-  _QuoteItem(
-    client: 'Bernard Marc', address: '22 quai de la Loire, Nantes',
-    number: '#5003', date: 'Il y a 8 jours', tag: 'À planifier', status: 'À planifier',
-    assignedMetreurName: 'Pascal M.',
-  ),
-  _QuoteItem(
-    client: 'Laurent Céline', address: '5 impasse des Pins, Toulouse',
-    number: '#5004', date: 'Il y a 10 jours', tag: 'Commande en cours', status: 'Commande en cours',
-    assignedMetreurName: 'Pascal M.',
-    metreurNote: 'Grille d\'aération à retirer de la commande : le conduit de VMC '
-        'passe déjà par là, pas besoin.',
-    metreurNoteName: 'Pascal M.',
-  ),
-  _QuoteItem(
-    client: 'Petit Thomas', address: '3 allée des Roses, Bordeaux',
-    number: '#5005', date: 'Il y a 12 jours', tag: 'En pose', status: 'En pose',
-    assignedMetreurName: 'Pascal M.',
-    poseurNames: 'Équipe A',
-    poseDate: DateTime.now(),
-  ),
-  _QuoteItem(
-    client: 'Moreau Julie', address: '17 rue du Moulin, Strasbourg',
-    number: '#5006', date: 'Il y a 20 jours', tag: 'Terminé', status: 'Terminé',
-    assignedMetreurName: 'Pascal M.',
-    poseurNames: 'Équipe A',
-    rapportFin: {
-      'reglementEffectue': true,
-      'photoUrls': [
-        'https://picsum.photos/seed/workit-chantier-1/300',
-        'https://picsum.photos/seed/workit-chantier-2/300',
-      ],
-      'attestationUrl': 'https://picsum.photos/seed/workit-attestation/300',
-    },
-  ),
-];
+// Données de démonstration retirées (2026-08-14) — l'app n'affiche plus que
+// les vrais chantiers Firestore, plus aucune vignette codée en dur.
+final _kDemoDevis = <_QuoteItem>[];

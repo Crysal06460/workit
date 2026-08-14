@@ -54,8 +54,13 @@ class ChatEntryButton extends StatelessWidget {
     return prefs.getString('workit_workspace_id');
   }
 
-  Future<bool> _hasUnread(Timestamp? latest) async {
+  Future<bool> _hasUnread(Timestamp? latest, String? latestSenderId) async {
     if (latest == null) return false;
+    // Son propre dernier message n'est jamais "non lu" pour soi-même —
+    // sinon le point rouge s'allume dès qu'on vient d'écrire.
+    if (latestSenderId != null && latestSenderId == FirebaseAuth.instance.currentUser?.uid) {
+      return false;
+    }
     final prefs = await SharedPreferences.getInstance();
     final lastReadIso = prefs.getString(_chatLastReadKey(devisId));
     if (lastReadIso == null) return true;
@@ -90,12 +95,14 @@ class ChatEntryButton extends StatelessWidget {
           stream: messagesRef.snapshots(),
           builder: (context, snap) {
             Timestamp? latest;
+            String? latestSenderId;
             if (snap.hasData && snap.data!.docs.isNotEmpty) {
               final data = snap.data!.docs.first.data() as Map<String, dynamic>;
               latest = data['createdAt'] as Timestamp?;
+              latestSenderId = data['senderId']?.toString();
             }
             return FutureBuilder<bool>(
-              future: _hasUnread(latest),
+              future: _hasUnread(latest, latestSenderId),
               builder: (context, unreadSnap) {
                 final unread = unreadSnap.data ?? false;
                 return Stack(
@@ -134,6 +141,83 @@ class ChatEntryButton extends StatelessWidget {
                         ),
                       ),
                   ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Pastille "N messages non lus" à poser directement sur une vignette de la
+/// liste d'accueil — même mécanique de lecture locale (SharedPreferences)
+/// que [ChatEntryButton], mais avec un vrai compte au lieu d'un simple point,
+/// pour rester visible sans avoir à ouvrir la vignette puis l'icône message.
+class WiUnreadMessageBadge extends StatelessWidget {
+  const WiUnreadMessageBadge({super.key, required this.devisId, this.workspaceId});
+
+  final String devisId;
+  final String? workspaceId;
+
+  Future<String?> _resolveWorkspaceId() async {
+    if (workspaceId != null && workspaceId!.isNotEmpty) return workspaceId;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('workit_workspace_id');
+  }
+
+  Future<DateTime?> _lastRead() async {
+    final prefs = await SharedPreferences.getInstance();
+    final iso = prefs.getString(_chatLastReadKey(devisId));
+    return iso == null ? null : DateTime.tryParse(iso);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: _resolveWorkspaceId(),
+      builder: (context, wsSnap) {
+        final ws = wsSnap.data;
+        if (ws == null || ws.isEmpty) return const SizedBox.shrink();
+        return FutureBuilder<DateTime?>(
+          future: _lastRead(),
+          builder: (context, lastReadSnap) {
+            if (!lastReadSnap.hasData && lastReadSnap.connectionState != ConnectionState.done) {
+              return const SizedBox.shrink();
+            }
+            final lastRead = lastReadSnap.data;
+            final messagesRef = FirebaseFirestore.instance
+                .collection('workspaces')
+                .doc(ws)
+                .collection('devis')
+                .doc(devisId)
+                .collection('messages');
+            final query = lastRead == null
+                ? messagesRef
+                : messagesRef.where('createdAt', isGreaterThan: Timestamp.fromDate(lastRead));
+            final myUid = FirebaseAuth.instance.currentUser?.uid;
+            return StreamBuilder<QuerySnapshot>(
+              stream: query.snapshots(),
+              builder: (context, snap) {
+                // Ne jamais compter ses propres messages comme "non lus" —
+                // sinon le badge grimpe même quand c'est l'utilisateur lui-même
+                // qui vient d'écrire (constaté en test réel : le compteur
+                // montait pendant les allers-retours de test).
+                final count = snap.data?.docs
+                        .where((d) => (d.data() as Map<String, dynamic>)['senderId'] != myUid)
+                        .length ??
+                    0;
+                if (count == 0) return const SizedBox.shrink();
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  constraints: const BoxConstraints(minWidth: 18),
+                  decoration: BoxDecoration(color: AppColors.danger, borderRadius: BorderRadius.circular(999)),
+                  child: Text(
+                    count > 9 ? '9+' : '$count',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                  ),
                 );
               },
             );

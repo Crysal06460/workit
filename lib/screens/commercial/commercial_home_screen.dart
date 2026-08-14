@@ -33,6 +33,7 @@ import '../../core/widgets/wi_recent_chantiers_section.dart';
 import '../../core/widgets/wi_responsive_dialog.dart';
 import '../../core/widgets/wi_stat_row.dart';
 import '../../core/widgets/wi_status_badge.dart';
+import '../../core/widgets/wi_swipe_back.dart';
 import '../../services/devis_service.dart';
 
 part 'commercial_models.dart';
@@ -123,7 +124,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
       length: 7,
       child: WiAppShell(
         navItems: const [
-          WiNavItem(icon: Icons.description_outlined, activeIcon: Icons.description_rounded, label: 'Devis'),
+          WiNavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Accueil'),
           WiNavItem(icon: Icons.calendar_month_outlined, activeIcon: Icons.calendar_month_rounded, label: 'Agenda'),
           WiNavItem(icon: Icons.settings_outlined, activeIcon: Icons.settings_rounded, label: 'Réglages'),
         ],
@@ -706,7 +707,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
             title: const Text('Agenda', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
             iconTheme: const IconThemeData(color: AppColors.grey600),
           ),
-          body: PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleCommercial),
+          body: WiSwipeBack(child: PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleCommercial)),
         ),
       ));
     } else if (index == 2) {

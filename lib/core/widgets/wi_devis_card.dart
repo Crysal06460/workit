@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../screens/chantier_chat_screen.dart';
 import '../theme/app_colors.dart';
 import 'wi_status_badge.dart';
 
@@ -57,6 +58,10 @@ class WiDevisCard extends StatelessWidget {
   final Widget? trailingBadge;
   /// Petites actions icône additionnelles dans l'en-tête (ex: éditer/supprimer).
   final List<Widget>? headerActions;
+  /// Id du devis/chantier — si renseigné, affiche la pastille "messages non
+  /// lus" dans l'en-tête sans qu'il faille ouvrir la fiche détail.
+  final String? devisId;
+  final String? workspaceId;
 
   const WiDevisCard({
     super.key,
@@ -74,6 +79,8 @@ class WiDevisCard extends StatelessWidget {
     this.onTap,
     this.trailingBadge,
     this.headerActions,
+    this.devisId,
+    this.workspaceId,
   });
 
   @override
@@ -115,6 +122,10 @@ class WiDevisCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (devisId != null) ...[
+                  WiUnreadMessageBadge(devisId: devisId!, workspaceId: workspaceId),
+                  const SizedBox(width: 6),
+                ],
                 trailingBadge ?? WiStatusBadge(status: status),
                 if (headerActions != null) ...headerActions!,
               ],

@@ -93,6 +93,7 @@ class _PlannerScreenState extends State<PlannerScreen> {
       .collection('workspaces')
       .doc(widget.workspaceId)
       .collection('planningTeams')
+      .orderBy('createdAt')
       .snapshots();
 
   Stream<QuerySnapshot<Map<String, dynamic>>> get _usersStream => _firestore
@@ -520,28 +521,25 @@ class _PlannerBody extends StatelessWidget {
     return count;
   }
 
-  Future<void> _assignToCell(BuildContext context, _PlanUnit unit, _PlanningTeam team, DateTime day) async {
-    final names = team.memberIds.map((uid) => _findPoseur(uid)?.name ?? uid).join(', ');
-    try {
-      await DevisService.updateStatus(
+  // Le dépôt (glisser-déposer depuis le backlog, ou re-glisser une pose déjà
+  // planifiée) fixe un jour + une équipe par défaut, mais n'écrit rien tout
+  // de suite : `_PoseAssignmentSheet` s'ouvre pour ajuster l'heure et
+  // confirmer/changer l'équipe avant l'écriture Firestore.
+  void _assignToCell(BuildContext context, _PlanUnit unit, _PlanningTeam team, DateTime day) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _PoseAssignmentSheet(
         workspaceId: workspaceId,
-        devisId: unit.devisId,
-        newStatus: 'En pose',
-        lotId: unit.lotId,
-        extraFields: {
-          'teamId': team.id,
-          'poseDate': day.toIso8601String(),
-          'poseurIds': team.memberIds,
-          'poseurNames': names,
-        },
-      );
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur de planification : $e'), backgroundColor: AppColors.danger),
-        );
-      }
-    }
+        unit: unit,
+        teams: allTeams ?? teams,
+        poseurs: poseurs,
+        initialDay: day,
+        initialTeamId: team.id,
+      ),
+    );
   }
 
   @override
@@ -607,11 +605,29 @@ class _PlannerBody extends StatelessWidget {
         if (allTeams != null && allTeams!.length > 1)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-            child: _MobileTeamPicker(
-              teams: allTeams!,
-              selectedTeamId: selectedTeamId,
-              accentColor: accentColor,
-              onChanged: onSelectTeam!,
+            child: Row(
+              children: [
+                _MobileTeamPicker(
+                  teams: allTeams!,
+                  selectedTeamId: selectedTeamId,
+                  accentColor: accentColor,
+                  onChanged: onSelectTeam!,
+                ),
+                if (!readOnly) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: 'Renommer l\'équipe',
+                    icon: Icon(Icons.edit_outlined, size: 18, color: accentColor),
+                    onPressed: () {
+                      final selected = allTeams!.firstWhere(
+                        (t) => t.id == selectedTeamId,
+                        orElse: () => allTeams!.first,
+                      );
+                      _openTeamSheet(context, selected);
+                    },
+                  ),
+                ],
+              ],
             ),
           ),
         Expanded(
@@ -747,7 +763,14 @@ class _PlannerBody extends StatelessWidget {
                           ),
                         ],
                       ),
-                      ...dayChantiers.map((c) => _ScheduledCard(workspaceId: workspaceId, unit: c, day: day, readOnly: readOnly)),
+                      ...dayChantiers.map((c) => _ScheduledCard(
+                            workspaceId: workspaceId,
+                            unit: c,
+                            day: day,
+                            readOnly: readOnly,
+                            teams: allTeams ?? teams,
+                            poseurs: poseurs,
+                          )),
                     ],
                   ),
                 );
@@ -849,7 +872,14 @@ class _PlannerBody extends StatelessWidget {
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _ChantierDetailSheet(workspaceId: workspaceId, unit: unit, accentColor: accentColor, readOnly: readOnly),
+      builder: (_) => _ChantierDetailSheet(
+        workspaceId: workspaceId,
+        unit: unit,
+        accentColor: accentColor,
+        readOnly: readOnly,
+        teams: allTeams ?? teams,
+        poseurs: poseurs,
+      ),
     );
   }
 }
@@ -1320,11 +1350,20 @@ class _BacklogCard extends StatelessWidget {
 }
 
 class _ScheduledCard extends StatelessWidget {
-  const _ScheduledCard({required this.workspaceId, required this.unit, required this.day, this.readOnly = false});
+  const _ScheduledCard({
+    required this.workspaceId,
+    required this.unit,
+    required this.day,
+    this.readOnly = false,
+    this.teams = const [],
+    this.poseurs = const [],
+  });
   final String workspaceId;
   final _PlanUnit unit;
   final DateTime day;
   final bool readOnly;
+  final List<_PlanningTeam> teams;
+  final List<_PoseurOption> poseurs;
 
   @override
   Widget build(BuildContext context) {
@@ -1365,6 +1404,8 @@ class _ScheduledCard extends StatelessWidget {
           unit: unit,
           accentColor: AppColors.primary,
           readOnly: readOnly,
+          teams: teams,
+          poseurs: poseurs,
         ),
       ),
       child: readOnly
@@ -1862,15 +1903,177 @@ class _HistorySheet extends StatelessWidget {
 }
 
 // ────────────────────────────────────────────────
+// FEUILLE : CONFIRMER DATE + HEURE + ÉQUIPE D'UNE POSE
+// ────────────────────────────────────────────────
+
+/// Popup de confirmation ouverte à chaque fois qu'une pose est assignée à
+/// une case (glisser-déposer depuis le backlog ou re-glissée à une autre
+/// date/équipe) — la case déposée ne fixe qu'un jour + une équipe par
+/// défaut, cette feuille laisse ajuster l'heure et changer l'équipe avant
+/// d'écrire. Réutilisée aussi comme feuille "Modifier" quand on tape une
+/// pose déjà planifiée dans la grille (voir `_ChantierDetailSheet`).
+class _PoseAssignmentSheet extends StatefulWidget {
+  const _PoseAssignmentSheet({
+    required this.workspaceId,
+    required this.unit,
+    required this.teams,
+    required this.poseurs,
+    required this.initialDay,
+    this.initialTeamId,
+  });
+  final String workspaceId;
+  final _PlanUnit unit;
+  final List<_PlanningTeam> teams;
+  final List<_PoseurOption> poseurs;
+  final DateTime initialDay;
+  final String? initialTeamId;
+
+  @override
+  State<_PoseAssignmentSheet> createState() => _PoseAssignmentSheetState();
+}
+
+class _PoseAssignmentSheetState extends State<_PoseAssignmentSheet> {
+  late DateTime _date;
+  late TimeOfDay _time;
+  String? _teamId;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _date = _startOfDay(widget.initialDay);
+    _time = widget.unit.poseDate != null
+        ? TimeOfDay.fromDateTime(widget.unit.poseDate!)
+        : const TimeOfDay(hour: 8, minute: 0);
+    _teamId = widget.initialTeamId ??
+        widget.unit.teamId ??
+        (widget.teams.isNotEmpty ? widget.teams.first.id : null);
+  }
+
+  String _poseurName(String uid) {
+    for (final p in widget.poseurs) {
+      if (p.id == uid) return p.name;
+    }
+    return uid;
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 730)),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final picked = await showTimePicker(context: context, initialTime: _time);
+    if (picked != null) setState(() => _time = picked);
+  }
+
+  Future<void> _confirm() async {
+    if (_teamId == null) return;
+    final team = widget.teams.firstWhere((t) => t.id == _teamId, orElse: () => widget.teams.first);
+    final names = team.memberIds.map(_poseurName).join(', ');
+    final poseDateTime = DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute);
+    setState(() => _saving = true);
+    try {
+      await DevisService.updateStatus(
+        workspaceId: widget.workspaceId,
+        devisId: widget.unit.devisId,
+        newStatus: 'En pose',
+        lotId: widget.unit.lotId,
+        extraFields: {
+          'teamId': team.id,
+          'poseDate': poseDateTime.toIso8601String(),
+          'poseurIds': team.memberIds,
+          'poseurNames': names,
+        },
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur de planification : $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.unit.label,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.grey900)),
+          Text(widget.unit.client, style: const TextStyle(fontSize: 12, color: AppColors.grey500)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: Text('Date', style: const TextStyle(color: AppColors.grey700, fontSize: 13))),
+              TextButton(onPressed: _pickDate, child: Text(_formatShortDate(_date))),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(child: Text('Heure', style: const TextStyle(color: AppColors.grey700, fontSize: 13))),
+              TextButton(onPressed: _pickTime, child: Text(_time.format(context))),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(child: Text('Équipe', style: const TextStyle(color: AppColors.grey700, fontSize: 13))),
+              DropdownButton<String>(
+                value: _teamId,
+                items: widget.teams
+                    .map((t) => DropdownMenuItem(value: t.id, child: Text(t.name)))
+                    .toList(),
+                onChanged: (v) => setState(() => _teamId = v),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _saving || _teamId == null ? null : _confirm,
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              child: _saving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Confirmer'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────
 // FEUILLE : DÉTAILS DE PLANIFICATION D'UN CHANTIER / LOT
 // ────────────────────────────────────────────────
 
 class _ChantierDetailSheet extends StatefulWidget {
-  const _ChantierDetailSheet({required this.workspaceId, required this.unit, required this.accentColor, this.readOnly = false});
+  const _ChantierDetailSheet({
+    required this.workspaceId,
+    required this.unit,
+    required this.accentColor,
+    this.readOnly = false,
+    this.teams = const [],
+    this.poseurs = const [],
+  });
   final String workspaceId;
   final _PlanUnit unit;
   final Color accentColor;
   final bool readOnly;
+  final List<_PlanningTeam> teams;
+  final List<_PoseurOption> poseurs;
 
   @override
   State<_ChantierDetailSheet> createState() => _ChantierDetailSheetState();
@@ -2003,6 +2206,24 @@ class _ChantierDetailSheetState extends State<_ChantierDetailSheet> {
     );
   }
 
+  void _openModifyPose() {
+    Navigator.of(context).pop();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _PoseAssignmentSheet(
+        workspaceId: widget.workspaceId,
+        unit: widget.unit,
+        teams: widget.teams,
+        poseurs: widget.poseurs,
+        initialDay: widget.unit.poseDate ?? DateTime.now(),
+        initialTeamId: widget.unit.teamId,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -2032,6 +2253,29 @@ class _ChantierDetailSheetState extends State<_ChantierDetailSheet> {
               ),
             ],
           ),
+          if (widget.unit.poseDate != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Prévu le ${_formatDateTime(widget.unit.poseDate!)}'
+                      '${widget.unit.poseurNames.isNotEmpty ? ' par ${widget.unit.poseurNames}' : ''}',
+                      style: const TextStyle(color: AppColors.grey900, fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  if (!widget.readOnly && widget.teams.isNotEmpty)
+                    TextButton(onPressed: _openModifyPose, child: const Text('Modifier')),
+                ],
+              ),
+            ),
+          ],
           if (widget.unit.dependsOn.isNotEmpty) ...[
             const SizedBox(height: 8),
             Wrap(

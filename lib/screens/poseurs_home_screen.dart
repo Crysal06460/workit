@@ -17,6 +17,7 @@ import '../core/theme/app_colors.dart';
 import '../core/utils/recent_chantiers.dart';
 import '../core/widgets/wi_devis_list_modal.dart';
 import '../core/widgets/wi_recent_chantiers_section.dart';
+import '../core/widgets/wi_swipe_back.dart';
 import '../services/devis_service.dart';
 import '../services/document_engine.dart';
 
@@ -235,11 +236,13 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
                         title: const Text('Agenda', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
                         iconTheme: const IconThemeData(color: AppColors.grey600),
                       ),
-                      body: PlannerScreen(
-                        workspaceId: _workspaceId!,
-                        accentColor: AppColors.rolePoseur,
-                        readOnly: true,
-                        filterPoseurId: _userId!,
+                      body: WiSwipeBack(
+                        child: PlannerScreen(
+                          workspaceId: _workspaceId!,
+                          accentColor: AppColors.rolePoseur,
+                          readOnly: true,
+                          filterPoseurId: _userId!,
+                        ),
                       ),
                     ),
                   ),

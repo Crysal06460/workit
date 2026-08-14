@@ -145,6 +145,8 @@ WiDevisCard _quoteCardFor(
     status: statusFromFirestore(item.status),
     meta: meta,
     trailingBadge: badge,
+    devisId: item.id,
+    workspaceId: workspaceId,
     headerActions: headerActions,
     stepCount: isDone ? null : 5,
     currentStep: isDone ? null : step,
