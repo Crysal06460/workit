@@ -1,6 +1,17 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-13 (suite 4) — Longue session de test en direct dans le simulateur iOS,
+**Dernière mise à jour :** 2026-08-13 (suite 5) — Courte session de test en direct sur l'iPhone physique de
+Christophe (branché USB, `flutter run`). App installée et lancée avec succès (build 98,6s), mais la connexion
+au device a été perdue avant qu'un vrai test de connexion Commercial/Métreur ait pu se faire. Deux pistes
+identifiées dans les logs avant la coupure, **non corrigées** : (1) `App attestation failed` (403,
+`PERMISSION_DENIED`) répété sur `firebaseappcheck.googleapis.com` — Firebase App Check échoue en boucle sur ce
+build/device, peut bloquer des appels Firestore/Functions selon l'enforcement serveur ; (2) `RenderFlex
+overflowed by 193 pixels on the bottom` dans `commercial_home_screen.dart:316` — vrai bug de layout à
+corriger. **Aucun changement de code cette session** (rien à committer côté app) — le commit `57398d5` de
+l'après-midi (suite 4, ci-dessous) reste le dernier en date, déjà poussé sur `origin/main` avant la fin de
+cette session.
+
+**Dernière mise à jour (suite 4) :** 2026-08-13 (suite 4) — Longue session de test en direct dans le simulateur iOS,
 uniquement côté **Commercial**, à la demande de Christophe qui voulait enfin voir l'app tourner sur mobile.
 Un vrai crash trouvé et corrigé en tout début (popup de pastille invisible sur mobile — `Material` manquant),
 puis une longue série d'allers-retours UX pilotés en direct par Christophe pointant du doigt ce qui n'allait
@@ -17,6 +28,29 @@ INTERNAL`) — corrigé sur les 66 occurrences de `functions/index.js` et **dép
 explicite de Christophe). Testé exclusivement avec le rôle Commercial cette session — Métreur/Poseur/Admin
 partagent plusieurs des composants touchés (pastilles, "chantiers récents") mais n'ont pas été revérifiés à
 l'écran. **Tout commité et poussé sur `origin/main`** à la fin (voir section dédiée avec le detail du commit).
+
+## 🆕 Session 2026-08-13 (suite 5) — Test en direct sur iPhone physique, connexion perdue, 2 pistes ouvertes
+
+Session courte (21h16 → 21h46), déclenchée par Christophe pour tester l'app sur son vrai iPhone (branché USB)
+plutôt que le simulateur. Rien de codé, juste du run/observation.
+
+1. **Setup** : iPhone détecté par `flutter devices` mais non appairé avec le Mac. Appairage fait côté
+   Christophe via Xcode (Window → Devices and Simulators → Trust).
+2. **Lancement** : `flutter run` sur l'iPhone (`00008120-00141D543A6A601E`). Build Xcode 98,6s, install +
+   launch 28,8s. App démarrée avec succès, warning bénin `objc` de conflit de classe `FileUtils` entre
+   `file_picker` et un framework Apple (connu, sans impact).
+3. **Identifiants transmis** pour connexion Commercial (`commercial@workit-test.fr`) et Métreur
+   (`metreur@workit-test.fr`), workspace "Ambiance Alu" — pas d'outil de tap automatisé sur device physique,
+   donc navigation faite par Christophe lui-même.
+4. **Coupure** : "Lost connection to device" avant qu'un vrai test de connexion ait pu se faire. Logs
+   capturés avant la coupure montrent deux pistes à investiguer/corriger la prochaine session :
+   - `App attestation failed` (403 `PERMISSION_DENIED`) en boucle sur `firebaseappcheck.googleapis.com` —
+     Firebase App Check qui échoue sur ce build/device, à surveiller côté Firestore/Functions.
+   - `RenderFlex overflowed by 193 pixels on the bottom` — `commercial_home_screen.dart:316`, bug de layout
+     réel non corrigé.
+
+Aucun fichier de code modifié cette session — rien à committer, le dépôt était déjà à jour avec `origin/main`
+(commit `57398d5` de l'après-midi, suite 4 ci-dessous).
 
 ## 🆕 Session 2026-08-13 (suite 4) — Test en direct Commercial : série de bugs UI/UX + backend, popup détail enrichi
 
