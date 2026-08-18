@@ -46,7 +46,10 @@ _BadgeStyle _styleFor(DevisStatus status) {
     case DevisStatus.aplanifier:
       return const _BadgeStyle(AppColors.statusPlanBg, AppColors.statusPlanText, 'À planifier');
     case DevisStatus.enPose:
-      return const _BadgeStyle(AppColors.statusPoseBg, AppColors.statusPoseText, 'En pose');
+      // Libellé "Programmé" plutôt que "En pose" : le statut serveur passe à
+      // 'En pose' dès qu'une équipe/date sont posées dans l'agenda, pas
+      // seulement au moment réel de la pose — "En pose" prêtait à confusion.
+      return const _BadgeStyle(AppColors.statusPoseBg, AppColors.statusPoseText, 'Programmé');
     case DevisStatus.termine:
       return const _BadgeStyle(AppColors.statusDoneBg, AppColors.statusDoneText, 'Terminé');
     case DevisStatus.probleme:

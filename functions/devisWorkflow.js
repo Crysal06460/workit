@@ -42,19 +42,21 @@ const TRANSITIONS = {
     {to: "En cours", roles: ["metreur", "admin"], extraFields: ["meetingAt"],
       dateFields: ["meetingAt"]},
     {to: "À commander", roles: ["metreur", "admin"],
-      // "metierLabels" (Phase 3, multi-lots) : libellés métier utilisés
+      // "metierLabels"/"lotEstimates" (Phase 3, multi-lots) : libellés
+      // métier et durée/poseurs confirmés par le métreur, utilisés
       // uniquement si ce passage crée les lots (premier "À commander" de ce
-      // devis) — voir transitionDevisStatus. Ignoré sinon.
-      extraFields: ["draft", "updated", "metierLabels"]},
+      // devis) — voir transitionDevisStatus. Ignorés sinon.
+      extraFields: ["draft", "updated", "metierLabels", "lotEstimates"]},
   ],
   "Acceptée": [
     {to: "En cours", roles: ["metreur", "admin"], extraFields: ["meetingAt"],
       dateFields: ["meetingAt"]},
     {to: "À commander", roles: ["metreur", "admin"],
-      // "metierLabels" (Phase 3, multi-lots) : libellés métier utilisés
+      // "metierLabels"/"lotEstimates" (Phase 3, multi-lots) : libellés
+      // métier et durée/poseurs confirmés par le métreur, utilisés
       // uniquement si ce passage crée les lots (premier "À commander" de ce
-      // devis) — voir transitionDevisStatus. Ignoré sinon.
-      extraFields: ["draft", "updated", "metierLabels"]},
+      // devis) — voir transitionDevisStatus. Ignorés sinon.
+      extraFields: ["draft", "updated", "metierLabels", "lotEstimates"]},
   ],
   "À commander": [
     // allowPermission : override tri-état de users/{uid}.canPlaceOrders,
@@ -76,9 +78,10 @@ const TRANSITIONS = {
     // glisser-déposer un chantier depuis le backlog, comme métreur/admin.
     {to: "En pose", roles: ["metreur", "admin", "commercial"],
       extraFields: [
-        "teamId", "poseDate", "poseurIds", "poseurNames", "updated",
+        "teamId", "poseDate", "scheduledDates", "poseurIds", "poseurNames",
+        "updated",
       ],
-      dateFields: ["poseDate"],
+      dateFields: ["poseDate", "scheduledDates"],
       // Phase 3 (multi-lots) : le démarrage de pose d'un lot peut être
       // bloqué tant qu'un lot dont il dépend (`dependsOn`) n'est pas
       // Terminé/À clôturer. N'a d'effet que sur les transitions de lot
@@ -92,9 +95,10 @@ const TRANSITIONS = {
     // l'agenda par équipe, même raison que ci-dessus.
     {to: "En pose", roles: ["metreur", "admin", "commercial"],
       extraFields: [
-        "teamId", "poseDate", "poseurIds", "poseurNames", "updated",
+        "teamId", "poseDate", "scheduledDates", "poseurIds", "poseurNames",
+        "updated",
       ],
-      dateFields: ["poseDate"]},
+      dateFields: ["poseDate", "scheduledDates"]},
     // Phase 5 — soumission unifiée du rapport poseur (fin propre ou
     // problème) : plus de statut final direct, tout passe par À clôturer
     // qui devient un statut pivot "en attente de validation" (voir plus

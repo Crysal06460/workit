@@ -58,7 +58,13 @@ class AdminTeamTab extends StatefulWidget {
 class _AdminTeamTabState extends State<AdminTeamTab> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // null = "Tous" (aucun filtre). Restreint aux rôles visibles pour ce
+  // membre (widget.restrictToRoles) si un délégué a une vue partielle.
+  String? _roleFilter;
+
   bool get _isFullAdmin => widget.restrictToRoles == null;
+
+  List<String> get _filterableRoles => widget.restrictToRoles ?? onboardingRoles;
 
   Color _roleColor(String role) => _teamRoleColor(role);
 
@@ -191,6 +197,31 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _RoleChip(
+                  label: 'Tous',
+                  color: AppColors.grey500,
+                  selected: _roleFilter == null,
+                  onTap: () => setState(() => _roleFilter = null),
+                ),
+                for (final role in _filterableRoles) ...[
+                  const SizedBox(width: 8),
+                  _RoleChip(
+                    label: roleDisplayNamePlural(role),
+                    color: _teamRoleColor(role),
+                    selected: _roleFilter == role,
+                    onTap: () => setState(() => _roleFilter = role),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: _firestore
@@ -240,6 +271,9 @@ class _AdminTeamTabState extends State<AdminTeamTab> {
                 }
                 if (widget.restrictToRoles != null &&
                     !widget.restrictToRoles!.contains(data['role'])) {
+                  return false;
+                }
+                if (_roleFilter != null && data['role'] != _roleFilter) {
                   return false;
                 }
                 return true;

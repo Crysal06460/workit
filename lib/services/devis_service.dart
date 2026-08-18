@@ -111,6 +111,11 @@ class DevisService {
     int? estimatedDurationDays,
     int? poseurCountRequired,
     String? materielRequis,
+    // Tableau complet des jours déjà planifiés, un seul élément modifié —
+    // utilisé pour déplacer un jour isolé d'un chantier étalé sur plusieurs
+    // jours sans toucher aux autres. Chaque DateTime doit être en UTC (voir
+    // planner_screen.dart pour le pourquoi du .toUtc() avant l'appel).
+    List<DateTime>? scheduledDates,
   }) async {
     final callable = FirebaseFunctions.instanceFor(region: 'europe-west1')
         .httpsCallable('updateLotPlanningFields');
@@ -123,6 +128,8 @@ class DevisService {
       if (poseurCountRequired != null)
         'poseurCountRequired': poseurCountRequired,
       if (materielRequis != null) 'materielRequis': materielRequis,
+      if (scheduledDates != null)
+        'scheduledDates': scheduledDates.map((d) => d.toIso8601String()).toList(),
     });
   }
 

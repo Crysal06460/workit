@@ -1,14 +1,196 @@
 # Session courante — WorkIt
 
-**Dernière mise à jour :** 2026-08-14 — Grosse session de test en direct dans 2 simulateurs iOS en parallèle
-(Commercial sur iPhone 17 Pro Max, Métreur sur iPhone 17 Pro), pilotée par Christophe qui naviguait dans les
-deux apps en même temps. Deux phases : (1) une liste de 14 demandes UI/UX/logique métier données d'un coup en
-début de session, traitées une par une (voir détail ci-dessous) ; (2) du test en direct sur les corrections qui
-a fait remonter 3 bugs supplémentaires, trouvés et corrigés dans la foulée. Avant de commencer, la base
-Firestore a été entièrement vidée (tous les faux chantiers de test + notifications/stats associées, script
-`scripts/reset_devis.js` étendu pour supprimer récursivement) et les vignettes de démo codées en dur
-(`_kDemoDevis` côté commercial, `_kDemo*` côté métreur) ont été mises à zéro — l'app n'affiche plus que du vrai
-Firestore. **Tout commité et poussé sur `origin/main`** à la fin de session (redémarrage Mac de Christophe).
+**Dernière mise à jour :** 2026-08-18 — Session de deux jours (démarrée le 17, poursuivie le 18 après une
+coupure de nuit), 3 simulateurs iOS en parallèle (Commercial iPhone 17 Pro Max, Métreur iPhone 17 Pro, Admin
+iPhone 17 ajouté en cours de session), pilotée par Christophe qui testait en direct et remontait bugs/demandes
+au fil de l'eau. Gros morceau : durée/poseurs vendus dans le devis + planification multi-jours en jours ouvrés
++ déplacement d'un jour isolé (nouveau champ `scheduledDates` par lot). Plusieurs bugs trouvés en test réel et
+corrigés dans la foulée (voir détail ci-dessous). Base Firestore entièrement vidée en cours de session
+(`node scripts/reset_devis.js`) pour repartir de zéro. **Tout commité et poussé sur `origin/main`** à la fin.
+
+## 🆕 Session 2026-08-17/18 — Durée/poseurs vendus, planification multi-jours jours ouvrés, déplacement d'un
+jour isolé, refontes agenda Commercial/Équipe Métreur/header Admin, renommages UI
+
+### Repris du point d'arrêt du 14/08
+Reprise du plan laissé par la session précédente : lancement des 2 simulateurs (Commercial + Métreur),
+correction de 2 petits bugs remontés tout de suite :
+- **Fiche client métreur** : la section "Rendez-vous" + bouton "Modifier rendez-vous client" restaient affichés
+  même une fois le métré terminé (n'a plus de sens à ce stade) — masqués dès que le statut dépasse
+  Acceptée/En cours (nouvelle variable `metreDone` dans `_MeasureRequestSummary`).
+- **Bouton "Planifier pose"** sur la carte chantier de l'accueil métreur ouvrait la fiche détail au lieu
+  d'ouvrir l'agenda pour le glisser-déposer — nouveau callback `onPlanifierPose` sur `_MetCard`/`_MetreurList`,
+  routé vers `_openPlanner()` pour les statuts À planifier/En pose.
+
+### Bug data découvert en creusant : chantier test orphelin
+Le chantier ##5633 (BEYLET) était en statut `En pose` avec `poseDate`/`poseurIds` renseignés mais **sans
+`teamId`** (ni au niveau devis ni du lot) — trace d'un ancien flux de planification (`_schedulePose`/
+`_schedulePoseLot`, dead code depuis le 14/08) qui écrivait la date/l'équipe sans jamais écrire `teamId`.
+Résultat : invisible à la fois dans le backlog (statuts autorisés : À commander/Commande en cours/À planifier)
+et dans la grille équipes×jours (indexée par teamId). Diagnostiqué en interrogeant Firestore directement via
+l'API REST (token OAuth du CLI `firebase-tools`, technique interne à `firebase-tools`, pas un secret utilisateur)
+faute d'accès `idb`/tap sur simulateur. Corrigé en repassant ce chantier en `À planifier` par écriture directe
+(poseDate/poseurIds/teamId effacés) pour qu'il retombe proprement dans le backlog.
+
+### Bug timezone : heure de pose décalée de +2h
+`DateTime` local construit depuis les pickers date/heure puis sérialisé en ISO string **sans** `.toUtc()` avant
+envoi à `updateStatus`/Cloud Functions — le serveur (Node.js, fuseau UTC) parsait cette chaîne sans indicateur
+de fuseau comme si elle était déjà UTC (`new Date(...)`), d'où un décalage systématique de +2h (été, Paris)
+observé à la relecture. Corrigé en ajoutant `.toUtc()` avant `.toIso8601String()` sur les 4 points d'écriture :
+`planner_screen.dart` (`_PoseAssignmentSheet._confirm`), `metreur_home_screen.dart` (`_scheduleMeeting` +
+2 dialogues legacy inactifs mais corrigés par cohérence).
+
+### Agenda Commercial simplifié (nouvel écran, plus de sélecteur d'équipe)
+Nouveau fichier `lib/screens/commercial/commercial_agenda_screen.dart` (part de `commercial_home_screen.dart`) :
+liste en lecture seule des chantiers du commercial connecté uniquement (`.where('userId', isEqualTo: uid)`),
+triés par date de pose, une carte par lot planifié (`_CommercialAgendaEntry`), tap → détail complet (équipe,
+dates). Remplace l'ancien `PlannerScreen` complet (grille + glisser-déposer + sélecteur d'équipe) sur l'onglet
+Agenda du commercial — celui-ci n'a plus accès à la planification elle-même, réservée métreur/admin. Décision
+validée avec Christophe via AskUserQuestion avant implémentation (recommandation retenue : lecture seule).
+
+### Nouvel espace "Équipe" pour le métreur (poseurs/équipes/congés regroupés)
+`MetreurTeamScreen` ajouté à la fin de `planner_screen.dart` (même librairie, réutilise directement
+`_PlanningTeam`/`_PoseurOption`/`_Unavailability`/`_TeamEditSheet`/`_UnavailabilitiesSheet` déjà existants —
+aucun nouveau modèle de données, juste une présentation regroupée). Trois sections : pool des poseurs avec
+statut dispo/congé visible directement (avant caché dans le menu ⋮ de l'agenda), liste des équipes (composition
+déjà "verrouillée" — une équipe = toujours les mêmes poseurs) avec édition, et congés/absences avec accès rapide
+à la gestion. Nouvelle entrée dans `settings_screen.dart` ("Équipes de pose & congés"), visible pour les rôles
+métreur/admin uniquement (nouveau champ `_role` chargé dans `_SettingsScreenState`).
+
+### 🎯 Gros morceau : durée/poseurs vendus + planification multi-jours + jours ouvrés + déplacement d'un jour
+Demande initiale de Christophe, scope confirmé par AskUserQuestion (tout construire d'un coup plutôt que par
+étapes) :
+
+1. **Champs devis (Commercial)** : "Durée estimée (jours)" + "Nombre de poseurs" ajoutés à l'étape "Infos
+   générales chantier" du wizard (`commercial_quote_wizard.dart`). Stockés `soldEstimatedDurationDays`/
+   `soldPoseurCountRequired` sur `_QuoteDraft` (dupliqué dans `commercial_models.dart` ET
+   `metreur_home_screen.dart` — deux classes du même nom dans deux librairies séparées, comme le reste du
+   modèle `_QuoteDraft`).
+2. **Confirmation obligatoire à la validation du métré** : nouvelle feuille bloquante `_ScheduleEstimateSheet`
+   (`metreur_home_screen.dart`, `isDismissible: false`) — un pair durée/poseurs par métier distinct du devis,
+   pré-rempli avec l'estimation du commercial, affichée juste avant que "Terminer et Valider" ne déclenche la
+   transition vers "À commander". Annuler laisse le métré non validé (retentable). **Bug trouvé par relecture
+   de code (pas par Christophe) et corrigé avant tout test** : si annulation, les mesures saisies dans le
+   formulaire étaient perdues (jamais sauvegardées) — corrigé en écrivant le `draft` directement dans Firestore
+   *avant* d'afficher cette confirmation (règles Firestore : tout champ sauf `status`/`metreurStatus` est
+   modifiable en écriture directe cliente).
+3. **Valeurs par défaut du lot créé côté serveur** (`functions/index.js`, bloc de naissance des lots à "À
+   commander") : lit désormais `extraFields.lotEstimates[metierKey]` (valeurs confirmées par le métreur) avec
+   repli sur `draft.soldEstimatedDurationDays`/`soldPoseurCountRequired` (valeurs du commercial), au lieu de
+   `null`/`1` codés en dur.
+4. **Jours ouvrés** : nouveau helper `_businessDays(start, count)` dans `planner_screen.dart` (skip
+   samedi/dimanche). Utilisé (a) en repli dans `_PlanUnit.occupiedDays` pour les chantiers planifiés avant ce
+   changement, et (b) dans `_PoseAssignmentSheet._confirm()` pour calculer les jours réels à la première
+   planification.
+5. **Modèle `scheduledDates`** (remplace la dérivation pure `poseDate` + `estimatedDurationDays`) : nouveau
+   champ `scheduledDates: Timestamp[]` par lot (et devis-level pour les chantiers sans lot), écrit à la
+   première planification, source de vérité de `occupiedDays` dès qu'il est renseigné (repli sur l'ancienne
+   dérivation sinon, pour compat avec les chantiers déjà planifiés). `poseDate` continue d'être écrit en
+   parallèle (= `scheduledDates.first`) pour tous les écrans qui ne lisent que lui.
+6. **Déplacer un seul jour** : nouvelle interaction en tapant une vignette d'un chantier multi-jours dans la
+   grille — `_DayActionSheet` (choix "Déplacer ce jour" / "Voir les détails") puis `_MoveDaySheet` (date picker,
+   réécrit `scheduledDates` avec seulement ce jour changé, les autres restent identiques, toujours la même
+   équipe). Passe par `DevisService.updateLotPlanningFields` (étendu pour accepter `scheduledDates`) plutôt que
+   par le moteur de transitions, puisque ni le statut ni l'équipe ne changent.
+7. **Serveur** : `functions/devisWorkflow.js` — `scheduledDates` ajouté aux `extraFields`/`dateFields` des
+   transitions À planifier→En pose et En pose→En pose ; `functions/index.js` — la boucle de conversion
+   ISO→Timestamp gère maintenant les tableaux (`Array.isArray`), `patchLotSummary`/l'agrégation devis-level
+   propagent `scheduledDates`, et `updateLotPlanningFields` accepte un nouveau champ `scheduledDates` (trié,
+   `poseDate` recalculé comme premier élément).
+
+**✅ Déployé sur Firebase** deux fois : un premier déploiement pour tout ce qui précède, puis un second après
+qu'un test réel de Christophe a fait remonter une erreur `[firebase_functions/invalid-argument] Champ(s) non
+autorisé(s) pour cette transition : lotEstimates` — `lotEstimates` avait été géré côté création de lot mais
+oublié dans la liste blanche `extraFields` des transitions "Acceptée"/"En cours" → "À commander" dans
+`devisWorkflow.js`. Corrigé et redéployé.
+
+### Bug trouvé en test réel (screenshots Christophe) : dates manquantes côté Commercial
+Un chantier planifié sur 2 jours non consécutifs (18 et 20 août, le 19 sauté via "Déplacer ce jour") n'affichait
+que le 18 août côté Commercial (fiche détail ET liste agenda) — ces deux écrans ne lisaient que `item.poseDate`
+(un seul champ, agrégat devis-level "date la plus proche"), jamais `lotsSummary[].scheduledDates`. Corrigé :
+- `_QuoteItem` (commercial_models.dart) gagne un champ `scheduledDates`.
+- `commercial_chantier_detail.dart` : nouvelle méthode `_buildPoseSections` — une section "Pose programmée" par
+  lot planifié, listant TOUTES ses dates ("Jour 1/2 — ...", "Jour 2/2 — ...").
+- `commercial_agenda_screen.dart` : `_CommercialAgendaEntry` gagne un champ `dates` (liste complète), affiché en
+  compact sur la carte ("18/08, 20/08 (2j)").
+
+### Bug trouvé en test réel : libellé "Planifier pose" trompeur une fois déjà planifié
+`_ctaLabel` retournait "Planifier pose" pour les statuts À planifier ET En pose — une fois déjà planifié
+(équipe/dates posées), le bouton disait encore "à planifier". Distingué : "Planifier pose" pour À planifier,
+"Voir le planning" pour En pose (l'action reste la même : ouvrir l'agenda).
+
+### Renommages UI (sans toucher aux statuts serveur)
+- **"Planner" → "Planning"** partout (métreur, planner_screen.dart, admin_home_screen.dart — onglet).
+- **"Backlog vide — aucun chantier..."** retiré : la bande backlog mobile se masque simplement si vide au lieu
+  d'afficher un message.
+- **"En pose" → "Programmé"** (libellé affiché uniquement, statut Firestore `'En pose'` inchangé) : jugé
+  trompeur par Christophe car atteint dès qu'une équipe/date sont posées dans l'agenda, pas forcément au
+  moment réel de la pose. Corrigé sur les 4 rôles partout où le statut brut était affiché comme texte : badge
+  partagé `wi_status_badge.dart` (`_styleFor`), badge métreur `_MetStatusBadge`, pastilles de stats/onglets/
+  Kanban (métreur, commercial, admin), pilule de statut `commercial_chantier_detail.dart`, libellés poseur
+  (`_summaryStatusLabel`/`_statusLabel`), et toutes les fonctions `_toSummary` qui construisaient `statusLabel`
+  depuis le statut brut (métreur/commercial/admin — poseur passe déjà par une fonction déjà corrigée). Le
+  statut Firestore `'En pose'` et toute la logique de transition restent inchangés — seul le texte affiché
+  change.
+- **"Metteur en œuvre" → "Métreur"** dans l'en-tête de l'accueil métreur (choix validé avec Christophe entre
+  "Métreur" et "Coordinateur de chantier" via AskUserQuestion).
+
+### Admin : filtre par rôle dans "Équipe"
+`admin_team_tab.dart` : rangée de filtres ("Tous"/rôles) sous l'en-tête "Mon équipe", réutilise le widget
+`_RoleChip` déjà existant (créé pour les permissions de délégation) plutôt que d'en recréer un. Filtre appliqué
+en plus du filtre `restrictToRoles` existant (délégué à vue partielle).
+
+### Admin : header identique Commercial/Métreur
+`admin_home_screen.dart` avait juste un titre statique "Admin" + bouton déconnexion, sans avatar ni nom — refait
+à l'identique du pattern Commercial/Métreur : "Bonjour {prénom} 👋" + sous-titre "Administrateur" + avatar rond
+avec initiales (couleur `AppColors.primary`) + bouton déconnexion. Prénom/nom lus depuis SharedPreferences
+(mêmes clés `workit_user_first_name`/`workit_user_last_name` que les autres rôles).
+
+### 3ème simulateur (Admin) mis en place
+iPhone 17 (déjà démarré, réutilisé) — nécessitait une réinitialisation (`xcrun simctl uninstall`) car une
+session métreur y était restée connectée depuis un test précédent. Compte admin de "Ambiance Alu" retrouvé
+(c'est le compte personnel de Christophe, pas un compte de test dédié — aucun admin de test n'existe pour ce
+workspace) et son mot de passe réinitialisé via le SDK Admin Firebase (script temporaire, supprimé après usage)
+car Christophe ne le connaissait plus — nouveau mot de passe communiqué directement à Christophe, **jamais
+inscrit dans ce journal** (règle absolue du fichier).
+
+### Base de données remise à zéro en cours de session
+`node scripts/reset_devis.js` relancé à la demande de Christophe ("je recommence les tests à zéro") — les 2
+chantiers de test (##5633 BEYLET, ##1382) supprimés avec sous-collections + 14 notifications/stats associées.
+
+### Coupure de session (nuit du 17 au 18)
+Les processus `flutter run` sont morts pendant la nuit (simulateurs restés démarrés mais plus de session Dart
+active) — reconnexion nécessaire au réveil du 18, tous les correctifs déjà appliqués côté code étaient
+préservés (rien perdu), simple recompilation/relance des 3 apps.
+
+### Vérifications faites cette session
+`flutter analyze` (scope `lib/` complet, en excluant les artefacts préexistants de `build/ios/...`) : 0 erreur
+après chaque lot de modifications. `node -c` + `npm run lint` (functions) : 0 erreur avant chaque déploiement.
+
+### ⚠️ Points restés ouverts / non re-testés après le tout dernier correctif
+- Le renommage "En pose" → "Programmé" vient d'être déployé sur les 3 simulateurs (Métreur/Commercial/Admin) —
+  pas encore explicitement reconfirmé par Christophe au-delà de son premier retour positif ("bcp mieux
+  programmé !").
+- Poseur n'a pas de simulateur lancé cette session (renommage appliqué au code par cohérence, jamais vérifié à
+  l'écran).
+- `_ChantierDetailSheet` (planner_screen.dart) : éditer `estimatedDurationDays` sur un chantier **déjà planifié**
+  (qui a un `scheduledDates` non vide) n'a plus d'effet visible sur la grille depuis l'introduction de
+  `scheduledDates` comme source de vérité — limitation connue, pas corrigée (l'édition de durée n'a de sens
+  qu'avant la première planification ; après, il faut passer par le glisser-déposer ou "Déplacer ce jour").
+- Warning Flutter non bloquant repéré dans les logs Commercial ("ListTile background color or ink splashes may
+  be invisible") — origine non identifiée avec certitude (pourrait être un artefact de log d'un ancien process),
+  jamais reproduit ni creusé plus loin.
+
+### Reste à faire (prochaine session)
+1. Confirmer avec Christophe que "Programmé" convient partout (3 rôles déjà testés, Poseur pas encore vu).
+2. Tester le flux complet de bout en bout sur un nouveau devis créé depuis la base vidée : durée/poseurs vendus
+   → confirmation obligatoire au métré → lot créé avec les bonnes valeurs → glisser-déposer multi-jours jours
+   ouvrés → déplacer un jour isolé → vérifier l'affichage Commercial (toutes les dates).
+3. Investiguer si besoin le warning ListTile côté Commercial s'il se reproduit.
+4. Décider si l'édition de durée post-planification (`_ChantierDetailSheet`) doit régénérer `scheduledDates`
+   ou rester limitée à avant planification (comportement actuel).
+5. Messagerie interne scoping fin (reportée depuis le 14/08, toujours pas commencée).
+
+---
 
 ## 🆕 Session 2026-08-14 — 14 demandes UI/UX/métier + 3 bugs trouvés en test réel
 

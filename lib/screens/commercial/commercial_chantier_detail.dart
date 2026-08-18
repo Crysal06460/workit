@@ -142,7 +142,10 @@ class _ChantierDetailBody extends StatelessWidget {
               border: Border.all(color: _statusColor(status).withOpacity(0.4)),
             ),
             child: Text(
-              status.isEmpty ? 'En attente' : status,
+              // "Programmé" plutôt que le statut serveur brut "En pose" :
+              // atteint dès qu'une équipe/date sont posées dans l'agenda,
+              // pas forcément au moment réel de la pose.
+              status.isEmpty ? 'En attente' : (status == 'En pose' ? 'Programmé' : status),
               style: TextStyle(
                 color: _statusColor(status),
                 fontWeight: FontWeight.w700,
@@ -237,20 +240,7 @@ class _ChantierDetailBody extends StatelessWidget {
             ),
           ],
 
-          if (item.poseDate != null) ...[
-            const SizedBox(height: 16),
-            const _SectionHeader(label: 'Pose programmée'),
-            const SizedBox(height: 8),
-            _DetailRow(
-              icon: Icons.calendar_today_outlined,
-              label: _formatDateTime(item.poseDate!),
-            ),
-            if (item.poseurNames?.isNotEmpty == true)
-              _DetailRow(
-                icon: Icons.group_outlined,
-                label: 'Équipe : ${item.poseurNames}',
-              ),
-          ],
+          ..._buildPoseSections(item),
 
           if (item.metreurNote?.isNotEmpty == true) ...[
             const SizedBox(height: 16),
@@ -458,6 +448,61 @@ class _ChantierDetailBody extends StatelessWidget {
     final h = dt.hour.toString().padLeft(2, '0');
     final m = dt.minute.toString().padLeft(2, '0');
     return '${dt.day} ${months[dt.month - 1]} ${dt.year} à ${h}h$m';
+  }
+
+  // Une section "Pose programmée" par lot planifié — un chantier étalé sur
+  // plusieurs jours (voir scheduledDates, planner_screen.dart) doit montrer
+  // TOUTES ses dates ici, pas seulement la première (poseDate).
+  List<Widget> _buildPoseSections(_QuoteItem item) {
+    if (item.lotsSummary.isEmpty) {
+      final dates = item.scheduledDates.isNotEmpty
+          ? item.scheduledDates
+          : (item.poseDate != null ? [item.poseDate!] : const <DateTime>[]);
+      if (dates.isEmpty) return const [];
+      return [
+        const SizedBox(height: 16),
+        const _SectionHeader(label: 'Pose programmée'),
+        const SizedBox(height: 8),
+        ..._poseDateRows(dates, item.poseurNames),
+      ];
+    }
+
+    final widgets = <Widget>[];
+    final multiLot = item.lotsSummary.length > 1;
+    for (final lot in item.lotsSummary) {
+      final lotDates = (lot['scheduledDates'] as List<dynamic>? ?? [])
+          .whereType<Timestamp>()
+          .map((t) => t.toDate())
+          .toList();
+      final lotPoseDate = lot['poseDate'] is Timestamp ? (lot['poseDate'] as Timestamp).toDate() : null;
+      final dates = lotDates.isNotEmpty ? lotDates : (lotPoseDate != null ? [lotPoseDate] : const <DateTime>[]);
+      if (dates.isEmpty) continue;
+      final label = lot['label']?.toString().isNotEmpty == true
+          ? lot['label'].toString()
+          : (lot['lotId']?.toString() ?? '');
+      widgets.addAll([
+        const SizedBox(height: 16),
+        _SectionHeader(label: multiLot ? 'Pose programmée — $label' : 'Pose programmée'),
+        const SizedBox(height: 8),
+        ..._poseDateRows(dates, lot['poseurNames']?.toString()),
+      ]);
+    }
+    return widgets;
+  }
+
+  List<Widget> _poseDateRows(List<DateTime> dates, String? poseurNames) {
+    final sorted = [...dates]..sort();
+    return [
+      for (var i = 0; i < sorted.length; i++)
+        _DetailRow(
+          icon: Icons.calendar_today_outlined,
+          label: sorted.length > 1
+              ? 'Jour ${i + 1}/${sorted.length} — ${_formatDateTime(sorted[i])}'
+              : _formatDateTime(sorted[i]),
+        ),
+      if (poseurNames?.isNotEmpty == true)
+        _DetailRow(icon: Icons.group_outlined, label: 'Équipe : $poseurNames'),
+    ];
   }
 }
 

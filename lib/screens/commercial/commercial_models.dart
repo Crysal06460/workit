@@ -115,6 +115,8 @@ class _QuoteDraft {
     this.products = const [],
     this.assignedMetreurId,
     this.assignedMetreurName,
+    this.soldEstimatedDurationDays,
+    this.soldPoseurCountRequired,
   });
 
   final String? clientName;
@@ -133,6 +135,11 @@ class _QuoteDraft {
   final List<_ProductFormData> products;
   final String? assignedMetreurId;
   final String? assignedMetreurName;
+  // Temps/poseurs vendus au client par le commercial — valeurs par défaut
+  // reprises à la naissance du/des lots après métré ; le métreur les
+  // confirme ou les ajuste avant de pouvoir valider le métré (obligatoire).
+  final int? soldEstimatedDurationDays;
+  final int? soldPoseurCountRequired;
 
   Map<String, dynamic> toMap() {
     return {
@@ -152,6 +159,8 @@ class _QuoteDraft {
       'products': products.map((e) => e.toMap()).toList(),
       'assignedMetreurId': assignedMetreurId,
       'assignedMetreurName': assignedMetreurName,
+      'soldEstimatedDurationDays': soldEstimatedDurationDays,
+      'soldPoseurCountRequired': soldPoseurCountRequired,
     };
   }
 
@@ -182,6 +191,8 @@ class _QuoteDraft {
           : const [],
       assignedMetreurId: map['assignedMetreurId']?.toString(),
       assignedMetreurName: map['assignedMetreurName']?.toString(),
+      soldEstimatedDurationDays: (map['soldEstimatedDurationDays'] as num?)?.toInt(),
+      soldPoseurCountRequired: (map['soldPoseurCountRequired'] as num?)?.toInt(),
     );
   }
 }
@@ -219,6 +230,7 @@ class _QuoteItem {
     this.clientFirstName,
     this.poseurNames,
     this.poseDate,
+    this.scheduledDates = const [],
     this.rapportFin,
     this.rapportProbleme,
     this.infoRequest,
@@ -249,6 +261,9 @@ class _QuoteItem {
   final String? clientFirstName;
   final String? poseurNames;
   final DateTime? poseDate;
+  // Tous les jours planifiés (devis sans lot) — poseDate reste le premier
+  // pour compat, voir _PlanUnit dans planner_screen.dart pour le pourquoi.
+  final List<DateTime> scheduledDates;
   final Map<String, dynamic>? rapportFin;
   final Map<String, dynamic>? rapportProbleme;
   final Map<String, dynamic>? infoRequest;
@@ -327,6 +342,10 @@ class _QuoteItem {
     if (map['poseDate'] is Timestamp) {
       poseDate = (map['poseDate'] as Timestamp).toDate();
     }
+    final scheduledDates = (map['scheduledDates'] as List<dynamic>? ?? [])
+        .whereType<Timestamp>()
+        .map((t) => t.toDate())
+        .toList();
     return _QuoteItem(
       id: map['id']?.toString(),
       client: map['client']?.toString() ?? 'Client',
@@ -352,6 +371,7 @@ class _QuoteItem {
       clientFirstName: map['clientFirstName']?.toString(),
       poseurNames: map['poseurNames']?.toString(),
       poseDate: poseDate,
+      scheduledDates: scheduledDates,
       rapportFin: map['rapportFin'] is Map
           ? Map<String, dynamic>.from(map['rapportFin'] as Map)
           : null,

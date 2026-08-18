@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/widgets/wi_swipe_back.dart';
+import 'planner_screen.dart';
 import 'team_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _canManageTeam = false;
   List<String> _manageableRoles = [];
   String? _workspaceId;
+  String? _role;
 
   @override
   void initState() {
@@ -45,6 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _manageableRoles = (data['manageableRoles'] as List<dynamic>? ?? [])
             .map((e) => e.toString())
             .toList();
+        _role = data['role']?.toString();
       });
     } catch (_) {}
   }
@@ -113,6 +116,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         builder: (_) => TeamManagementScreen(
                           workspaceId: _workspaceId!,
                           manageableRoles: _manageableRoles,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            if ((_role == 'metreur' || _role == 'admin') && _workspaceId != null) ...[
+              _SettingsCard(
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  leading: const Icon(Icons.engineering_outlined, color: AppColors.primary),
+                  title: const Text(
+                    'Équipes de pose & congés',
+                    style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Poseurs disponibles, composition des équipes, absences',
+                    style: TextStyle(color: AppColors.grey400, fontSize: 13),
+                  ),
+                  trailing: const Icon(Icons.chevron_right, color: AppColors.grey300),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => MetreurTeamScreen(
+                          workspaceId: _workspaceId!,
+                          accentColor: AppColors.roleMetteur,
                         ),
                       ),
                     );

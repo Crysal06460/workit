@@ -43,6 +43,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   String? accessibilite;
   DateTime? selectedDate;
   List<_ProductFormData> products = [const _ProductFormData()];
+  int? _soldDurationDays;
+  int? _soldPoseurCountRequired;
   String? uploadLabel;
   List<String> citySuggestions = [];
   bool isFetchingCities = false;
@@ -193,6 +195,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     selectedDate = draft.date;
     _selectedMetreurId = draft.assignedMetreurId;
     _selectedMetreurName = draft.assignedMetreurName;
+    _soldDurationDays = draft.soldEstimatedDurationDays;
+    _soldPoseurCountRequired = draft.soldPoseurCountRequired;
     products = draft.products.isNotEmpty ? draft.products : products;
     _ensureDefaultCategoryForProducts();
     setState(() {});
@@ -329,6 +333,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       products: products,
       assignedMetreurId: _selectedMetreurId == 'any' ? null : _selectedMetreurId,
       assignedMetreurName: _selectedMetreurName,
+      soldEstimatedDurationDays: _soldDurationDays,
+      soldPoseurCountRequired: _soldPoseurCountRequired,
     );
   }
 
@@ -877,6 +883,34 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           controller: chantierNotesController,
           keyboardType: TextInputType.multiline,
           maxLines: 3,
+        ),
+        const SizedBox(height: 4),
+        const Text('Temps & équipe vendus', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        const Text(
+          'Estimation transmise au métreur — il pourra la confirmer ou l\'ajuster après le métré.',
+          style: TextStyle(color: AppColors.grey400, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _IntField(
+                label: 'Durée estimée (jours)',
+                value: _soldDurationDays,
+                onChanged: (v) => setState(() => _soldDurationDays = v),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _IntField(
+                label: 'Nombre de poseurs',
+                value: _soldPoseurCountRequired,
+                onChanged: (v) => setState(() => _soldPoseurCountRequired = v),
+              ),
+            ),
+          ],
         ),
       ],
     );

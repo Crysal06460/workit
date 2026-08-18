@@ -700,11 +700,14 @@ exports.transitionDevisStatus = onCall(
         // Les dates transitent en ISO string (le SDK cloud_functions ne
         // sait pas sérialiser un Timestamp Firestore) : reconverties ici en
         // Timestamp pour rester compatibles avec tous les écrans qui les
-        // lisent déjà comme des Timestamp.
+        // lisent déjà comme des Timestamp. `scheduledDates` transite en
+        // tableau de chaînes ISO (un jour ouvré planifié = un élément).
         for (const key of transition.dateFields || []) {
-          if (extraFields[key]) {
-            updatePayload[key] = Timestamp.fromDate(new Date(extraFields[key]));
-          }
+          if (!extraFields[key]) continue;
+          const value = extraFields[key];
+          updatePayload[key] = Array.isArray(value) ?
+            value.map((v) => Timestamp.fromDate(new Date(v))) :
+            Timestamp.fromDate(new Date(value));
         }
         if (extraFields.rapportProbleme) {
           updatePayload.rapportProbleme = {
@@ -738,30 +741,56 @@ exports.transitionDevisStatus = onCall(
             (extraFields.metierLabels &&
               typeof extraFields.metierLabels === "object") ?
               extraFields.metierLabels : {};
+          // Temps/poseurs confirmés par le métreur (obligatoire à la
+          // validation du métré, voir measurement_form_screen côté client) —
+          // par métier, priment sur l'estimation vendue par le commercial
+          // dans le devis (`draft.sold*`), elle-même reprise seulement si le
+          // métreur n'a rien fourni pour ce métier.
+          const lotEstimates =
+            (extraFields.lotEstimates &&
+              typeof extraFields.lotEstimates === "object") ?
+              extraFields.lotEstimates : {};
+          const soldDuration =
+            typeof draft.soldEstimatedDurationDays === "number" ?
+              draft.soldEstimatedDurationDays : null;
+          const soldPoseurCount =
+            typeof draft.soldPoseurCountRequired === "number" ?
+              draft.soldPoseurCountRequired : null;
           const seenKeys = [];
           for (const p of products) {
             const key = (p && p.metierKey) ? p.metierKey : "_non_classe";
             if (!seenKeys.includes(key)) seenKeys.push(key);
           }
           if (seenKeys.length > 0) {
-            seededLots = seenKeys.map((key) => ({
-              lotId: key,
-              data: {
-                metierKey: key,
-                label: metierLabels[key] || key,
-                status: "À commander",
-                poseurIds: [],
-                poseurNames: "",
-                teamId: null,
-                poseDate: null,
-                estimatedDurationDays: null,
-                poseurCountRequired: 1,
-                materielRequis: "",
-                dependsOn: [],
-                createdAt: now,
-                updatedAt: now,
-              },
-            }));
+            seededLots = seenKeys.map((key) => {
+              const estimate =
+                (lotEstimates[key] && typeof lotEstimates[key] === "object") ?
+                  lotEstimates[key] : {};
+              const estimatedDurationDays =
+                typeof estimate.estimatedDurationDays === "number" ?
+                  estimate.estimatedDurationDays : soldDuration;
+              const poseurCountRequired =
+                typeof estimate.poseurCountRequired === "number" ?
+                  estimate.poseurCountRequired : (soldPoseurCount || 1);
+              return {
+                lotId: key,
+                data: {
+                  metierKey: key,
+                  label: metierLabels[key] || key,
+                  status: "À commander",
+                  poseurIds: [],
+                  poseurNames: "",
+                  teamId: null,
+                  poseDate: null,
+                  estimatedDurationDays,
+                  poseurCountRequired,
+                  materielRequis: "",
+                  dependsOn: [],
+                  createdAt: now,
+                  updatedAt: now,
+                },
+              };
+            });
             updatePayload.lotIds = seenKeys;
             updatePayload.lotsSummary = seededLots.map((l) => ({
               lotId: l.lotId,
@@ -802,6 +831,7 @@ exports.transitionDevisStatus = onCall(
               poseurIds: transitionedLotData.poseurIds || [],
               poseurNames: transitionedLotData.poseurNames || "",
               poseDate: transitionedLotData.poseDate || null,
+              scheduledDates: transitionedLotData.scheduledDates || [],
               teamId: transitionedLotData.teamId || null,
               dependsOn: transitionedLotData.dependsOn || [],
               estimatedDurationDays:
@@ -822,6 +852,7 @@ exports.transitionDevisStatus = onCall(
               poseurIds: d.poseurIds || [],
               poseurNames: d.poseurNames || "",
               poseDate: d.poseDate || null,
+              scheduledDates: d.scheduledDates || [],
               teamId: d.teamId || null,
               dependsOn: d.dependsOn || [],
               estimatedDurationDays: d.estimatedDurationDays || null,
@@ -1245,6 +1276,19 @@ exports.updateLotPlanningFields = onCall(
       }
       if (Object.prototype.hasOwnProperty.call(data, "materielRequis")) {
         patch.materielRequis = data.materielRequis;
+      }
+      // Déplacement d'un seul jour parmi ceux déjà planifiés (agenda) : le
+      // client renvoie le tableau complet (un seul élément modifié), jamais
+      // une écriture partielle par index — plus simple et sans ambiguïté
+      // côté Firestore (les tableaux ne s'éditent pas élément par élément).
+      if (Object.prototype.hasOwnProperty.call(data, "scheduledDates") &&
+          Array.isArray(data.scheduledDates)) {
+        patch.scheduledDates = data.scheduledDates
+            .map((v) => Timestamp.fromDate(new Date(v)))
+            .sort((a, b) => a.toMillis() - b.toMillis());
+        if (patch.scheduledDates.length > 0) {
+          patch.poseDate = patch.scheduledDates[0];
+        }
       }
       if (Object.keys(patch).length === 0) {
         throw new HttpsError("invalid-argument", "Aucun champ à mettre à jour");

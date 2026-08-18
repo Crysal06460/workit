@@ -19,9 +19,14 @@ class AdminHomeScreen extends StatefulWidget {
   State<AdminHomeScreen> createState() => _AdminHomeScreenState();
 }
 
+const String _userFirstNameKey = 'workit_user_first_name';
+const String _userLastNameKey = 'workit_user_last_name';
+
 class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String? _workspaceId;
+  String? _userFirstName;
+  String? _userLastName;
   bool _loading = true;
 
   @override
@@ -31,6 +36,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
     if (widget.workspaceId != null) {
       _workspaceId = widget.workspaceId;
       _loading = false;
+      _loadUser();
     } else {
       _loadWorkspace();
     }
@@ -40,8 +46,34 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _workspaceId = prefs.getString('workit_workspace_id');
+      _userFirstName = prefs.getString(_userFirstNameKey);
+      _userLastName = prefs.getString(_userLastNameKey);
       _loading = false;
     });
+  }
+
+  Future<void> _loadUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _userFirstName = prefs.getString(_userFirstNameKey);
+      _userLastName = prefs.getString(_userLastNameKey);
+    });
+  }
+
+  String _greetingName() {
+    if (_userFirstName?.trim().isNotEmpty == true) return _userFirstName!.trim();
+    if (_userLastName?.trim().isNotEmpty == true) return _userLastName!.trim();
+    return '';
+  }
+
+  String _initials() {
+    final f = _userFirstName?.trim() ?? '';
+    final l = _userLastName?.trim() ?? '';
+    if (f.isNotEmpty && l.isNotEmpty) return '${f[0]}${l[0]}'.toUpperCase();
+    if (f.isNotEmpty) return f[0].toUpperCase();
+    if (l.isNotEmpty) return l[0].toUpperCase();
+    return 'A';
   }
 
   @override
@@ -68,9 +100,45 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleSpacing: 20,
-        title: const Text('Admin', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800, fontSize: 22, letterSpacing: -0.5)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _greetingName().isNotEmpty ? 'Bonjour ${_greetingName()} 👋' : 'Bonjour 👋',
+              style: const TextStyle(
+                color: AppColors.grey900,
+                fontWeight: FontWeight.w800,
+                fontSize: 22,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const Text(
+              'Administrateur',
+              style: TextStyle(color: AppColors.grey400, fontSize: 13),
+            ),
+          ],
+        ),
         iconTheme: const IconThemeData(color: AppColors.grey600),
         actions: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              _initials(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
           IconButton(
             icon: const Icon(Icons.logout_outlined, color: AppColors.grey500),
             tooltip: 'Se déconnecter',
@@ -84,7 +152,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
               }
             },
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 10),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
@@ -103,7 +171,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> with SingleTickerProv
               tabs: const [
                 Tab(text: 'Tableau de bord', icon: Icon(Icons.dashboard_outlined, size: 20)),
                 Tab(text: 'KPIs', icon: Icon(Icons.insights_outlined, size: 20)),
-                Tab(text: 'Planner', icon: Icon(Icons.view_column_outlined, size: 20)),
+                Tab(text: 'Planning', icon: Icon(Icons.view_column_outlined, size: 20)),
                 Tab(text: 'Équipe', icon: Icon(Icons.group_outlined, size: 20)),
                 Tab(text: 'Entreprise', icon: Icon(Icons.business_outlined, size: 20)),
               ],

@@ -344,7 +344,7 @@ class _AllItemsList extends StatelessWidget {
           case 'À planifier':
             badge = 'À planifier'; badgeColor = AppColors.primary; break;
           case 'En pose':
-            badge = 'En pose'; badgeColor = AppColors.success; break;
+            badge = 'Programmé'; badgeColor = AppColors.success; break;
           case 'Terminé':
           case 'Clôturé':
             badge = 'Terminé'; badgeColor = AppColors.grey500; break;

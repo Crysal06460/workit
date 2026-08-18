@@ -46,6 +46,22 @@ const _kWeekdayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 DateTime? _tsOf(dynamic v) => v is Timestamp ? v.toDate() : null;
 
+bool _isWeekend(DateTime d) => d.weekday == DateTime.saturday || d.weekday == DateTime.sunday;
+
+/// `count` jours ouvrés (weekend exclu) à partir de `start` inclus — si
+/// `start` tombe un samedi/dimanche, le premier jour ouvré retenu est le
+/// lundi suivant. Utilisé pour dupliquer la vignette d'un chantier planifié
+/// sur plusieurs jours sans jamais poser une équipe le weekend.
+List<DateTime> _businessDays(DateTime start, int count) {
+  final days = <DateTime>[];
+  var d = _startOfDay(start);
+  while (days.length < count) {
+    if (!_isWeekend(d)) days.add(d);
+    d = d.add(const Duration(days: 1));
+  }
+  return days;
+}
+
 class PlannerScreen extends StatefulWidget {
   const PlannerScreen({
     super.key,
@@ -326,6 +342,7 @@ class _PlanUnit {
     this.supplierDeliveryDate,
     this.clientDesiredDate,
     this.siblings = const {},
+    this.scheduledDates = const [],
   });
 
   final String devisId;
@@ -345,6 +362,12 @@ class _PlanUnit {
   final DateTime? supplierDeliveryDate;
   final DateTime? clientDesiredDate;
   final Map<String, _SiblingLotInfo> siblings;
+  // Source de vérité de l'étalement multi-jours dès qu'elle est renseignée
+  // (écrite au premier glisser-déposer, voir _PoseAssignmentSheet._confirm)
+  // — une vraie liste, pas juste poseDate+durée, pour pouvoir déplacer un
+  // seul jour sans recalculer/décaler les autres. `poseDate` reste écrit en
+  // parallèle (= scheduledDates.first) pour les écrans qui ne lisent que lui.
+  final List<DateTime> scheduledDates;
 
   bool get dependenciesSatisfied {
     if (dependsOn.isEmpty) return true;
@@ -370,10 +393,15 @@ class _PlanUnit {
   }
 
   List<DateTime> get occupiedDays {
+    if (scheduledDates.isNotEmpty) {
+      final sorted = [...scheduledDates]..sort();
+      return sorted;
+    }
+    // Repli pour les chantiers planifiés avant l'introduction de
+    // scheduledDates : dérive les jours ouvrés depuis poseDate + durée.
     if (poseDate == null) return const [];
-    final start = _startOfDay(poseDate!);
     final days = estimatedDurationDays < 1 ? 1 : (estimatedDurationDays > 60 ? 60 : estimatedDurationDays);
-    return List.generate(days, (i) => start.add(Duration(days: i)));
+    return _businessDays(poseDate!, days);
   }
 
   bool touchesWeek(DateTime weekStart) {
@@ -389,6 +417,11 @@ class _PlanUnit {
     final clientDesiredDate = _tsOf(d['clientDesiredDate']);
     final lotsSummary = (d['lotsSummary'] as List<dynamic>? ?? [])
         .whereType<Map<String, dynamic>>()
+        .toList();
+
+    List<DateTime> scheduledDatesOf(Map<String, dynamic> map) => (map['scheduledDates'] as List<dynamic>? ?? [])
+        .map(_tsOf)
+        .whereType<DateTime>()
         .toList();
 
     if (lotsSummary.isEmpty) {
@@ -409,6 +442,7 @@ class _PlanUnit {
           materielRequis: d['materielRequis']?.toString() ?? '',
           supplierDeliveryDate: supplierDeliveryDate,
           clientDesiredDate: clientDesiredDate,
+          scheduledDates: scheduledDatesOf(d),
         ),
       ];
     }
@@ -441,6 +475,7 @@ class _PlanUnit {
         supplierDeliveryDate: supplierDeliveryDate,
         clientDesiredDate: clientDesiredDate,
         siblings: siblings,
+        scheduledDates: scheduledDatesOf(l),
       );
     }).toList();
   }
@@ -917,7 +952,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
-          const Text('Planner', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.grey900)),
+          const Text('Planning', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.grey900)),
           const SizedBox(width: 8),
           IconButton(
             onPressed: onPrev,
@@ -1144,13 +1179,7 @@ class _MobileBacklogStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (backlog.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: Text('Backlog vide — aucun chantier en attente de planification.',
-            style: TextStyle(color: AppColors.grey400, fontSize: 12)),
-      );
-    }
+    if (backlog.isEmpty) return const SizedBox.shrink();
     // Prêts d'abord (actionnables tout de suite), bloqués ensuite.
     final ordered = [
       ...backlog.where((c) => c.isReady),
@@ -1365,11 +1394,61 @@ class _ScheduledCard extends StatelessWidget {
   final List<_PlanningTeam> teams;
   final List<_PoseurOption> poseurs;
 
+  void _openDetail(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _ChantierDetailSheet(
+        workspaceId: workspaceId,
+        unit: unit,
+        accentColor: AppColors.primary,
+        readOnly: readOnly,
+        teams: teams,
+        poseurs: poseurs,
+      ),
+    );
+  }
+
+  void _openTap(BuildContext context, int dayIndex, int totalDays) {
+    // Un seul jour planifié : rien à choisir, on ouvre directement la fiche.
+    if (readOnly || totalDays <= 1) {
+      _openDetail(context);
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _DayActionSheet(
+        unit: unit,
+        day: day,
+        dayIndex: dayIndex,
+        totalDays: totalDays,
+        onSeeDetails: () {
+          Navigator.of(context).pop();
+          _openDetail(context);
+        },
+        onMoveDay: () {
+          Navigator.of(context).pop();
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: AppColors.surface,
+            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+            builder: (_) => _MoveDaySheet(workspaceId: workspaceId, unit: unit, day: day),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dayIndex = unit.poseDate == null
-        ? 1
-        : day.difference(_startOfDay(unit.poseDate!)).inDays + 1;
+    final occupied = unit.occupiedDays;
+    final dayIndex = occupied.isEmpty ? 1 : occupied.indexWhere((d) => _isSameDay(d, day)) + 1;
+    final totalDays = occupied.isEmpty ? 1 : occupied.length;
     final card = Container(
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -1386,28 +1465,15 @@ class _ScheduledCard extends StatelessWidget {
           if (unit.lotId != null)
             Text(unit.client,
                 style: const TextStyle(fontSize: 10, color: AppColors.grey500), overflow: TextOverflow.ellipsis),
-          if (unit.estimatedDurationDays > 1)
-            Text('Jour $dayIndex/${unit.estimatedDurationDays}',
+          if (totalDays > 1)
+            Text('Jour $dayIndex/$totalDays',
                 style: const TextStyle(fontSize: 10, color: AppColors.grey500)),
           _DependencyChip(unit: unit),
         ],
       ),
     );
     return GestureDetector(
-      onTap: () => showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: AppColors.surface,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-        builder: (_) => _ChantierDetailSheet(
-          workspaceId: workspaceId,
-          unit: unit,
-          accentColor: AppColors.primary,
-          readOnly: readOnly,
-          teams: teams,
-          poseurs: poseurs,
-        ),
-      ),
+      onTap: () => _openTap(context, dayIndex, totalDays),
       child: readOnly
           ? card
           : Draggable<_PlanUnit>(
@@ -1416,6 +1482,176 @@ class _ScheduledCard extends StatelessWidget {
               childWhenDragging: Opacity(opacity: 0.3, child: card),
               child: card,
             ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────
+// FEUILLE : ACTIONS SUR UN JOUR D'UN CHANTIER MULTI-JOURS
+// ────────────────────────────────────────────────
+
+/// Choix affiché au tap sur une vignette faisant partie d'un chantier étalé
+/// sur plusieurs jours : voir la fiche complète, ou déplacer CE jour précis
+/// sans toucher aux autres (ex : le poseur signale le mardi soir qu'il
+/// manque du matériel, le métreur déplace juste le 3ᵉ jour au vendredi).
+class _DayActionSheet extends StatelessWidget {
+  const _DayActionSheet({
+    required this.unit,
+    required this.day,
+    required this.dayIndex,
+    required this.totalDays,
+    required this.onSeeDetails,
+    required this.onMoveDay,
+  });
+
+  final _PlanUnit unit;
+  final DateTime day;
+  final int dayIndex;
+  final int totalDays;
+  final VoidCallback onSeeDetails;
+  final VoidCallback onMoveDay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(unit.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.grey900)),
+          const SizedBox(height: 2),
+          Text(
+            'Jour $dayIndex/$totalDays — ${_formatShortDate(day)}',
+            style: const TextStyle(color: AppColors.grey500, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.event_repeat, color: AppColors.primary),
+            title: const Text('Déplacer ce jour', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: const Text('Change uniquement cette date, les autres jours restent en place.',
+                style: TextStyle(fontSize: 12, color: AppColors.grey400)),
+            onTap: onMoveDay,
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.info_outline, color: AppColors.grey600),
+            title: const Text('Voir les détails du chantier', style: TextStyle(fontWeight: FontWeight.w700)),
+            onTap: onSeeDetails,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Déplace uniquement le jour tapé — remplace sa date dans `scheduledDates`
+/// (les autres restent identiques) et réécrit le tableau complet, jamais un
+/// simple recalcul depuis poseDate+durée (qui décalerait tout en cascade).
+class _MoveDaySheet extends StatefulWidget {
+  const _MoveDaySheet({required this.workspaceId, required this.unit, required this.day});
+
+  final String workspaceId;
+  final _PlanUnit unit;
+  final DateTime day;
+
+  @override
+  State<_MoveDaySheet> createState() => _MoveDaySheetState();
+}
+
+class _MoveDaySheetState extends State<_MoveDaySheet> {
+  late DateTime _newDate = widget.day;
+  bool _saving = false;
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _newDate,
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => _newDate = picked);
+  }
+
+  Future<void> _confirm() async {
+    setState(() => _saving = true);
+    // Heure conservée identique à celle du jour déplacé, jour calendaire
+    // remplacé par le choix ci-dessus (aucune contrainte jour ouvré ici —
+    // un déplacement manuel et explicite peut viser n'importe quel jour).
+    final occupied = [...widget.unit.occupiedDays];
+    final idx = occupied.indexWhere((d) => _isSameDay(d, widget.day));
+    final time = idx >= 0 ? occupied[idx] : widget.day;
+    final replacement = DateTime(_newDate.year, _newDate.month, _newDate.day, time.hour, time.minute);
+    final updated = [...occupied];
+    if (idx >= 0) {
+      updated[idx] = replacement;
+    } else {
+      updated.add(replacement);
+    }
+    updated.sort();
+    try {
+      if (widget.unit.lotId != null) {
+        await DevisService.updateLotPlanningFields(
+          workspaceId: widget.workspaceId,
+          devisId: widget.unit.devisId,
+          lotId: widget.unit.lotId!,
+          scheduledDates: updated,
+        );
+      } else {
+        await FirebaseFirestore.instance
+            .collection('workspaces')
+            .doc(widget.workspaceId)
+            .collection('devis')
+            .doc(widget.unit.devisId)
+            .set({
+          'scheduledDates': updated.map((d) => Timestamp.fromDate(d.toUtc())).toList(),
+          'poseDate': Timestamp.fromDate(updated.first.toUtc()),
+        }, SetOptions(merge: true));
+      }
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur : $e'), backgroundColor: AppColors.danger),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Déplacer le ${_formatShortDate(widget.day)}',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.grey900)),
+          const SizedBox(height: 4),
+          Text(widget.unit.label, style: const TextStyle(color: AppColors.grey500, fontSize: 13)),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              const Expanded(child: Text('Nouvelle date', style: TextStyle(color: AppColors.grey700, fontSize: 13))),
+              TextButton(onPressed: _pickDate, child: Text(_formatShortDate(_newDate))),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _saving ? null : _confirm,
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+              child: _saving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Confirmer'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1976,7 +2212,13 @@ class _PoseAssignmentSheetState extends State<_PoseAssignmentSheet> {
     if (_teamId == null) return;
     final team = widget.teams.firstWhere((t) => t.id == _teamId, orElse: () => widget.teams.first);
     final names = team.memberIds.map(_poseurName).join(', ');
-    final poseDateTime = DateTime(_date.year, _date.month, _date.day, _time.hour, _time.minute);
+    // Jours ouvrés depuis le jour choisi (weekend exclu) — un chantier de
+    // 3 jours glissé un jeudi occupe jeu/ven puis le lundi suivant, jamais
+    // le weekend. La même heure de RDV s'applique à chaque jour.
+    final days = widget.unit.estimatedDurationDays < 1 ? 1 : widget.unit.estimatedDurationDays;
+    final scheduledDates = _businessDays(_date, days)
+        .map((d) => DateTime(d.year, d.month, d.day, _time.hour, _time.minute))
+        .toList();
     setState(() => _saving = true);
     try {
       await DevisService.updateStatus(
@@ -1986,7 +2228,12 @@ class _PoseAssignmentSheetState extends State<_PoseAssignmentSheet> {
         lotId: widget.unit.lotId,
         extraFields: {
           'teamId': team.id,
-          'poseDate': poseDateTime.toIso8601String(),
+          // .toUtc() explicite : le serveur (Cloud Functions, fuseau UTC)
+          // parse cette chaîne avec `new Date(...)` — sans indicateur de
+          // fuseau, une heure locale Paris y serait lue comme une heure UTC
+          // (décalage de +2h l'été observé en test sur cet écran).
+          'poseDate': scheduledDates.first.toUtc().toIso8601String(),
+          'scheduledDates': scheduledDates.map((d) => d.toUtc().toIso8601String()).toList(),
           'poseurIds': team.memberIds,
           'poseurNames': names,
         },
@@ -2346,6 +2593,280 @@ class _ChantierDetailSheetState extends State<_ChantierDetailSheet> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ESPACE "ÉQUIPE" — vue regroupée pour le métreur/admin : pool des poseurs
+// avec dispo/congé visible d'un coup d'œil, composition des équipes (déjà un
+// groupe fixe de poseurs — glisser sur "Équipe Guigui+Lucas" sélectionne
+// toujours les deux mêmes personnes) et gestion des congés. Réutilise les
+// mêmes modèles/feuilles que le Planner (_PlanningTeam, _PoseurOption,
+// _Unavailability, _TeamEditSheet, _UnavailabilitiesSheet) plutôt que d'en
+// recréer une seconde version — seule la présentation change : ici un écran
+// dédié et lisible, plutôt que ces réglages cachés dans le menu ⋮ de l'agenda.
+// ════════════════════════════════════════════════════════════════════════════
+
+class MetreurTeamScreen extends StatelessWidget {
+  const MetreurTeamScreen({super.key, required this.workspaceId, required this.accentColor});
+
+  final String workspaceId;
+  final Color accentColor;
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _teamsStream => FirebaseFirestore.instance
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('planningTeams')
+      .orderBy('createdAt')
+      .snapshots();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _usersStream => FirebaseFirestore.instance
+      .collection('users')
+      .where('workspaceId', isEqualTo: workspaceId)
+      .snapshots();
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> get _unavailStream => FirebaseFirestore.instance
+      .collection('workspaces')
+      .doc(workspaceId)
+      .collection('unavailabilities')
+      .snapshots();
+
+  void _openTeamSheet(BuildContext context, List<_PoseurOption> poseurs, _PlanningTeam? team) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _TeamEditSheet(
+        workspaceId: workspaceId,
+        accentColor: accentColor,
+        team: team,
+        poseurs: poseurs,
+      ),
+    );
+  }
+
+  void _openUnavailabilitiesSheet(
+    BuildContext context,
+    List<_PoseurOption> poseurs,
+    List<_Unavailability> unavailabilities,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _UnavailabilitiesSheet(
+        workspaceId: workspaceId,
+        accentColor: accentColor,
+        poseurs: poseurs,
+        unavailabilities: unavailabilities,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.grey600),
+        title: const Text('Équipe', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
+      ),
+      body: SafeArea(
+        child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _usersStream,
+          builder: (context, usersSnap) {
+            final poseurs = (usersSnap.data?.docs ?? [])
+                .map(_PoseurOption.fromDoc)
+                .where((p) => p.role == 'poseur' && p.active)
+                .toList();
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _unavailStream,
+              builder: (context, unavailSnap) {
+                final unavailabilities = (unavailSnap.data?.docs ?? [])
+                    .map(_Unavailability.fromDoc)
+                    .whereType<_Unavailability>()
+                    .toList();
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _teamsStream,
+                  builder: (context, teamsSnap) {
+                    if (!usersSnap.hasData || !unavailSnap.hasData || !teamsSnap.hasData) {
+                      return Center(child: CircularProgressIndicator(color: accentColor));
+                    }
+                    final teams = (teamsSnap.data?.docs ?? [])
+                        .map(_PlanningTeam.fromDoc)
+                        .where((t) => t.active)
+                        .toList();
+                    final today = DateTime.now();
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                      children: [
+                        const Text('Poseurs',
+                            style: TextStyle(color: AppColors.grey900, fontSize: 17, fontWeight: FontWeight.w800)),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Disponibilité du jour — la composition des équipes ci-dessous reste fixe quel que soit un congé ponctuel.',
+                          style: TextStyle(color: AppColors.grey400, fontSize: 12),
+                        ),
+                        const SizedBox(height: 12),
+                        if (poseurs.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text('Aucun poseur dans l\'équipe pour le moment.',
+                                style: TextStyle(color: AppColors.grey400)),
+                          )
+                        else
+                          ...poseurs.map((p) {
+                            final leave = unavailabilities.where((u) => u.poseurId == p.id && u.covers(today));
+                            final onLeave = leave.isNotEmpty;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.cardBorder),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.circle,
+                                      size: 10, color: onLeave ? AppColors.danger : AppColors.success),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(p.name,
+                                        style: const TextStyle(
+                                            color: AppColors.grey900, fontWeight: FontWeight.w600, fontSize: 14)),
+                                  ),
+                                  Text(
+                                    onLeave
+                                        ? '${leave.first.reason.isNotEmpty ? leave.first.reason : 'Congé'} · jusqu\'au ${_formatShortDate(leave.first.end)}'
+                                        : 'Disponible',
+                                    style: TextStyle(
+                                        color: onLeave ? AppColors.danger : AppColors.grey400,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text('Équipes',
+                                  style: TextStyle(
+                                      color: AppColors.grey900, fontSize: 17, fontWeight: FontWeight.w800)),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _openTeamSheet(context, poseurs, null),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Nouvelle équipe'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          'Un binôme habituel se compose une fois ici : glisser un chantier sur cette équipe dans l\'agenda sélectionne toujours ces mêmes poseurs.',
+                          style: TextStyle(color: AppColors.grey400, fontSize: 12),
+                        ),
+                        const SizedBox(height: 12),
+                        if (teams.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text('Aucune équipe créée pour le moment.',
+                                style: TextStyle(color: AppColors.grey400)),
+                          )
+                        else
+                          ...teams.map((t) {
+                            final memberNames = t.memberIds
+                                .map((id) => poseurs.where((p) => p.id == id).map((p) => p.name).firstOrNull ?? id)
+                                .join(', ');
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.cardBorder),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(t.name,
+                                            style: const TextStyle(
+                                                color: AppColors.grey900,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 14)),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          memberNames.isEmpty ? 'Aucun membre' : memberNames,
+                                          style: const TextStyle(color: AppColors.grey400, fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.grey500),
+                                    onPressed: () => _openTeamSheet(context, poseurs, t),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text('Congés & absences',
+                                  style: TextStyle(
+                                      color: AppColors.grey900, fontSize: 17, fontWeight: FontWeight.w800)),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _openUnavailabilitiesSheet(context, poseurs, unavailabilities),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Gérer'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (unavailabilities.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text('Aucune absence enregistrée.', style: TextStyle(color: AppColors.grey400)),
+                          )
+                        else
+                          ...(() {
+                            final sorted = [...unavailabilities]..sort((a, b) => a.start.compareTo(b.start));
+                            return sorted.take(5).map((u) {
+                              final poseur = poseurs.where((p) => p.id == u.poseurId).toList();
+                              final poseurName = poseur.isNotEmpty ? poseur.first.name : u.poseurId;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  '$poseurName — ${u.reason.isNotEmpty ? '${u.reason} · ' : ''}'
+                                  '${_formatShortDate(u.start)} → ${_formatShortDate(u.end)}',
+                                  style: const TextStyle(color: AppColors.grey600, fontSize: 13),
+                                ),
+                              );
+                            });
+                          })(),
+                      ],
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

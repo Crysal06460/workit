@@ -16,7 +16,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../admin_home_screen.dart';
 import '../chantier_chat_screen.dart';
 import '../entry_screen.dart';
-import '../planner_screen.dart';
 import '../sign_in_screen.dart';
 import '../settings_screen.dart';
 import '../widgets/dynamic_dropdown_field.dart';
@@ -40,6 +39,7 @@ part 'commercial_models.dart';
 part 'commercial_quote_list.dart';
 part 'commercial_quote_wizard.dart';
 part 'commercial_chantier_detail.dart';
+part 'commercial_agenda_screen.dart';
 
 const Map<String, String> _metierOptions = {
   'menuiserie_aluminium': 'Menuiserie Extérieure & Fermeture',
@@ -301,7 +301,7 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                             _PillTab(label: 'Métré prog.', count: scheduledItems.length + demoSched, isSelected: sel == 2),
                             _PillTab(label: 'À commander', count: commandeItems.length + demoCmd, isSelected: sel == 3),
                             _PillTab(label: 'À planifier', count: planifierItems.length + demoPlan, isSelected: sel == 4),
-                            _PillTab(label: 'En pose', count: poseItems.length + demoPose, isSelected: sel == 5),
+                            _PillTab(label: 'Programmé', count: poseItems.length + demoPose, isSelected: sel == 5),
                             _PillTab(label: 'Terminés', count: terminesItems.length + demoTerm, isSelected: sel == 6),
                           ],
                         );
@@ -385,9 +385,9 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                               title: 'À planifier', items: allPlanifier.map((e) => _toSummary(context, e)).toList()),
                         ),
                         WiStat(
-                          value: '${allPose.length}', label: 'En pose', color: AppColors.purple,
+                          value: '${allPose.length}', label: 'Programmé', color: AppColors.purple,
                           onTap: () => WiDevisListModal.show(context,
-                              title: 'En pose', items: allPose.map((e) => _toSummary(context, e)).toList()),
+                              title: 'Programmé', items: allPose.map((e) => _toSummary(context, e)).toList()),
                         ),
                         WiStat(
                           value: '${allTermine.length}', label: 'Terminé', color: AppColors.success,
@@ -567,8 +567,8 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
                             cards: planifierItems.map((i) => kanbanCard(i, 'À planifier', AppColors.primary)).toList(),
                           ),
                           WiKanbanColumn(
-                            id: 'pose', label: 'En pose', color: AppColors.success,
-                            cards: poseItems.map((i) => kanbanCard(i, 'En pose', AppColors.success)).toList(),
+                            id: 'pose', label: 'Programmé', color: AppColors.success,
+                            cards: poseItems.map((i) => kanbanCard(i, 'Programmé', AppColors.success)).toList(),
                           ),
                           WiKanbanColumn(
                             id: 'termines', label: 'Terminés', color: AppColors.grey500,
@@ -697,17 +697,11 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
     // (bug constaté en test réel : "Agenda" restait bleu sur l'écran Devis).
     if (index == 0) setState(() => _bottomNavIndex = index);
     if (index == 1) {
-      if (_workspaceId == null) return;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (_workspaceId == null || uid == null) return;
       Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: AppColors.background,
-          appBar: AppBar(
-            backgroundColor: AppColors.surface,
-            elevation: 0,
-            title: const Text('Agenda', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
-            iconTheme: const IconThemeData(color: AppColors.grey600),
-          ),
-          body: WiSwipeBack(child: PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleCommercial)),
+        builder: (_) => WiSwipeBack(
+          child: CommercialAgendaScreen(workspaceId: _workspaceId!, uid: uid),
         ),
       ));
     } else if (index == 2) {
@@ -752,7 +746,9 @@ class _CommercialHomeScreenState extends State<CommercialHomeScreen> {
       clientLabel: item.client,
       address: item.address,
       status: status ?? '',
-      statusLabel: status == null || status.isEmpty ? 'Nouvelle demande' : status,
+      statusLabel: status == null || status.isEmpty
+          ? 'Nouvelle demande'
+          : (status == 'En pose' ? 'Programmé' : status),
       statusColor: _summaryStatusColor(status),
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,

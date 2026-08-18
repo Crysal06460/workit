@@ -58,7 +58,9 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
       status: status,
       statusLabel: status.isEmpty
           ? 'Nouvelle demande'
-          : (status == 'À planifier' ? 'Pose à programmer' : status),
+          : (status == 'À planifier'
+              ? 'Pose à programmer'
+              : (status == 'En pose' ? 'Programmé' : status)),
       statusColor: _statusColor(status),
       createdAt: createdAt is Timestamp ? createdAt.toDate() : null,
       updatedAt: updatedAt is Timestamp ? updatedAt.toDate() : null,
@@ -486,13 +488,13 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                           ),
                         ),
                         _StatCard(
-                          title: 'En pose',
+                          title: 'Programmé',
                           count: enPoseDocs.length,
                           icon: Icons.home_repair_service_outlined,
                           color: AppColors.purple,
                           onTap: () => WiDevisListModal.show(
                             context,
-                            title: 'En pose',
+                            title: 'Programmé',
                             items: enPoseDocs.map((d) => _toSummary(context, d)).toList(),
                           ),
                         ),

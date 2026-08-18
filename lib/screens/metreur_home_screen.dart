@@ -292,7 +292,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                 ),
               ),
               Text(
-                'Metteur en œuvre · ${_totalActions()} actions à traiter',
+                'Métreur · ${_totalActions()} actions à traiter',
                 style: const TextStyle(color: AppColors.grey400, fontSize: 13),
               ),
             ],
@@ -428,10 +428,10 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                       const SizedBox(height: 8),
                       chipRow([
                         _StatChip(
-                          label: 'En pose', count: pose.length,
+                          label: 'Programmé', count: pose.length,
                           color: AppColors.purple,
                           onTap: () => WiDevisListModal.show(context,
-                              title: 'En pose', items: pose.map((e) => _toSummary(context, e)).toList()),
+                              title: 'Programmé', items: pose.map((e) => _toSummary(context, e)).toList()),
                         ),
                         _StatChip(
                           label: 'Terminé', count: termine.length,
@@ -465,31 +465,37 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                       items: allItems,
                       emptyLabel: 'Aucun chantier.',
                       onCardTap: (item) => _showRequestDetails(context, item),
+                      onPlanifierPose: (item) => _openPlanner(),
                     ),
                     _MetreurList(
                       items: _newRequests,
                       emptyLabel: 'Aucune demande en attente.',
                       onCardTap: (item) => _showRequestDetails(context, item),
+                      onPlanifierPose: (item) => _openPlanner(),
                     ),
                     _MetreurList(
                       items: _acceptedRequests,
                       emptyLabel: 'Aucun métré en cours.',
                       onCardTap: (item) => _showRequestDetails(context, item),
+                      onPlanifierPose: (item) => _openPlanner(),
                     ),
                     _MetreurList(
                       items: _toOrder,
                       emptyLabel: 'Aucune commande en attente.',
                       onCardTap: (item) => _showRequestDetails(context, item),
+                      onPlanifierPose: (item) => _openPlanner(),
                     ),
                     _MetreurList(
                       items: _toPlan,
                       emptyLabel: 'Aucune pose à planifier.',
                       onCardTap: (item) => _showRequestDetails(context, item),
+                      onPlanifierPose: (item) => _openPlanner(),
                     ),
                     _MetreurList(
                       items: _toClose,
                       emptyLabel: 'Rien à clôturer.',
                       onCardTap: (item) => _showRequestDetails(context, item),
+                      onPlanifierPose: (item) => _openPlanner(),
                     ),
                   ],
                 ),
@@ -510,7 +516,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.surface,
           elevation: 0,
-          title: const Text('Planner', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
+          title: const Text('Planning', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
           iconTheme: const IconThemeData(color: AppColors.grey600),
         ),
         body: WiSwipeBack(child: PlannerScreen(workspaceId: _workspaceId!, accentColor: AppColors.roleMetteur)),
@@ -558,7 +564,9 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
       clientLabel: data.title,
       address: data.address,
       status: data.status ?? '',
-      statusLabel: (data.status?.isEmpty ?? true) ? 'Nouvelle demande' : data.status!,
+      statusLabel: (data.status?.isEmpty ?? true)
+          ? 'Nouvelle demande'
+          : (data.status == 'En pose' ? 'Programmé' : data.status!),
       statusColor: _MetCard._accentColor(data.status),
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
@@ -837,7 +845,9 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
           workspaceId: _workspaceId!,
           devisId: data.id,
           newStatus: 'En cours',
-          extraFields: {'meetingAt': dt.toIso8601String()},
+          // .toUtc() : voir planner_screen.dart _confirm() pour le pourquoi
+          // (sans ça, le serveur lit l'heure locale comme si elle était UTC).
+          extraFields: {'meetingAt': dt.toUtc().toIso8601String()},
         );
       } catch (_) {}
     }
@@ -1002,7 +1012,7 @@ class _MetreurHomeScreenState extends State<MetreurHomeScreen> {
                           devisId: data.id,
                           newStatus: 'En pose',
                           extraFields: {
-                            'poseDate': dt.toIso8601String(),
+                            'poseDate': dt.toUtc().toIso8601String(),
                             'poseurIds': poseurIds,
                             'poseurNames': poseurNames,
                             'updated': 'Pose programmée',
@@ -1733,10 +1743,12 @@ class _MetreurList extends StatelessWidget {
     required this.items,
     required this.emptyLabel,
     required this.onCardTap,
+    this.onPlanifierPose,
   });
   final List<_MeasureCardData> items;
   final String emptyLabel;
   final void Function(_MeasureCardData) onCardTap;
+  final void Function(_MeasureCardData)? onPlanifierPose;
 
   @override
   Widget build(BuildContext context) {
@@ -1752,15 +1764,20 @@ class _MetreurList extends StatelessWidget {
       itemBuilder: (_, i) => _MetCard(
         data: items[i],
         onTap: () => onCardTap(items[i]),
+        onPlanifierPose: onPlanifierPose == null ? null : () => onPlanifierPose!(items[i]),
       ),
     );
   }
 }
 
 class _MetCard extends StatelessWidget {
-  const _MetCard({required this.data, required this.onTap});
+  const _MetCard({required this.data, required this.onTap, this.onPlanifierPose});
   final _MeasureCardData data;
   final VoidCallback onTap;
+  // Statuts 'À planifier'/'En pose' : la pose se planifie depuis l'agenda
+  // (glisser-déposer), pas depuis la fiche — voir _MeasureRequestSummary.
+  // Si non fourni, la carte retombe sur onTap comme les autres statuts.
+  final VoidCallback? onPlanifierPose;
 
   static Color _accentColor(String? s) {
     if (s == 'En cours' || s == 'Acceptée' || s == 'RDV métré' || s == 'Métré programmé') {
@@ -1790,7 +1807,11 @@ class _MetCard extends StatelessWidget {
     if (s == 'En cours') return 'Saisir métré';
     if (s == 'À commander') return 'Commander';
     if (s == 'Commande en cours') return 'Confirmer';
-    if (s == 'À planifier' || s == 'En pose') return 'Planifier pose';
+    // 'En pose' veut dire qu'une équipe/date sont déjà posées (voir
+    // scheduledDates) — seul 'À planifier' correspond à un chantier pas
+    // encore glissé dans l'agenda, distinction perdue avant ce correctif.
+    if (s == 'À planifier') return 'Planifier pose';
+    if (s == 'En pose') return 'Voir le planning';
     if (s == 'À clôturer') return 'En attente de validation';
     if (s == 'Terminé' || s == 'Clôturé' || s == 'SAV') return 'Clôturer';
     return 'Accepter';
@@ -1912,7 +1933,11 @@ class _MetCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(10),
                               ),
                             ),
-                            onPressed: onTap,
+                            onPressed:
+                                (data.status == 'À planifier' || data.status == 'En pose') &&
+                                        onPlanifierPose != null
+                                    ? onPlanifierPose
+                                    : onTap,
                             child: Text(
                               _ctaLabel(data.status),
                               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
@@ -1939,7 +1964,10 @@ class _MetStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final label = status ?? 'En attente';
+    // "Programmé" plutôt que le statut serveur brut "En pose" : ce dernier
+    // est atteint dès qu'une équipe/date sont posées dans l'agenda, pas
+    // forcément au moment réel de la pose — libellé jugé trompeur.
+    final label = status == 'En pose' ? 'Programmé' : (status ?? 'En attente');
     final bg = accent.withOpacity(0.12);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -2192,6 +2220,8 @@ class _QuoteDraft {
     this.products = const [],
     this.assignedMetreurId,
     this.assignedMetreurName,
+    this.soldEstimatedDurationDays,
+    this.soldPoseurCountRequired,
   });
 
   final String? clientName;
@@ -2210,6 +2240,11 @@ class _QuoteDraft {
   final List<_ProductFormData> products;
   final String? assignedMetreurId;
   final String? assignedMetreurName;
+  // Temps/poseurs vendus au client par le commercial — voir même champ côté
+  // commercial_models.dart, lu ici en lecture seule pour pré-remplir la
+  // confirmation obligatoire du métreur à la validation du métré.
+  final int? soldEstimatedDurationDays;
+  final int? soldPoseurCountRequired;
 
   Map<String, dynamic> toMap() {
     return {
@@ -2229,6 +2264,8 @@ class _QuoteDraft {
       'products': products.map((e) => e.toMap()).toList(),
       'assignedMetreurId': assignedMetreurId,
       'assignedMetreurName': assignedMetreurName,
+      'soldEstimatedDurationDays': soldEstimatedDurationDays,
+      'soldPoseurCountRequired': soldPoseurCountRequired,
     };
   }
 
@@ -2259,6 +2296,8 @@ class _QuoteDraft {
           : const [],
       assignedMetreurId: map['assignedMetreurId']?.toString(),
       assignedMetreurName: map['assignedMetreurName']?.toString(),
+      soldEstimatedDurationDays: (map['soldEstimatedDurationDays'] as num?)?.toInt(),
+      soldPoseurCountRequired: (map['soldPoseurCountRequired'] as num?)?.toInt(),
     );
   }
 }
@@ -2400,6 +2439,64 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
             })
           : null;
 
+      // Sauvegarde immédiate des mesures saisies, indépendamment de la
+      // transition de statut ci-dessous — les règles Firestore autorisent
+      // l'écriture directe de tout champ sauf le statut. Si le métreur
+      // annule ensuite la confirmation obligatoire durée/poseurs, ses
+      // mesures restent acquises (sinon il faudrait tout ressaisir).
+      final wsIdForDraft = data.workspaceId ?? widget.workspaceId;
+      if (updatedDraft != null && wsIdForDraft != null) {
+        try {
+          await FirebaseFirestore.instance
+              .collection('workspaces')
+              .doc(wsIdForDraft)
+              .collection('devis')
+              .doc(data.id)
+              .set({'draft': updatedDraft.toMap()}, SetOptions(merge: true));
+        } catch (_) {}
+        if (mounted) {
+          setState(() => _data = _data.copyWith(draft: updatedDraft));
+        }
+      }
+
+      // Phase 3 (multi-lots) : si ce passage en "À commander" est le premier
+      // pour ce devis, la Cloud Function crée un lot par metierKey distinct
+      // parmi les produits — elle a besoin des libellés métier (le
+      // dictionnaire n'est pas accessible côté serveur) pour nommer les lots
+      // créés, et calculées ici pour être aussi affichées dans la
+      // confirmation obligatoire durée/poseurs ci-dessous.
+      final isFirstValidation = updatedDraft != null && data.lotIds.isEmpty;
+      final metierKeys = isFirstValidation
+          ? updatedDraft.products
+              .map((p) => p.metierKey)
+              .whereType<String>()
+              .where((k) => k.isNotEmpty)
+              .toSet()
+          : const <String>{};
+      final metierLabels = <String, String>{};
+      for (final key in metierKeys) {
+        metierLabels[key] = await DictionaryService.instance.metierLabel(key);
+      }
+
+      // Obligatoire avant de pouvoir valider le métré : le métreur confirme
+      // ou ajuste le temps/l'équipe vendus par le commercial (ou saisit une
+      // valeur si le commercial n'en a transmis aucune) — ces valeurs
+      // deviennent celles du/des lots créés par la transition ci-dessous.
+      // Annuler ici laisse les mesures déjà sauvegardées ci-dessus intactes
+      // et le statut inchangé — "Terminer et Valider" reste retentable.
+      Map<String, Map<String, int>>? lotEstimates;
+      if (metierKeys.isNotEmpty) {
+        if (!mounted) return;
+        lotEstimates = await _confirmScheduleEstimates(
+          context,
+          metierKeys: metierKeys,
+          metierLabels: metierLabels,
+          defaultDuration: data.draft?.soldEstimatedDurationDays,
+          defaultPoseurCount: data.draft?.soldPoseurCountRequired,
+        );
+        if (lotEstimates == null) return; // annulé — métré pas encore validé
+      }
+
       try {
         final wsId = data.workspaceId ?? widget.workspaceId;
         if (wsId == null) throw 'Workspace ID manquant';
@@ -2407,25 +2504,12 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         final extraFields = <String, dynamic>{'updated': 'Métré terminé'};
         if (updatedDraft != null) {
           extraFields['draft'] = updatedDraft.toMap();
-          // Phase 3 (multi-lots) : si ce passage en "À commander" est le
-          // premier pour ce devis, la Cloud Function crée un lot par
-          // metierKey distinct parmi les produits — elle a besoin des
-          // libellés métier (le dictionnaire n'est pas accessible côté
-          // serveur) pour nommer les lots créés.
-          if (data.lotIds.isEmpty) {
-            final metierKeys = updatedDraft.products
-                .map((p) => p.metierKey)
-                .whereType<String>()
-                .where((k) => k.isNotEmpty)
-                .toSet();
-            final metierLabels = <String, String>{};
-            for (final key in metierKeys) {
-              metierLabels[key] = await DictionaryService.instance.metierLabel(key);
-            }
-            if (metierLabels.isNotEmpty) {
-              extraFields['metierLabels'] = metierLabels;
-            }
+          if (metierLabels.isNotEmpty) {
+            extraFields['metierLabels'] = metierLabels;
           }
+        }
+        if (lotEstimates != null) {
+          extraFields['lotEstimates'] = lotEstimates;
         }
 
         await DevisService.updateStatus(
@@ -2468,6 +2552,33 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
         }
       }
     }
+  }
+
+  /// Confirmation obligatoire du temps/de l'équipe avant de pouvoir valider
+  /// le métré — un pair durée/poseurs par métier distinct du devis, pré-
+  /// rempli avec l'estimation vendue par le commercial si transmise. Retourne
+  /// `null` si le métreur annule (le métré reste non validé, réessayable).
+  Future<Map<String, Map<String, int>>?> _confirmScheduleEstimates(
+    BuildContext context, {
+    required Set<String> metierKeys,
+    required Map<String, String> metierLabels,
+    int? defaultDuration,
+    int? defaultPoseurCount,
+  }) {
+    return showModalBottomSheet<Map<String, Map<String, int>>>(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      backgroundColor: _metreurCard,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _ScheduleEstimateSheet(
+        metierKeys: metierKeys,
+        metierLabels: metierLabels,
+        defaultDuration: defaultDuration,
+        defaultPoseurCount: defaultPoseurCount,
+      ),
+    );
   }
 
   // ─── Phase 3 (multi-lots) : actions par lot ────────────────────────────
@@ -2673,7 +2784,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                           newStatus: 'En pose',
                           lotId: lot.lotId,
                           extraFields: {
-                            'poseDate': dt.toIso8601String(),
+                            'poseDate': dt.toUtc().toIso8601String(),
                             'poseurIds': poseurIds,
                             'poseurNames': poseurNames,
                             'updated': 'Pose programmée',
@@ -2949,6 +3060,13 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
   @override
   Widget build(BuildContext context) {
     final data = _data;
+    // Une fois le métré fait (statut au-delà de Acceptée/En cours), le
+    // rendez-vous concernait la prise de mesures — sans rapport avec la
+    // suite (commande/planification), donc plus affiché ni modifiable ici.
+    final metreDone = data.status != null &&
+        data.status != 'Nouvelle demande' &&
+        data.status != 'Acceptée' &&
+        data.status != 'En cours';
     return Scaffold(
       backgroundColor: _metreurBg,
       appBar: AppBar(
@@ -3016,7 +3134,7 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                             label: 'Reçue',
                             value: data.updated ?? 'À l’instant',
                           ),
-                          if (meetingAt != null)
+                          if (meetingAt != null && !metreDone)
                             _SummaryLine(
                               icon: Icons.event_available_outlined,
                               label: 'Rendez-vous',
@@ -3032,17 +3150,21 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                                 child: const Text('Appeler', style: TextStyle(color: _metreurAccent)),
                               ),
                             ),
-                          const SizedBox(height: 8),
-                          _PrimaryAction(
-                            label: meetingAt == null ? 'Prendre rendez-vous client' : 'Modifier rendez-vous client',
-                            icon: Icons.calendar_month_outlined,
-                            onPressed: () async {
-                              final picked = await widget.onSchedule();
-                              if (picked != null && mounted) {
-                                setState(() => meetingAt = picked);
-                              }
-                            },
-                          ),
+                          if (!metreDone) ...[
+                            const SizedBox(height: 8),
+                            _PrimaryAction(
+                              label: meetingAt == null
+                                  ? 'Prendre rendez-vous client'
+                                  : 'Modifier rendez-vous client',
+                              icon: Icons.calendar_month_outlined,
+                              onPressed: () async {
+                                final picked = await widget.onSchedule();
+                                if (picked != null && mounted) {
+                                  setState(() => meetingAt = picked);
+                                }
+                              },
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -3050,14 +3172,6 @@ class _MeasureRequestSummaryState extends State<_MeasureRequestSummary> {
                     const SizedBox(height: 12),
                     if (data.draft != null && data.draft!.products.isNotEmpty)
                       Builder(builder: (context) {
-                        // Une fois le métré fait (statut au-delà de
-                        // Acceptée/En cours), la section devient "à
-                        // commander" : on n'édite plus élément par élément,
-                        // on consulte/imprime le métré déjà réalisé.
-                        final metreDone = data.status != null &&
-                            data.status != 'Nouvelle demande' &&
-                            data.status != 'Acceptée' &&
-                            data.status != 'En cours';
                         return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -3630,6 +3744,110 @@ class _PrimaryAction extends StatelessWidget {
       label: Text(
         label,
         style: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+/// Feuille bloquante affichée à la fin de la saisie du métré (avant que la
+/// transition vers "À commander" ne parte) : un pair durée/poseurs par
+/// métier distinct du devis. Pas de bouton retour/croix — seul "Confirmer"
+/// (retourne les valeurs) ou "Revenir au métré" (retourne null, annule la
+/// validation) referment la feuille, pour qu'il soit impossible de valider
+/// un métré sans ces deux informations.
+class _ScheduleEstimateSheet extends StatefulWidget {
+  const _ScheduleEstimateSheet({
+    required this.metierKeys,
+    required this.metierLabels,
+    this.defaultDuration,
+    this.defaultPoseurCount,
+  });
+
+  final Set<String> metierKeys;
+  final Map<String, String> metierLabels;
+  final int? defaultDuration;
+  final int? defaultPoseurCount;
+
+  @override
+  State<_ScheduleEstimateSheet> createState() => _ScheduleEstimateSheetState();
+}
+
+class _ScheduleEstimateSheetState extends State<_ScheduleEstimateSheet> {
+  late final Map<String, int> _durations = {
+    for (final key in widget.metierKeys) key: widget.defaultDuration ?? 1,
+  };
+  late final Map<String, int> _poseurCounts = {
+    for (final key in widget.metierKeys) key: widget.defaultPoseurCount ?? 1,
+  };
+
+  Widget _stepper(String label, int value, ValueChanged<int> onChanged, {int min = 1, int max = 30}) {
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: const TextStyle(color: AppColors.grey700, fontSize: 13))),
+        IconButton(
+          onPressed: value > min ? () => onChanged(value - 1) : null,
+          icon: const Icon(Icons.remove_circle_outline),
+        ),
+        Text('$value', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        IconButton(
+          onPressed: value < max ? () => onChanged(value + 1) : null,
+          icon: const Icon(Icons.add_circle_outline),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hadSoldEstimate = widget.defaultDuration != null || widget.defaultPoseurCount != null;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Temps prévu pour la pose',
+            style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800, fontSize: 17),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            hadSoldEstimate
+                ? 'Confirmez ou ajustez l\'estimation transmise par le commercial — nécessaire pour planifier la pose.'
+                : 'Le commercial n\'a transmis aucune estimation — indiquez le temps et le nombre de poseurs nécessaires.',
+            style: const TextStyle(color: AppColors.grey400, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          for (final key in widget.metierKeys) ...[
+            if (widget.metierKeys.length > 1) ...[
+              Text(widget.metierLabels[key] ?? key,
+                  style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700, fontSize: 14)),
+              const SizedBox(height: 4),
+            ],
+            _stepper('Durée estimée (jours)', _durations[key]!, (v) => setState(() => _durations[key] = v)),
+            _stepper('Poseurs requis', _poseurCounts[key]!, (v) => setState(() => _poseurCounts[key] = v), max: 10),
+            const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 4),
+          _PrimaryAction(
+            label: 'Confirmer et valider le métré',
+            icon: Icons.check_circle_outline,
+            onPressed: () => Navigator.of(context).pop({
+              for (final key in widget.metierKeys)
+                key: {
+                  'estimatedDurationDays': _durations[key]!,
+                  'poseurCountRequired': _poseurCounts[key]!,
+                },
+            }),
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Revenir au métré', style: TextStyle(color: AppColors.grey500)),
+            ),
+          ),
+        ],
       ),
     );
   }

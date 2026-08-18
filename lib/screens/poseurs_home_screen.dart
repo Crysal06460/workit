@@ -107,7 +107,7 @@ class _PoseursHomeScreenState extends State<PoseursHomeScreen> {
         return 'SAV';
       case 'En pose':
       default:
-        return 'En pose';
+        return 'Programmé';
     }
   }
 
@@ -507,7 +507,7 @@ class _ChantierCard extends StatelessWidget {
         return 'SAV';
       case 'En pose':
       default:
-        return 'En pose';
+        return 'Programmé';
     }
   }
 
