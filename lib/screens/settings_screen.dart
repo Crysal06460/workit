@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:local_auth/local_auth.dart';
+import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/theme/app_colors.dart';
@@ -188,24 +190,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _LegalTile(
                     icon: Icons.description_outlined,
                     label: 'Conditions générales de vente',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const _LegalPlaceholderScreen(
-                          title: 'Conditions générales de vente',
-                        ),
-                      ),
+                    onTap: () => _openLegalPdf(
+                      context,
+                      assetPath: 'assets/legal/cgv.pdf',
+                      fileName: 'WorkIt - Conditions generales de vente.pdf',
                     ),
                   ),
                   const Divider(height: 1, color: AppColors.cardBorder, indent: 16, endIndent: 16),
                   _LegalTile(
                     icon: Icons.privacy_tip_outlined,
                     label: 'Politique de confidentialité',
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const _LegalPlaceholderScreen(
-                          title: 'Politique de confidentialité',
-                        ),
-                      ),
+                    onTap: () => _openLegalPdf(
+                      context,
+                      assetPath: 'assets/legal/politique_confidentialite.pdf',
+                      fileName: 'WorkIt - Politique de confidentialite.pdf',
                     ),
                   ),
                 ],
@@ -285,41 +283,24 @@ class _LegalTile extends StatelessWidget {
   }
 }
 
-/// Écran temporaire pour CGV/Politique de confidentialité — le lien est
-/// fictif pour l'instant (pas de vrai texte juridique fourni), mais
-/// l'entrée de menu et la navigation sont fonctionnelles dès maintenant.
-class _LegalPlaceholderScreen extends StatelessWidget {
-  const _LegalPlaceholderScreen({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.surface,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.grey600),
-        title: Text(title, style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w700)),
-      ),
-      body: const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.article_outlined, size: 40, color: AppColors.grey300),
-              SizedBox(height: 16),
-              Text(
-                'Contenu à venir.',
-                style: TextStyle(color: AppColors.grey400, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+/// Ouvre un PDF légal embarqué dans l'app (CGV/Politique de confidentialité,
+/// voir assets/legal/) via le sélecteur d'impression/partage natif — permet
+/// de lire, imprimer ou partager le document. Document provisoire : voir
+/// scripts/generate_legal_pdfs.dart pour le texte source et les champs à
+/// compléter avant tout usage commercial réel.
+Future<void> _openLegalPdf(
+  BuildContext context, {
+  required String assetPath,
+  required String fileName,
+}) async {
+  try {
+    final bytes = (await rootBundle.load(assetPath)).buffer.asUint8List();
+    await Printing.layoutPdf(onLayout: (format) async => bytes, name: fileName);
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir le document.')),
+      );
+    }
   }
 }

@@ -55,7 +55,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '408329565311',
     projectId: 'workit-1daa1',
     storageBucket: 'workit-1daa1.firebasestorage.app',
-    iosBundleId: 'com.example.workit',
+    iosBundleId: 'com.workit.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

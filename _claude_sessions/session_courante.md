@@ -1,5 +1,94 @@
 # Session courante — WorkIt
 
+## 🆕 Session 2026-08-19 (suite) — Audit complet + pages légales CGV/Politique de confidentialité
+
+Christophe s'est absenté 2h en demandant un audit complet de l'app, la vérification des liens cassés, la
+création des pages CGV/Politique de confidentialité en PDF, et la cohérence entre les 4 rôles. Travail fait en
+autonomie (2 agents Explore en parallèle pour l'audit + travail direct pour les pages légales), **rien commité
+ni poussé** (à valider par Christophe à son retour — voir détail des changements ci-dessous).
+
+### Pages légales (CGV + Politique de confidentialité)
+Texte juridique complet rédigé en français, adapté aux vraies fonctionnalités de l'app (données Firestore/
+Storage, sous-traitants OpenAI/DeepSeek/Mailjet, RGPD) — **document provisoire**, champs d'identité de
+l'éditeur ([SIRET], [adresse], [email de contact]...) laissés en placeholders explicites, à compléter et à
+faire relire par un professionnel du droit avant tout usage commercial réel. Bandeau d'avertissement visible
+sur chaque PDF généré.
+- `scripts/generate_legal_pdfs.dart` (nouveau) : génère les 2 PDF via le package `pdf` déjà utilisé par
+  l'app (`dart run scripts/generate_legal_pdfs.dart` → `scripts/output/*.pdf`).
+- PDF copiés en asset embarqué (`assets/legal/cgv.pdf`, `assets/legal/politique_confidentialite.pdf`,
+  déclarés dans `pubspec.yaml`).
+- `settings_screen.dart` : les 2 entrées "Légal" (qui affichaient "Contenu à venir.") ouvrent maintenant le
+  vrai PDF via `Printing.layoutPdf` (même mécanisme déjà utilisé par `document_engine.dart` pour les bons de
+  commande — aperçu/impression/partage natif). **Pas testé en direct dans un navigateur/simulateur.**
+- **Hébergement Firebase Storage demandé par Christophe pas fait** : `scripts/upload_legal_pdfs.js` (nouveau)
+  est prêt (upload via le token OAuth du CLI `firebase-tools` déjà connecté, pas besoin de
+  `serviceAccountKey.json` — même technique que celle utilisée en session précédente pour interroger
+  Firestore) mais **son exécution a été bloquée par le mode automatique** (appel réseau direct avec un jeton
+  d'accès, jugé sensible sans confirmation en direct de Christophe). À lancer par Christophe lui-même
+  (`node scripts/upload_legal_pdfs.js`, après `dart run scripts/generate_legal_pdfs.dart`) ou avec moi à son
+  retour. Sert surtout si ces PDF doivent être liés depuis un site web externe — l'usage dans l'app est déjà
+  fonctionnel via l'asset embarqué.
+
+### Audit — 2 agents Explore lancés en parallèle
+**Corrigés directement (petits, sans ambiguïté) :**
+- `lib/screens/onboarding_screen.dart:1592` — bouton "Accéder à mon espace" (fin du flux "rejoindre une
+  équipe par e-mail d'invitation") ne faisait rien (`onTap: () {}`) — vrai cul-de-sac utilisateur. Ce
+  sous-flux entier s'est avéré être une maquette UI jamais branchée à une vraie logique (champ e-mail sans
+  contrôleur, récap figé à "—") — le vrai mécanisme pour rejoindre une équipe passe par un compte provisionné
+  par l'admin + lien d'activation. Corrigé en renvoyant vers `SignInScreen` (vraie connexion) plutôt que de
+  laisser un bouton mort — mais le flux "rejoindre par e-mail" reste à construire ou à retirer, décision à
+  prendre avec Christophe.
+- `lib/firebase_options.dart:58` — `iosBundleId: 'com.example.workit'` sur le bloc `macos` (résidu de
+  `flutterfire configure` jamais nettoyé, alors que le bloc `ios` a bien `com.workit.app`) — corrigé pour
+  cohérence.
+
+**Trouvé, à trancher avec Christophe (pas touché) :**
+1. **Pastille "messages non lus"** (`WiUnreadMessageBadge`) : confirmé câblée seulement pour Commercial et
+   Métreur, absente pour Poseur (`poseurs_home_screen.dart` a sa propre `_ChantierCard` locale, pas
+   `WiDevisCard`) et Admin. Le point d'entrée du chat (`ChatEntryButton`, simple point rouge) est lui présent
+   aux 4 rôles — seule la pastille de la liste d'accueil manque à 2 rôles.
+2. **Header d'accueil Poseur non aligné** sur le pattern "Bonjour {prénom} 👋" + avatar à initiales (déjà
+   unifié Commercial/Métreur/Admin) — le header Poseur reste dans son style d'origine (titre centré, sans
+   avatar, sans emoji). Nouvelle incohérence trouvée, pas notée dans les sessions précédentes.
+3. **Filtre par rôle dans "Équipe" (Admin)** (`admin_team_tab.dart`) ne couvre que 3 rôles sur 4 —
+   `onboardingRoles` (`lib/models/onboarding_models.dart`) ne liste pas `'admin'`, donc un admin ne peut
+   jamais être isolé par ce filtre si plusieurs admins existent dans un workspace.
+4. **28 fichiers d'icônes orphelins** (`assets/icons/exterieur|menuiseries|protections/*`, sans extension) —
+   bundlés dans l'app via `pubspec.yaml` mais jamais référencés nulle part dans `lib/` ni dans le dictionnaire
+   JSON — pictogrammes de menuiserie probablement prévus mais jamais branchés à l'UI.
+5. **Bloc `linux` de `firebase_options.dart`** entièrement en valeurs `'TODO-...'` — sans conséquence tant que
+   Linux n'est pas ciblé (jamais mentionné comme cible sur ce projet), non touché.
+6. Quelques boutons secondaires sans action (`onPressed: () {}`) repérés mais jugés mineurs : menu "⋮" sur le
+   détail devis Métreur (`metreur_home_screen.dart:3108`), icône navigation/itinéraire GPS sur une carte
+   agenda Métreur (`metreur_home_screen.dart:1133`).
+
+**Confirmé cohérent (pas de problème trouvé) :**
+- Renommage "En pose" → "Programmé" : bien appliqué aux 4 rôles y compris Poseur (contrairement à la réserve
+  notée dans une session précédente comme "jamais revérifié à l'écran").
+- Terminologie "Metteur en œuvre" : aucun résidu, renommage en "Métreur" complet.
+- Modèles `_ProductFormData`/`_QuoteDraft` dupliqués (Commercial/Métreur) : champs du 19/08
+  (`aiHint`/`elementsCount`/`montantHT`) bien synchronisés entre les deux copies — pas de risque de casse à
+  la désérialisation croisée.
+- Aucun lien externe fictif/cassé trouvé (`url_launcher`), aucun asset image référencé mais manquant sur
+  disque, bucket Storage cohérent partout.
+
+### Vérifications faites
+`flutter analyze` (scope `lib/`) : 0 erreur, 142 issues (inchangé, aucune nouvelle catégorie de warning
+introduite par les correctifs de cette session).
+
+### Reste à faire (prochaine session, ou au retour de Christophe)
+1. **Décider commit/push** de tout ce qui précède — rien n'est encore sur `origin/main`.
+2. Lancer `node scripts/upload_legal_pdfs.js` si l'hébergement Firebase Storage externe (site web) est
+   toujours voulu en plus de l'accès in-app déjà fonctionnel.
+3. Compléter les champs légaux ([SIRET], adresse, email de contact...) dans
+   `scripts/generate_legal_pdfs.dart` puis régénérer, et faire relire le texte par un professionnel du droit
+   avant tout usage commercial réel.
+4. Tester en direct l'ouverture des PDF légaux depuis Réglages (jamais vérifié à l'écran).
+5. Trancher les 3 incohérences listées ci-dessus (pastille non lus Poseur/Admin, header Poseur, filtre rôle
+   Admin) et le sort du flux "rejoindre par e-mail" (à construire ou à retirer du onboarding).
+
+---
+
 **Dernière mise à jour :** 2026-08-19 — Session Windows (pas de simulateur, code + config uniquement, pas encore
 testé en direct par Christophe). Simplification du formulaire "Nouveau devis" côté Commercial (trop détaillé,
 jamais rempli en pratique) + montant HT + extraction IA des éléments du devis. **Code écrit et vérifié

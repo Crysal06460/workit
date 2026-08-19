@@ -1589,7 +1589,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               child: _PrimaryButton(
                 label: 'Accéder à mon espace',
-                onTap: () {},
+                // Ce flux "rejoindre par e-mail d'invitation" (page
+                // précédente) n'a pas de logique réelle branchée (champ
+                // e-mail sans contrôleur, récap figé à "—") — le vrai
+                // mécanisme de rejoindre une équipe passe par un compte
+                // provisionné par l'admin + lien d'activation. En attendant
+                // que ce flux soit implémenté, on renvoie vers la vraie
+                // connexion plutôt que de laisser un bouton sans effet.
+                onTap: () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const SignInScreen()),
+                ),
               ),
             ),
           ],
