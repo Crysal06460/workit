@@ -96,17 +96,30 @@ async function logAuditEvent(workspaceId, entry) {
 }
 
 /**
- * Analyse un devis via OpenAI Vision.
+ * Analyse un devis (PDF/photos uploadés par le commercial) pour en extraire
+ * la liste des éléments à métrer, en pré-remplissage du "Nombre d'éléments à
+ * métrer" côté commercial et en suggestion pour le métreur sur le terrain.
+ *
+ * Pipeline en deux étapes, DeepSeek n'ayant à ce jour aucune entrée image
+ * documentée dans son API (voir api-docs.deepseek.com) :
+ *  1. Lecture visuelle du devis via OpenAI Vision → texte brut listant les
+ *     éléments.
+ *  2. Structuration de ce texte en JSON via DeepSeek (moins cher, préférence
+ *     explicite de l'équipe WorkIt pour les tâches d'analyse texte).
+ * Si l'étape 2 échoue (DeepSeek indisponible...), on renvoie quand même une
+ * seule ligne avec le texte brut plutôt que de faire échouer toute l'analyse.
  */
 exports.analyzeDevis = onCall(
-    {region: "europe-west1", secrets: ["OPENAI_API_KEY"]},
+    {region: "europe-west1", secrets: ["OPENAI_API_KEY", "DEEPSEEK_API_KEY"]},
     async (request) => {
       const caller = request.auth && request.auth.uid;
       if (!caller) throw new HttpsError("unauthenticated", "Non autorisé");
-      const fileUrl = request.data && request.data.fileUrl;
-      if (!fileUrl) {
-        throw new HttpsError("invalid-argument", "fileUrl manquant");
+      const fileUrls = request.data && request.data.fileUrls;
+      if (!Array.isArray(fileUrls) || fileUrls.length === 0) {
+        throw new HttpsError("invalid-argument", "fileUrls manquant");
       }
+      const tradeLabel = (request.data && request.data.tradeLabel) ||
+        "bâtiment";
 
       const callerDoc = await db.collection("users").doc(caller).get();
       const callerWorkspaceId = callerDoc.exists ?
@@ -116,52 +129,118 @@ exports.analyzeDevis = onCall(
       }
       await checkAndIncrementAiQuota(callerWorkspaceId);
 
-      const openai = getOpenAIClient();
-
-      const systemPrompt =
-      `Tu es une IA WorkIt, experte des devis menuiserie/pose
-(fenêtres, portes, volets, stores, pergolas).
-Objectif: extraire un résumé structuré du devis en français.
-Retourne du texte clair (pas de Markdown) avec :
-- Client (nom complet)
-- Adresse chantier
-- Références (modèle/produit), Quantité, Dimensions,
-  Couleur/RAL, Matière, Options
-- Totaux (HT/TTC si présents)
-Si une info manque, ignore-la.`;
+      const rawText = await readDevisWithOpenAiVision(fileUrls, tradeLabel);
+      if (!rawText.trim()) {
+        return {elements: [], montantHT: null};
+      }
 
       try {
-        const response = await openai.responses.create({
-          model: "gpt-4o-mini",
-          input: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Analyse ce devis et fournis le résumé structuré.",
-                },
-                {type: "input_image", image_url: fileUrl, detail: "high"},
-              ],
-            },
-          ],
-          response_format: {type: "text"},
-        });
-
-        const text = (response && response.output_text) ?
-        response.output_text : "";
-        logger.info("Analyse terminée", {length: text.length});
-        return {text};
+        return await structureElementsWithDeepSeek(rawText);
       } catch (error) {
-        logger.error("Erreur OpenAI", error);
-        throw new HttpsError("internal", `Analyse échouée: ${error.message}`);
+        logger.error("Erreur structuration DeepSeek", error);
+        return {
+          elements: [{quantite: 1, description: rawText.slice(0, 200)}],
+          montantHT: null,
+        };
       }
     },
 );
+
+/**
+ * Lit un devis (une ou plusieurs images/pages) via OpenAI Vision et retourne
+ * une description texte brute de ses éléments.
+ * @param {string[]} fileUrls URLs des pages du devis (images).
+ * @param {string} tradeLabel métier de l'entreprise (ex. "Menuiserie").
+ * @return {Promise<string>} texte brut listant les éléments détectés.
+ */
+async function readDevisWithOpenAiVision(fileUrls, tradeLabel) {
+  const openai = getOpenAIClient();
+  const systemPrompt =
+    `Tu regardes un devis ${tradeLabel}. Liste en texte brut (pas de
+Markdown), une ligne par élément/prestation, sa quantité et sa description
+courte (ex: "2x Fenêtre PVC 2 vantaux", "3x Store banne"). Termine par le
+montant total HT s'il est visible ("Montant HT: X €"). Ignore mentions
+légales, conditions générales, et tout ce qui n'est pas un élément vendu.`;
+
+  try {
+    const response = await openai.responses.create({
+      model: "gpt-4o-mini",
+      input: [
+        {role: "system", content: systemPrompt},
+        {
+          role: "user",
+          content: [
+            {type: "text", text: "Lis ce devis et liste ses éléments."},
+            ...fileUrls.map((url) => (
+              {type: "input_image", image_url: url, detail: "high"}
+            )),
+          ],
+        },
+      ],
+      response_format: {type: "text"},
+    });
+    const text = (response && response.output_text) ?
+      response.output_text : "";
+    logger.info("Lecture devis terminée", {length: text.length});
+    return text;
+  } catch (error) {
+    logger.error("Erreur lecture OpenAI Vision", error);
+    throw new HttpsError("internal",
+        `Lecture du devis échouée: ${error.message}`);
+  }
+}
+
+/**
+ * Structure une description texte d'éléments de devis en JSON via l'API
+ * DeepSeek (compatible OpenAI).
+ * @param {string} rawText texte brut produit par readDevisWithOpenAiVision.
+ * @return {Promise<Object>} `{elements: {quantite, description}[],
+ *   montantHT: number|null}`.
+ */
+async function structureElementsWithDeepSeek(rawText) {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) throw new Error("DEEPSEEK_API_KEY non configurée");
+
+  const resp = await fetch("https://api.deepseek.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "deepseek-v4-flash",
+      messages: [
+        {
+          role: "system",
+          content: "Tu structures une liste d'éléments de devis en JSON " +
+            "strict, sans texte autour, au format exact : " +
+            "{\"elements\": [{\"quantite\": number, \"description\": " +
+            "string}], \"montantHT\": number|null}.",
+        },
+        {role: "user", content: rawText},
+      ],
+      response_format: {type: "json_object"},
+    }),
+  });
+  if (!resp.ok) throw new Error(`DeepSeek HTTP ${resp.status}`);
+  const data = await resp.json();
+  const content = data.choices && data.choices[0] &&
+    data.choices[0].message && data.choices[0].message.content;
+  if (!content) throw new Error("Réponse DeepSeek vide");
+
+  const parsed = JSON.parse(content);
+  const elements = Array.isArray(parsed.elements) ?
+    parsed.elements
+        .filter((e) => e && e.description)
+        .map((e) => ({
+          quantite: Number(e.quantite) > 0 ? Math.round(Number(e.quantite)) : 1,
+          description: String(e.description).slice(0, 200),
+        })) :
+    [];
+  const montantHT = typeof parsed.montantHT === "number" ?
+    parsed.montantHT : null;
+  return {elements, montantHT};
+}
 
 /**
  * Retourne un client OpenAI initialisé.

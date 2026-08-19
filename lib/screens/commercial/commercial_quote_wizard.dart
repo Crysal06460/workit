@@ -21,14 +21,13 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   final emailController = TextEditingController();
   final commentaireController = TextEditingController();
   final chantierNotesController = TextEditingController();
-  final quantiteController = TextEditingController(text: '1');
-  final largeurController = TextEditingController();
-  final hauteurController = TextEditingController();
+  final montantHTController = TextEditingController();
   final List<_MetreurOption> _metreurs = [];
   bool loadingMetreurs = true;
   String? _selectedMetreurId;
   String? _selectedMetreurName;
   String? uploadedFileUrl;
+  List<String> uploadedFileUrls = [];
   int currentStep = 0;
   Map<String, dynamic>? dictionary;
   bool loadingDictionary = true;
@@ -42,9 +41,17 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   String? typeHabitation;
   String? accessibilite;
   DateTime? selectedDate;
-  List<_ProductFormData> products = [const _ProductFormData()];
+  // Éléments à métrer : liste conservée telle quelle si on édite un devis déjà
+  // en cours (le métreur a pu déjà y saisir des mesures — surtout ne pas les
+  // écraser), sinon reconstruite à la soumission à partir de _elementsCount
+  // (ou de la détection IA si elle a tourné, voir _aiElements).
+  List<_ProductFormData> products = const [];
   int? _soldDurationDays;
   int? _soldPoseurCountRequired;
+  int _elementsCount = 1;
+  List<_AiExtractedElement>? _aiElements;
+  bool _analyzingWithAi = false;
+  String? _aiError;
   String? uploadLabel;
   List<String> citySuggestions = [];
   bool isFetchingCities = false;
@@ -127,7 +134,6 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         dictionary = json.decode(raw) as Map<String, dynamic>;
         loadingDictionary = false;
       });
-      _ensureDefaultCategoryForProducts();
     } catch (_) {
       setState(() {
         dictionary = {};
@@ -146,7 +152,6 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         tradeLabel = _metierOptions[key] ?? key;
         loadingTrade = false;
       });
-      _ensureDefaultCategoryForProducts();
       return;
     }
 
@@ -162,7 +167,6 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
             tradeLabel = _metierOptions[workspaceTrade] ?? workspaceTrade;
             loadingTrade = false;
           });
-          _ensureDefaultCategoryForProducts();
           return;
         }
       } catch (_) {
@@ -175,7 +179,6 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       tradeLabel = _metierOptions[key] ?? key;
       loadingTrade = false;
     });
-    _ensureDefaultCategoryForProducts();
   }
 
   void _applyDraft(_QuoteDraft? draft) {
@@ -197,8 +200,13 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     _selectedMetreurName = draft.assignedMetreurName;
     _soldDurationDays = draft.soldEstimatedDurationDays;
     _soldPoseurCountRequired = draft.soldPoseurCountRequired;
-    products = draft.products.isNotEmpty ? draft.products : products;
-    _ensureDefaultCategoryForProducts();
+    montantHTController.text = draft.montantHT != null ? draft.montantHT!.toStringAsFixed(2) : '';
+    // Devis déjà existant (édition) : on garde les éléments tels quels — un
+    // métreur a pu déjà y saisir des mesures, surtout ne pas les régénérer.
+    // Sinon (nouveau devis) `products` reste vide, reconstruit à la
+    // soumission depuis _elementsCount (voir _buildDraft).
+    products = draft.products;
+    _elementsCount = draft.elementsCount ?? (draft.products.isNotEmpty ? draft.products.length : 1);
     setState(() {});
   }
 
@@ -234,8 +242,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     emailController.clear();
     _selectedMetreurId = item.assignedMetreurId;
     _selectedMetreurName = item.assignedMetreurName;
-    products = const [_ProductFormData(quantite: 1)];
-    _ensureDefaultCategoryForProducts();
+    products = const [];
+    _elementsCount = 1;
   }
 
   void _capitalizeFirstLetter(TextEditingController controller) {
@@ -252,67 +260,23 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     );
   }
 
-  String? _colorDetailLabel(String? choice) {
-    switch (choice) {
-      case 'RAL Aluminium':
-        return 'RAL :';
-      case 'Couleur PVC':
-        return 'Couleur :';
-      case 'Essence de Bois':
-        return 'Essence :';
-      default:
-        return null;
+  /// Génère les éléments à métrer pour un nouveau devis (pas d'édition en
+  /// cours) : un placeholder par élément compté par le commercial, ou un par
+  /// ligne détectée par l'IA si une analyse a abouti (voir _aiElements) —
+  /// dans les deux cas, seul `metierKey` est connu à ce stade, le reste
+  /// (catégorie, type, dimensions) est rempli par le métreur sur place.
+  List<_ProductFormData> _buildPlaceholderProducts() {
+    if (_aiElements != null && _aiElements!.isNotEmpty) {
+      return _aiElements!
+          .map((e) => _ProductFormData(
+                metierKey: tradeKey,
+                quantite: e.quantite,
+                aiHint: e.description,
+              ))
+          .toList();
     }
-  }
-
-  String _defaultCouleurForTrade() {
-    switch (tradeKey) {
-      case 'menuiserie_pvc':
-        return 'Couleur PVC';
-      case 'menuiserie_bois':
-        return 'Essence de Bois';
-      default:
-        return 'RAL Aluminium';
-    }
-  }
-
-  void _ensureDefaultCategoryForProducts() {
-    final categories = _categoryChoices(tradeKey);
-    if (categories.isEmpty) return;
-    final defaultCategory = categories.first.key;
-    final defaultCouleur = _defaultCouleurForTrade();
-    var changed = false;
-    final updated = <_ProductFormData>[];
-
-    if (products.isEmpty) {
-      updated.add(_ProductFormData(metierKey: tradeKey, categoryKey: defaultCategory, couleur: defaultCouleur));
-      changed = true;
-    } else {
-      for (final product in products) {
-        if (product.metierKey == null || product.categoryKey == null || product.couleur == null) {
-          updated.add(product.copyWith(
-            metierKey: product.metierKey ?? tradeKey,
-            categoryKey: product.categoryKey ?? defaultCategory,
-            couleur: product.couleur ?? defaultCouleur,
-          ));
-          changed = true;
-        } else {
-          updated.add(product);
-        }
-      }
-    }
-
-    if (changed) {
-      setState(() {
-        products = updated;
-      });
-    }
-  }
-
-  _ProductFormData _newProductWithDefaultCategory() {
-    final categories = _categoryChoices(tradeKey);
-    final defaultCategory = categories.isNotEmpty ? categories.first.key : null;
-    return _ProductFormData(metierKey: tradeKey, categoryKey: defaultCategory, couleur: _defaultCouleurForTrade());
+    final count = _elementsCount < 1 ? 1 : _elementsCount;
+    return List.generate(count, (_) => _ProductFormData(metierKey: tradeKey, quantite: 1));
   }
 
   _QuoteDraft _buildDraft() {
@@ -330,11 +294,13 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       typeHabitation: typeHabitation,
       accessibilite: accessibilite,
       date: selectedDate,
-      products: products,
+      products: products.isNotEmpty ? products : _buildPlaceholderProducts(),
       assignedMetreurId: _selectedMetreurId == 'any' ? null : _selectedMetreurId,
       assignedMetreurName: _selectedMetreurName,
       soldEstimatedDurationDays: _soldDurationDays,
       soldPoseurCountRequired: _soldPoseurCountRequired,
+      elementsCount: _elementsCount,
+      montantHT: double.tryParse(montantHTController.text.replaceAll(',', '.').trim()),
     );
   }
 
@@ -349,92 +315,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     emailController.dispose();
     commentaireController.dispose();
     chantierNotesController.dispose();
-    quantiteController.dispose();
-    largeurController.dispose();
-    hauteurController.dispose();
+    montantHTController.dispose();
     super.dispose();
-  }
-
-  /// Liste des métiers disponibles (dictionnaire déjà chargé en mémoire).
-  List<_Choice> _allMetiers() {
-    final metiers = dictionary?['metiers'];
-    if (metiers is Map) {
-      return metiers.entries
-          .map((e) => _Choice(e.key.toString(), (e.value is Map ? e.value['label']?.toString() : null) ?? e.key.toString()))
-          .toList();
-    }
-    return const [];
-  }
-
-  /// Nœud du métier donné (ou du métier principal du workspace si non précisé).
-  Map<String, dynamic>? _tradeNode(String? metierKey) {
-    final key = metierKey ?? tradeKey;
-    if (key == null) return null;
-    final metiers = dictionary?['metiers'];
-    if (metiers is Map && metiers[key] is Map<String, dynamic>) {
-      return metiers[key] as Map<String, dynamic>;
-    }
-    return null;
-  }
-
-  List<_Choice> _categoryChoices(String? metierKey) {
-    final trade = _tradeNode(metierKey);
-    final cats = trade?['categories'];
-    if (cats is Map<String, dynamic>) {
-      return cats.entries
-          .map((e) => _Choice(e.key, e.value['label']?.toString() ?? e.key))
-          .toList();
-    }
-    return const [];
-  }
-
-  List<String> _sousCategories(String? metierKey, String? categoryKey) {
-    if (categoryKey == null) return const [];
-    final trade = _tradeNode(metierKey);
-    final cat = trade?['categories']?[categoryKey];
-    if (cat is Map && cat['sous_categories'] is List) {
-      return (cat['sous_categories'] as List).map((e) => e.toString()).toList();
-    }
-    return const [];
-  }
-
-  List<_Choice> _typeChoices(String? metierKey, String? categoryKey) {
-    if (categoryKey == null) return const [];
-    final trade = _tradeNode(metierKey);
-    final cat = trade?['categories']?[categoryKey];
-    if (cat is Map && cat['types'] is Map) {
-      return (cat['types'] as Map<String, dynamic>)
-          .entries
-          .map((e) => _Choice(e.key, e.value['label']?.toString() ?? e.key))
-          .toList();
-    }
-    return const [];
-  }
-
-  List<String> _variantForType(String? metierKey, String? categoryKey, String? typeKey) {
-    if (categoryKey == null || typeKey == null) return const [];
-    final trade = _tradeNode(metierKey);
-    final type = trade?['categories']?[categoryKey]?['types']?[typeKey];
-    if (type is Map && type['variantes'] is List) {
-      return (type['variantes'] as List).map((e) => e.toString()).toList();
-    }
-    return const [];
-  }
-
-  String _categoryLabelFromKey(String? metierKey, String? categoryKey) {
-    if (categoryKey == null) return '';
-    final trade = _tradeNode(metierKey);
-    final cat = trade?['categories']?[categoryKey];
-    if (cat is Map && cat['label'] != null) return cat['label'].toString();
-    return categoryKey;
-  }
-
-  String _typeLabelFromKey(String? metierKey, String? categoryKey, String? typeKey) {
-    if (categoryKey == null || typeKey == null) return typeKey ?? '';
-    final trade = _tradeNode(metierKey);
-    final typeData = trade?['categories']?[categoryKey]?['types']?[typeKey];
-    if (typeData is Map) return typeData['label']?.toString() ?? typeKey;
-    return typeKey;
   }
 
   List<Map<String, dynamic>> _buildSummaryFromDraft(_QuoteDraft draft) {
@@ -450,25 +332,10 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     addEntry('Type d’habitation', draft.typeHabitation);
     addEntry('Accessibilité', draft.accessibilite);
     addEntry('Commentaires chantier', draft.chantierNotes);
-
-    for (var i = 0; i < draft.products.length; i++) {
-      final p = draft.products[i];
-      final catLabel = _categoryLabelFromKey(p.metierKey, p.categoryKey);
-      final buffer = StringBuffer();
-      buffer.write(catLabel);
-      if (p.sousCategorie?.isNotEmpty == true) buffer.write(' • ${p.sousCategorie}');
-      if (p.typeProduit?.isNotEmpty == true) buffer.write(' • ${_typeLabelFromKey(p.metierKey, p.categoryKey, p.typeProduit)}');
-      if (p.variante?.isNotEmpty == true) buffer.write(' • ${p.variante}');
-      if (p.couleur?.isNotEmpty == true) buffer.write(' • Couleur: ${p.couleur}');
-      final dimParts = <String>[];
-      if (p.largeur != null) dimParts.add('${p.largeur}');
-      if (p.hauteur != null) dimParts.add('${p.hauteur}');
-      if (dimParts.isNotEmpty) {
-        buffer.write(' • Dim: ${dimParts.join(' x ')} ${p.unite}');
-      }
-      if (p.quantite != null) buffer.write(' • Qté: ${p.quantite}');
-      addEntry('Élément ${i + 1}', buffer.toString());
-    }
+    addEntry('Éléments à métrer', draft.products.isNotEmpty ? '${draft.products.length}' : null);
+    final hints = draft.products.map((p) => p.aiHint).whereType<String>().where((h) => h.isNotEmpty).toList();
+    if (hints.isNotEmpty) addEntry('Suggestions IA', hints.join(', '));
+    if (draft.montantHT != null) addEntry('Montant HT', '${draft.montantHT!.toStringAsFixed(2)} €');
 
     if (draft.date != null) {
       final d = draft.date!;
@@ -637,38 +504,104 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     );
   }
 
-  Future<void> _uploadFile(String path) async {
+  /// Upload un seul fichier vers Storage et retourne son URL de
+  /// téléchargement (ou `null` si le bucket refuse d'en émettre une — le
+  /// fichier reste stocké, juste sans lien direct).
+  Future<String?> _uploadSingleFile(String path) async {
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}_${p.basename(path)}';
+    final storage = FirebaseStorage.instanceFor(bucket: _storageBucket);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final prefs = await SharedPreferences.getInstance();
+    final workspace = prefs.getString(_workspaceIdKey);
+    if (uid == null || workspace == null) {
+      throw Exception('Utilisateur ou workspace manquant pour sécuriser le fichier.');
+    }
+    final ref = storage.ref().child('devis_uploads/$workspace/$uid/$fileName');
+
+    // Certaines sélections (bibliothèque photos) nécessitent une lecture en mémoire.
+    final file = File(path);
+    final bytes = await file.readAsBytes();
+    final uploadTask = await ref.putData(bytes);
+    if (uploadTask.bytesTransferred <= 0) throw Exception('Téléversement incomplet.');
+
+    try {
+      return await ref.getDownloadURL();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Upload tous les fichiers sélectionnés (pas seulement le premier — un
+  /// devis multi-pages doit être lu en entier, notamment par l'analyse IA,
+  /// voir _analyzeUpload) puis déclenche cette analyse.
+  Future<void> _uploadAllFiles(List<String> paths) async {
     try {
       setState(() => uploadLabel = 'Envoi du devis…');
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}_${p.basename(path)}';
-      final storage = FirebaseStorage.instanceFor(bucket: _storageBucket);
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      final prefs = await SharedPreferences.getInstance();
-      final workspace = prefs.getString(_workspaceIdKey);
-      if (uid == null || workspace == null) {
-        throw Exception('Utilisateur ou workspace manquant pour sécuriser le fichier.');
+      final urls = <String>[];
+      for (final path in paths) {
+        final url = await _uploadSingleFile(path);
+        if (url != null) urls.add(url);
       }
-      final ref = storage.ref().child('devis_uploads/$workspace/$uid/$fileName');
-
-      // Certaines sélections (bibliothèque photos) nécessitent une lecture en mémoire.
-      final file = File(path);
-      final bytes = await file.readAsBytes();
-      final uploadTask = await ref.putData(bytes);
-      final success = uploadTask.bytesTransferred > 0;
-      if (!success) throw Exception('Téléversement incomplet.');
-
-      // Tente d’obtenir l’URL sans bloquer l’utilisateur si le bucket refuse.
-      try {
-        final url = await ref.getDownloadURL();
-        uploadedFileUrl = url;
-      } catch (_) {
-        uploadedFileUrl = null;
-      }
-
-      setState(() => uploadLabel = 'Devis stocké pour le reste de l’équipe.');
+      setState(() {
+        uploadedFileUrls = urls;
+        uploadedFileUrl = urls.isNotEmpty ? urls.first : null;
+        uploadLabel = 'Devis stocké pour le reste de l’équipe.';
+      });
+      if (urls.isNotEmpty) unawaited(_analyzeUpload(urls));
     } catch (e) {
       _showPickerError(context, 'Envoi impossible : $e');
       setState(() => uploadLabel = null);
+    }
+  }
+
+  /// Fait lire le devis uploadé par l'IA (Cloud Function `analyzeDevis`) pour
+  /// en extraire les éléments — jamais bloquant : en cas d'échec/quota
+  /// dépassé, le commercial garde simplement la saisie manuelle du nombre
+  /// d'éléments (voir _ElementCountField dans _chantierForm).
+  Future<void> _analyzeUpload(List<String> urls) async {
+    setState(() {
+      _analyzingWithAi = true;
+      _aiError = null;
+    });
+    try {
+      final callable = FirebaseFunctions.instanceFor(region: 'europe-west1').httpsCallable('analyzeDevis');
+      final result = await callable.call<Map<String, dynamic>>({
+        'fileUrls': urls,
+        'tradeLabel': tradeLabel,
+      });
+      final data = result.data;
+      final rawElements = data['elements'];
+      final elements = rawElements is List
+          ? rawElements
+              .whereType<Map>()
+              .map((e) => _AiExtractedElement(
+                    quantite: (e['quantite'] as num?)?.toInt() ?? 1,
+                    description: e['description']?.toString() ?? '',
+                  ))
+              .where((e) => e.description.isNotEmpty)
+              .toList()
+          : <_AiExtractedElement>[];
+
+      if (!mounted) return;
+      setState(() {
+        _analyzingWithAi = false;
+        if (elements.isEmpty) {
+          _aiError = 'Aucun élément détecté automatiquement — indiquez le nombre à la main.';
+          return;
+        }
+        _aiElements = elements;
+        _elementsCount = elements.fold(0, (s, e) => s + e.quantite).clamp(1, 999);
+        final montantHT = (data['montantHT'] as num?)?.toDouble();
+        if (montantHT != null && montantHTController.text.trim().isEmpty) {
+          montantHTController.text = montantHT.toStringAsFixed(2);
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _analyzingWithAi = false;
+        _aiError = 'Analyse IA indisponible — indiquez le nombre d’éléments manuellement.';
+      });
     }
   }
 
@@ -680,13 +613,13 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
       );
       if (picked == null || picked.files.isEmpty) return;
-      final firstPath = picked.files.first.path;
-      if (firstPath == null) {
+      final paths = picked.files.map((f) => f.path).whereType<String>().toList();
+      if (paths.isEmpty) {
         _showPickerError(context, 'Impossible de lire ce fichier.');
         return;
       }
       setState(() => selectedFiles = picked.files.map((f) => f.name).toList());
-      await _uploadFile(firstPath);
+      await _uploadAllFiles(paths);
     } on PlatformException catch (e) {
       _showPickerError(context, 'Sélection de fichier impossible (${e.code}).');
     } catch (e) {
@@ -699,9 +632,8 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
       final picker = ImagePicker();
       final photos = await picker.pickMultiImage();
       if (photos.isEmpty) return;
-      final firstPath = photos.first.path;
       setState(() => selectedFiles = photos.map((f) => f.name).toList());
-      await _uploadFile(firstPath);
+      await _uploadAllFiles(photos.map((f) => f.path).toList());
     } on PlatformException catch (e) {
       _showPickerError(context, 'Accès appareil photo impossible (${e.code}).');
     } catch (e) {
@@ -710,7 +642,7 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
   }
 
   Widget _stepHeader() {
-    const labels = ['Client', 'Chantier', 'Éléments', 'Date', 'Commentaires', 'Upload devis'];
+    const labels = ['Client', 'Chantier', 'Date', 'Commentaires', 'Upload devis'];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -912,203 +844,26 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
             ),
           ],
         ),
-      ],
-    );
-  }
-
-  Widget _productCard(int index) {
-    final product = products[index];
-    final metiers = _allMetiers();
-    final effectiveMetierKey = product.metierKey ?? tradeKey;
-    final categories = _categoryChoices(effectiveMetierKey);
-    final sousCategories = _sousCategories(effectiveMetierKey, product.categoryKey);
-    final types = _typeChoices(effectiveMetierKey, product.categoryKey);
-    final variants = _variantForType(effectiveMetierKey, product.categoryKey, product.typeProduit);
-    const couleurs = ['RAL Aluminium', 'Couleur PVC', 'Essence de Bois'];
-    final colorDetailLabel = _colorDetailLabel(product.couleur);
-    final bool showDecorOptions = effectiveMetierKey == 'menuiserie_aluminium';
-    final bool showDimensions = effectiveMetierKey == 'menuiserie_aluminium';
-    final bool showVariant = effectiveMetierKey == 'menuiserie_aluminium';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.grey50,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.grey200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Élément ${index + 1}',
-                style: const TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800),
-              ),
-              if (products.length > 1)
-                IconButton(
-                  onPressed: () => setState(() => products.removeAt(index)),
-                  icon: const Icon(Icons.delete_outline, color: AppColors.grey400),
-                ),
-            ],
-          ),
-          _DropdownField(
-            label: 'Métier',
-            value: effectiveMetierKey,
-            required: true,
-            items: metiers,
-            onChanged: (v) => setState(() {
-              products[index] = products[index].copyWith(
-                metierKey: v,
-                categoryKey: null,
-                sousCategorie: null,
-                typeProduit: null,
-                variante: null,
-              );
-            }),
-          ),
-          _DropdownField(
-            label: 'Catégorie',
-            value: product.categoryKey,
-            required: true,
-            items: categories,
-            onChanged: (v) => setState(() {
-              products[index] = products[index].copyWith(
-                categoryKey: v,
-                sousCategorie: null,
-                typeProduit: null,
-                variante: null,
-              );
-            }),
-          ),
-          _DropdownField(
-            label: 'Sous-catégorie',
-            value: product.sousCategorie,
-            items: sousCategories,
-            onChanged: (v) => setState(() => products[index] = products[index].copyWith(sousCategorie: v)),
-          ),
-          _DropdownField(
-            label: 'Type',
-            value: product.typeProduit,
-            items: types,
-            onChanged: (v) => setState(() => products[index] = products[index].copyWith(typeProduit: v, variante: null)),
-          ),
-          if (showVariant)
-            _DropdownField(
-              label: 'Spécificité / variante',
-              value: product.variante,
-              items: variants.isEmpty ? const ['Standard'] : variants,
-              onChanged: (v) => setState(() => products[index] = products[index].copyWith(variante: v)),
-            ),
-          if (showDecorOptions) ...[
-            _DropdownField(
-              label: 'Couleur',
-              value: product.couleur,
-              items: couleurs,
-              onChanged: (v) => setState(() => products[index] = products[index].copyWith(couleur: v, couleurDetail: null)),
-            ),
-            if (colorDetailLabel != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(colorDetailLabel, style: const TextStyle(color: AppColors.grey500)),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: TextEditingController(text: product.couleurDetail ?? '')
-                        ..selection = TextSelection.collapsed(offset: (product.couleurDetail ?? '').length),
-                      style: const TextStyle(color: AppColors.grey900),
-                      onChanged: (text) => setState(() => products[index] = products[index].copyWith(couleurDetail: text)),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: AppColors.grey50,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.grey200),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: AppColors.grey200),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: _commercialAccent, width: 1.3),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-          if (showDimensions)
-            Row(
-              children: [
-                Expanded(
-                  child: _IntField(
-                    label: 'Largeur',
-                    value: product.largeur,
-                    onChanged: (v) => setState(() => products[index] = products[index].copyWith(largeur: v)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _IntField(
-                    label: 'Hauteur',
-                    value: product.hauteur,
-                    onChanged: (v) => setState(() => products[index] = products[index].copyWith(hauteur: v)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 80,
-                  child: _DropdownField(
-                    label: 'Unité',
-                    value: product.unite,
-                    items: const ['mm', 'cm', 'm'],
-                    onChanged: (v) => setState(() => products[index] = products[index].copyWith(unite: v ?? 'mm')),
-                  ),
-                ),
-              ],
-            ),
-          _IntField(
-            label: 'Quantité',
-            value: product.quantite,
-            onChanged: (v) => setState(() => products[index] = products[index].copyWith(quantite: v)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _productForm() {
-    if (loadingDictionary) {
-      return const Center(child: CircularProgressIndicator(color: _commercialAccent));
-    }
-    if (_allMetiers().isEmpty) {
-      return const Text(
-        'Aucun métier disponible dans le dictionnaire produits.',
-        style: TextStyle(color: AppColors.grey500),
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('Éléments du devis', style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 8),
-        ...List.generate(products.length, _productCard),
-        Align(
-          alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        onPressed: () => setState(() => products.add(_newProductWithDefaultCategory())),
-        icon: const Icon(Icons.add, color: _commercialAccent),
-        label: const Text(
-          'Ajouter un élément',
-          style: TextStyle(color: _commercialAccent, fontWeight: FontWeight.w700),
+        const SizedBox(height: 4),
+        const Text(
+          'Le détail de chaque élément (type, dimensions) sera relevé par le métreur sur place.',
+          style: TextStyle(color: AppColors.grey400, fontSize: 12),
         ),
-          ),
+        const SizedBox(height: 8),
+        _ElementCountField(
+          value: _elementsCount,
+          onChanged: (v) => setState(() {
+            _elementsCount = v;
+            // Une saisie manuelle du nombre invalide une éventuelle
+            // détection IA précédente (qui pilotait ce champ jusque-là).
+            _aiElements = null;
+          }),
+        ),
+        _LabeledField(
+          label: 'Montant HT total du chantier (€)',
+          controller: montantHTController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
         ),
       ],
     );
@@ -1301,6 +1056,55 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           const SizedBox(height: 10),
           Text(uploadLabel!, style: const TextStyle(color: AppColors.grey500)),
         ],
+        if (_analyzingWithAi) ...[
+          const SizedBox(height: 14),
+          const Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, color: _commercialAccent),
+              ),
+              SizedBox(width: 10),
+              Text('Analyse du devis en cours…', style: TextStyle(color: AppColors.grey500)),
+            ],
+          ),
+        ],
+        if (_aiError != null && !_analyzingWithAi) ...[
+          const SizedBox(height: 14),
+          Text(
+            _aiError!,
+            style: const TextStyle(color: AppColors.grey400, fontSize: 12),
+          ),
+        ],
+        if (_aiElements != null && _aiElements!.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            '${_aiElements!.length} élément(s) détecté(s) par l’IA — nombre à métrer mis à jour automatiquement, modifiable à l’étape Chantier.',
+            style: const TextStyle(color: AppColors.grey500, fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(_aiElements!.length, (i) {
+              final e = _aiElements![i];
+              return Chip(
+                label: Text(
+                  '${e.quantite}x ${e.description}',
+                  style: const TextStyle(color: AppColors.grey900, fontSize: 12),
+                ),
+                backgroundColor: _commercialAccent.withOpacity(0.12),
+                deleteIcon: const Icon(Icons.close, size: 16),
+                onDeleted: () => setState(() {
+                  _aiElements = List.of(_aiElements!)..removeAt(i);
+                  _elementsCount = _aiElements!.fold(0, (s, e) => s + e.quantite);
+                  if (_elementsCount < 1) _elementsCount = 1;
+                }),
+              );
+            }),
+          ),
+        ],
       ],
     );
   }
@@ -1314,7 +1118,6 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
     final steps = [
       _clientForm(),
       _chantierForm(),
-      _productForm(),
       _dateForm(),
       if (showMetreurStep) _metreurStep(),
       _commentsForm(),
@@ -1487,21 +1290,22 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
                 : 'quote_${DateTime.now().millisecondsSinceEpoch}');
         final ref = col.doc(docId);
 
-        String? categoryLabel;
-        final firstProduct = newItem.draft?.products.isNotEmpty == true ? newItem.draft!.products.first : null;
-        if (firstProduct != null) {
-          categoryLabel = _categoryLabelFromKey(firstProduct.metierKey, firstProduct.categoryKey);
-        }
+        // Catégorie du chantier = métier de l'entreprise connectée, auto —
+        // il n'y a plus de saisie manuelle par élément (voir _buildDraft).
+        final categoryLabel = tradeLabel;
 
         final summary = newItem.draft != null ? _buildSummaryFromDraft(newItem.draft!) : <Map<String, dynamic>>[];
-        final attachments = <Map<String, dynamic>>[];
-        if (newItem.uploadUrl != null && newItem.uploadUrl!.isNotEmpty) {
-          attachments.add({
-            'label': 'Devis du commercial',
-            'icon': Icons.picture_as_pdf.codePoint,
-            'thumbnailUrl': newItem.uploadUrl,
-          });
-        }
+        final attachmentUrls = uploadedFileUrls.isNotEmpty
+            ? uploadedFileUrls
+            : (newItem.uploadUrl != null && newItem.uploadUrl!.isNotEmpty ? [newItem.uploadUrl!] : const <String>[]);
+        final attachments = [
+          for (var i = 0; i < attachmentUrls.length; i++)
+            {
+              'label': attachmentUrls.length > 1 ? 'Devis du commercial (page ${i + 1})' : 'Devis du commercial',
+              'icon': Icons.picture_as_pdf.codePoint,
+              'thumbnailUrl': attachmentUrls[i],
+            },
+        ];
 
         final combinedClientName = [
           newItem.draft?.clientFirstName?.trim() ?? '',
@@ -1520,10 +1324,12 @@ class _AddQuoteScreenState extends State<_AddQuoteScreen> {
           'status': existing?.status ?? 'Nouvelle demande',
           'category': categoryLabel,
           'phone': newItem.draft?.phone,
+          'montantHT': newItem.draft?.montantHT,
           'updated': 'À l’instant',
           'note': newItem.draft?.commentaire ?? newItem.draft?.chantierNotes ?? '',
           'summary': summary,
           'attachments': attachments,
+          if (attachmentUrls.isNotEmpty) 'attachmentUrls': attachmentUrls,
           if (combinedClientName.isNotEmpty) 'client': combinedClientName,
           'createdAt': newItem.createdAt != null
               ? Timestamp.fromDate(newItem.createdAt!)
@@ -1775,75 +1581,73 @@ class _LabeledField extends StatelessWidget {
   }
 }
 
-class _DropdownField extends StatelessWidget {
-  const _DropdownField({
-    required this.label,
-    required this.items,
-    this.value,
-    this.onChanged,
-    this.required = false,
-  });
+/// Champ "Combien d'éléments à métrer ?" — un `DropdownMenu` (Material 3)
+/// propose 1 à 10 en suggestions rapides, mais le champ texte sous-jacent
+/// reste librement modifiable : taper directement "13" fonctionne même si ce
+/// n'est pas une des suggestions affichées.
+class _ElementCountField extends StatefulWidget {
+  const _ElementCountField({required this.value, required this.onChanged});
 
-  final String label;
-  final List<dynamic> items;
-  final String? value;
-  final ValueChanged<String?>? onChanged;
-  final bool required;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_ElementCountField> createState() => _ElementCountFieldState();
+}
+
+class _ElementCountFieldState extends State<_ElementCountField> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.value.toString())..addListener(_handleTextChange);
+
+  void _handleTextChange() {
+    final parsed = int.tryParse(_controller.text.trim());
+    if (parsed != null && parsed > 0 && parsed != widget.value) widget.onChanged(parsed);
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_handleTextChange);
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final List<String> itemValues = items.map(_itemValue).toList();
-    final String? currentValue =
-        (value != null && itemValues.contains(value)) ? value : (itemValues.isNotEmpty ? itemValues.first : null);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            required ? '$label *' : label,
-            style: const TextStyle(color: AppColors.grey500),
-          ),
+          const Text('Combien d’éléments à métrer ?', style: TextStyle(color: AppColors.grey500)),
           const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: AppColors.grey50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.grey200),
-            ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: currentValue,
-              isExpanded: true,
-              dropdownColor: _commercialCard,
-              style: const TextStyle(color: AppColors.grey900),
-              icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.grey500),
-              items: items
-                    .map(
-                      (e) => DropdownMenuItem(
-                        value: _itemValue(e),
-                        child: Text(_itemLabel(e)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: onChanged,
+          DropdownMenu<int>(
+            controller: _controller,
+            width: double.infinity,
+            inputDecorationTheme: InputDecorationTheme(
+              filled: true,
+              fillColor: AppColors.grey50,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.grey200),
               ),
             ),
+            textStyle: const TextStyle(color: AppColors.grey900),
+            keyboardType: TextInputType.number,
+            dropdownMenuEntries: List.generate(
+              10,
+              (i) => DropdownMenuEntry(value: i + 1, label: '${i + 1}'),
+            ),
+            // Le contrôleur accepte aussi une saisie libre (ex. "13") qui ne
+            // correspond à aucune entrée listée — `_handleTextChange` capte
+            // ce cas en écoutant directement le texte, en plus des choix
+            // pris dans le menu (qui écrivent aussi dans ce contrôleur).
+            onSelected: (v) {
+              if (v != null) widget.onChanged(v);
+            },
           ),
         ],
       ),
     );
-  }
-
-  String _itemValue(dynamic e) {
-    if (e is _Choice) return e.key;
-    return e.toString();
-  }
-
-  String _itemLabel(dynamic e) {
-    if (e is _Choice) return e.label;
-    return e.toString();
   }
 }
 

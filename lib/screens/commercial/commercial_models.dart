@@ -15,6 +15,7 @@ class _ProductFormData {
     this.hauteur,
     this.quantite,
     this.unite = 'mm',
+    this.aiHint,
   });
 
   /// Métier choisi pour CET élément du devis (ex: 'menuiserie_aluminium',
@@ -31,6 +32,12 @@ class _ProductFormData {
   final int? hauteur;
   final int? quantite;
   final String unite;
+  /// Suggestion textuelle libre (ex: "Fenêtre PVC 2 vantaux"), issue soit du
+  /// nombre d'éléments saisi à la main par le commercial (pas de suggestion),
+  /// soit de l'extraction IA du devis uploadé — jamais une valeur de
+  /// catalogue, juste une aide affichée au métreur qui choisit la vraie
+  /// catégorie sur place.
+  final String? aiHint;
 
   // Sentinel qui distingue "paramètre non fourni" (garder l'ancienne valeur)
   // de "null fourni explicitement" (réinitialiser le champ) — un simple `??`
@@ -48,6 +55,7 @@ class _ProductFormData {
     Object? hauteur = _unset,
     Object? quantite = _unset,
     Object? unite = _unset,
+    Object? aiHint = _unset,
   }) {
     return _ProductFormData(
       metierKey: identical(metierKey, _unset) ? this.metierKey : metierKey as String?,
@@ -61,6 +69,7 @@ class _ProductFormData {
       hauteur: identical(hauteur, _unset) ? this.hauteur : hauteur as int?,
       quantite: identical(quantite, _unset) ? this.quantite : quantite as int?,
       unite: identical(unite, _unset) ? this.unite : (unite as String?) ?? this.unite,
+      aiHint: identical(aiHint, _unset) ? this.aiHint : aiHint as String?,
     );
   }
 
@@ -77,6 +86,7 @@ class _ProductFormData {
       'hauteur': hauteur,
       'quantite': quantite,
       'unite': unite,
+      'aiHint': aiHint,
     };
   }
 
@@ -93,6 +103,7 @@ class _ProductFormData {
       hauteur: map['hauteur'] is int ? map['hauteur'] as int : int.tryParse(map['hauteur']?.toString() ?? ''),
       quantite: map['quantite'] is int ? map['quantite'] as int : int.tryParse(map['quantite']?.toString() ?? ''),
       unite: map['unite']?.toString() ?? 'mm',
+      aiHint: map['aiHint']?.toString(),
     );
   }
 }
@@ -117,6 +128,8 @@ class _QuoteDraft {
     this.assignedMetreurName,
     this.soldEstimatedDurationDays,
     this.soldPoseurCountRequired,
+    this.elementsCount,
+    this.montantHT,
   });
 
   final String? clientName;
@@ -140,6 +153,13 @@ class _QuoteDraft {
   // confirme ou les ajuste avant de pouvoir valider le métré (obligatoire).
   final int? soldEstimatedDurationDays;
   final int? soldPoseurCountRequired;
+  // Nombre d'éléments à métrer saisi par le commercial (ou pré-rempli par
+  // l'extraction IA du devis uploadé) — remplace la saisie détaillée
+  // catégorie/type/dimensions par élément, repoussée au métreur sur place.
+  final int? elementsCount;
+  // Montant HT total du chantier, saisi par le commercial pour donner à
+  // l'admin une visibilité sur le pipeline commercial en cours.
+  final double? montantHT;
 
   Map<String, dynamic> toMap() {
     return {
@@ -161,6 +181,8 @@ class _QuoteDraft {
       'assignedMetreurName': assignedMetreurName,
       'soldEstimatedDurationDays': soldEstimatedDurationDays,
       'soldPoseurCountRequired': soldPoseurCountRequired,
+      'elementsCount': elementsCount,
+      'montantHT': montantHT,
     };
   }
 
@@ -193,14 +215,18 @@ class _QuoteDraft {
       assignedMetreurName: map['assignedMetreurName']?.toString(),
       soldEstimatedDurationDays: (map['soldEstimatedDurationDays'] as num?)?.toInt(),
       soldPoseurCountRequired: (map['soldPoseurCountRequired'] as num?)?.toInt(),
+      elementsCount: (map['elementsCount'] as num?)?.toInt(),
+      montantHT: (map['montantHT'] as num?)?.toDouble(),
     );
   }
 }
 
-class _Choice {
-  const _Choice(this.key, this.label);
-  final String key;
-  final String label;
+/// Une ligne détectée par l'IA en lisant le devis uploadé (PDF/photos) —
+/// voir `analyzeDevis` (Cloud Function) et `_AddQuoteScreen._analyzeUpload`.
+class _AiExtractedElement {
+  const _AiExtractedElement({required this.quantite, required this.description});
+  final int quantite;
+  final String description;
 }
 
 class _MetreurOption {

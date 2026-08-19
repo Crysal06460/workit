@@ -98,6 +98,24 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
     if (mounted) setState(() => _loadingFields = false);
   }
 
+  /// Le métreur vient de choisir la catégorie (et éventuellement le type)
+  /// d'un élément créé sans détail — met à jour le produit en mémoire et
+  /// recharge les champs de métré spécialisés pour cet index (repli
+  /// générique sinon, voir _loadFieldDefs).
+  Future<void> _chooseCategory(int index, String categoryKey, String? typeKey) async {
+    final current = Map<String, dynamic>.from(_products[index]);
+    current['categoryKey'] = categoryKey;
+    if (typeKey != null) current['typeProduit'] = typeKey;
+    _productsCached![index] = current;
+
+    final metierKey = current['metierKey']?.toString();
+    if (metierKey != null) {
+      _fieldDefs[index] = await DictionaryService.instance.metreFieldsFor(metierKey, categoryKey);
+      _metierVersions[index] = await DictionaryService.instance.metierVersion(metierKey);
+    }
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _pageControllerCached?.dispose();
@@ -284,6 +302,18 @@ class _MeasurementFormScreenState extends State<MeasurementFormScreen> {
                 onPageChanged: (idx) => setState(() => _currentIndex = idx),
                 itemBuilder: (context, index) {
                   final product = _products[index];
+                  // Élément créé sans détail (comptage rapide côté commercial
+                  // ou détection IA, voir commercial_quote_wizard.dart) : le
+                  // métreur choisit la catégorie/le type sur place, avant de
+                  // pouvoir saisir les mesures — condition pour charger le
+                  // bon formulaire spécialisé (metreFieldsFor).
+                  if (product['categoryKey'] == null) {
+                    return _CategoryPickerStep(
+                      metierKey: product['metierKey']?.toString(),
+                      aiHint: product['aiHint']?.toString(),
+                      onChosen: (categoryKey, typeKey) => _chooseCategory(index, categoryKey, typeKey),
+                    );
+                  }
                   final qty = (product['quantite'] is int)
                       ? product['quantite'] as int
                       : int.tryParse(product['quantite']?.toString() ?? '1') ?? 1;
@@ -342,6 +372,197 @@ MetreFieldDef? _findField(List<MetreFieldDef> fields, String key) {
     if (f.key == key) return f;
   }
   return null;
+}
+
+/// Étape "quel est cet élément ?" affichée avant le formulaire de métré pour
+/// un élément créé sans catégorie (comptage rapide côté commercial, ou
+/// détection IA — voir commercial_quote_wizard.dart). Le métreur choisit
+/// catégorie puis type à partir du dictionnaire (DictionaryService), ce qui
+/// permet de charger ensuite le bon formulaire spécialisé.
+class _CategoryPickerStep extends StatefulWidget {
+  const _CategoryPickerStep({
+    required this.metierKey,
+    required this.aiHint,
+    required this.onChosen,
+  });
+
+  final String? metierKey;
+  final String? aiHint;
+  final void Function(String categoryKey, String? typeKey) onChosen;
+
+  @override
+  State<_CategoryPickerStep> createState() => _CategoryPickerStepState();
+}
+
+class _CategoryPickerStepState extends State<_CategoryPickerStep> {
+  List<MapEntry<String, String>> _categories = const [];
+  List<MapEntry<String, String>> _types = const [];
+  String? _categoryKey;
+  String? _typeKey;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final metierKey = widget.metierKey;
+    if (metierKey == null) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    final cats = await DictionaryService.instance.categoriesFor(metierKey);
+    if (!mounted) return;
+    setState(() {
+      _categories = cats;
+      _loading = false;
+    });
+  }
+
+  Future<void> _onCategoryChanged(String? key) async {
+    setState(() {
+      _categoryKey = key;
+      _typeKey = null;
+      _types = const [];
+    });
+    final metierKey = widget.metierKey;
+    if (metierKey == null || key == null) return;
+    final types = await DictionaryService.instance.typesFor(metierKey, key);
+    if (!mounted) return;
+    setState(() => _types = types);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(color: _accent));
+    }
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Quel est cet élément ?',
+            style: TextStyle(color: AppColors.grey900, fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          if (widget.aiHint != null && widget.aiHint!.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: _accent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome, size: 16, color: _accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Suggestion du devis : ${widget.aiHint}',
+                      style: const TextStyle(color: AppColors.grey700, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Sélectionnez la catégorie puis le type avant de saisir les mesures.',
+                style: TextStyle(color: AppColors.grey500, fontSize: 13),
+              ),
+            ),
+          if (_categories.isEmpty)
+            const Text(
+              'Aucune catégorie définie pour ce métier — mesures en formulaire générique.',
+              style: TextStyle(color: AppColors.grey400),
+            )
+          else ...[
+            _KeyedDropdownField(
+              label: 'Catégorie',
+              value: _categoryKey,
+              entries: _categories,
+              onChanged: _onCategoryChanged,
+            ),
+            if (_types.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _KeyedDropdownField(
+                label: 'Type',
+                value: _typeKey,
+                entries: _types,
+                onChanged: (v) => setState(() => _typeKey = v),
+              ),
+            ],
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _accent,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: _categoryKey == null ? null : () => widget.onChosen(_categoryKey!, _typeKey),
+                child: const Text('Continuer'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _KeyedDropdownField extends StatelessWidget {
+  const _KeyedDropdownField({
+    required this.label,
+    required this.entries,
+    required this.onChanged,
+    this.value,
+  });
+
+  final String label;
+  final List<MapEntry<String, String>> entries;
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final validKeys = entries.map((e) => e.key).toSet();
+    final effectiveValue = (value != null && validKeys.contains(value)) ? value : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: AppColors.grey500, fontSize: 12)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: AppColors.grey50,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: effectiveValue,
+              isExpanded: true,
+              dropdownColor: _cardBg,
+              hint: const Text('Choisir…', style: TextStyle(color: AppColors.grey300)),
+              style: const TextStyle(color: AppColors.grey900),
+              items: entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 /// Éditeur de métré générique : rend soit le schéma visuel (ouvertures

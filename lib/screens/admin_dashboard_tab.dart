@@ -421,6 +421,16 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
         final termineDocs = docs.where((d) => isTermine(d.data() as Map<String, dynamic>)).toList();
         final savDocs = docs.where((d) => isSav(d.data() as Map<String, dynamic>)).toList();
 
+        // Pipeline commercial en cours : somme des montants HT des devis pas
+        // encore clôturés (Terminé/Clôturé exclus, un chantier terminé ne
+        // fait plus partie du "pipeline" à suivre).
+        final montantHTTotal = docs.fold<double>(0, (sum, d) {
+          final data = d.data() as Map<String, dynamic>;
+          if (isTermine(data)) return sum;
+          final raw = data['montantHT'] ?? (data['draft'] as Map?)?['montantHT'];
+          return sum + ((raw as num?)?.toDouble() ?? 0);
+        });
+
         final allSummaries = docs.map((d) => _toSummary(context, d)).toList();
         final recentSummaries = mergeRecentChantiers(allSummaries);
 
@@ -520,6 +530,13 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                             items: savDocs.map((d) => _toSummary(context, d)).toList(),
                           ),
                         ),
+                        _StatCard(
+                          title: 'Montant HT en cours',
+                          count: 0,
+                          valueText: '${montantHTTotal.toStringAsFixed(0)} €',
+                          icon: Icons.euro_outlined,
+                          color: AppColors.grey700,
+                        ),
                       ],
                     ),
                     const SizedBox(height: 28),
@@ -560,6 +577,7 @@ class _StatCard extends StatelessWidget {
     required this.icon,
     required this.color,
     this.onTap,
+    this.valueText,
   });
 
   final String title;
@@ -567,6 +585,9 @@ class _StatCard extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback? onTap;
+  // Affiché à la place de `count` quand la valeur n'est pas un simple
+  // dénombrement (ex. un montant en euros) — voir la carte "Montant HT".
+  final String? valueText;
 
   @override
   Widget build(BuildContext context) {
@@ -593,10 +614,10 @@ class _StatCard extends StatelessWidget {
             Icon(icon, size: 28, color: color),
             const SizedBox(height: 10),
             Text(
-              '$count',
-              style: const TextStyle(
+              valueText ?? '$count',
+              style: TextStyle(
                 color: AppColors.grey900,
-                fontSize: 28,
+                fontSize: valueText != null ? 20 : 28,
                 fontWeight: FontWeight.w900,
               ),
             ),

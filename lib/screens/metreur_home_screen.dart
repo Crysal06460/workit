@@ -2126,6 +2126,7 @@ class _ProductFormData {
     this.cjDroite,
     this.note,
     this.ref,
+    this.aiHint,
   });
 
   /// Métier choisi pour cet élément (voir _ProductFormData équivalent dans
@@ -2150,6 +2151,9 @@ class _ProductFormData {
   final String? cjDroite;
   final String? note;
   final String? ref;
+  // Suggestion textuelle libre (extraction IA du devis, ou vide si compté à
+  // la main) — voir _ProductFormData équivalent dans commercial_models.dart.
+  final String? aiHint;
 
   Map<String, dynamic> toMap() {
     return {
@@ -2173,6 +2177,7 @@ class _ProductFormData {
       'cjDroite': cjDroite,
       'note': note,
       'ref': ref,
+      'aiHint': aiHint,
     };
   }
 
@@ -2198,6 +2203,7 @@ class _ProductFormData {
       cjDroite: map['cjDroite']?.toString(),
       note: map['note']?.toString(),
       ref: map['ref']?.toString(),
+      aiHint: map['aiHint']?.toString(),
     );
   }
 }
@@ -2222,6 +2228,8 @@ class _QuoteDraft {
     this.assignedMetreurName,
     this.soldEstimatedDurationDays,
     this.soldPoseurCountRequired,
+    this.elementsCount,
+    this.montantHT,
   });
 
   final String? clientName;
@@ -2245,6 +2253,8 @@ class _QuoteDraft {
   // confirmation obligatoire du métreur à la validation du métré.
   final int? soldEstimatedDurationDays;
   final int? soldPoseurCountRequired;
+  final int? elementsCount;
+  final double? montantHT;
 
   Map<String, dynamic> toMap() {
     return {
@@ -2266,6 +2276,8 @@ class _QuoteDraft {
       'assignedMetreurName': assignedMetreurName,
       'soldEstimatedDurationDays': soldEstimatedDurationDays,
       'soldPoseurCountRequired': soldPoseurCountRequired,
+      'elementsCount': elementsCount,
+      'montantHT': montantHT,
     };
   }
 
@@ -2298,6 +2310,8 @@ class _QuoteDraft {
       assignedMetreurName: map['assignedMetreurName']?.toString(),
       soldEstimatedDurationDays: (map['soldEstimatedDurationDays'] as num?)?.toInt(),
       soldPoseurCountRequired: (map['soldPoseurCountRequired'] as num?)?.toInt(),
+      elementsCount: (map['elementsCount'] as num?)?.toInt(),
+      montantHT: (map['montantHT'] as num?)?.toDouble(),
     );
   }
 }

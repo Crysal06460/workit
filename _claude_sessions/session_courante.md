@@ -1,5 +1,109 @@
 # Session courante — WorkIt
 
+**Dernière mise à jour :** 2026-08-19 — Session Windows (pas de simulateur, code + config uniquement, pas encore
+testé en direct par Christophe). Simplification du formulaire "Nouveau devis" côté Commercial (trop détaillé,
+jamais rempli en pratique) + montant HT + extraction IA des éléments du devis. **Code écrit et vérifié
+(`flutter analyze` 0 erreur, `npm run lint` 0 erreur, `firebase deploy --only functions --dry-run` propre),
+secret `DEEPSEEK_API_KEY` posé sur Firebase — mais rien commité/poussé ni déployé en prod, à valider avec
+Christophe avant.**
+
+## 🆕 Session 2026-08-19 — Wizard devis simplifié, montant HT, extraction IA (DeepSeek + OpenAI Vision)
+
+### Demande de Christophe
+Le formulaire d'ajout de devis côté Commercial (étape "Éléments du devis") demandait le détail complet de
+chaque élément (métier/catégorie/sous-catégorie/type/variante/couleur/dimensions) — jugé beaucoup trop lourd
+pour un usage terrain rapide ("sinon ils ne le feront jamais"). Demande : ne garder que l'essentiel, laisser le
+détail au métreur qui a le vrai devis sous les yeux sur le terrain, et ajouter un montant HT total pour la
+visibilité admin. Plan validé avec Christophe (mode plan) avant implémentation, deux clarifications tranchées
+en amont :
+- Le métreur choisit la catégorie/le type de chaque élément **sur place** (pas le commercial) — préserve les
+  formulaires de métré spécialisés existants par catégorie (dictionnaire), au lieu de tout basculer en
+  générique.
+- L'extraction IA du devis (lire le PDF/les photos pour en déduire les éléments) est construite **maintenant**,
+  pas reportée — avec **DeepSeek** comme IA demandée par Christophe (clé API fournie en direct dans la
+  conversation, jamais inscrite dans ce journal ni dans le code — posée en secret Firebase
+  `functions:secrets:set DEEPSEEK_API_KEY`, même mécanisme que `OPENAI_API_KEY` existant).
+
+### Vérification technique avant de coder : DeepSeek n'a pas de vision
+Recherche faite sur la doc officielle DeepSeek (`api-docs.deepseek.com`) : l'API ne propose aujourd'hui aucun
+modèle capable de lire une image (seulement `deepseek-v4-flash`/`deepseek-v4-pro`, texte uniquement). Décision
+prise avec Christophe (question posée avant d'écrire le code) : pipeline en deux étapes — **OpenAI Vision**
+(`gpt-4o-mini`, déjà en place) lit le devis et en sort une description texte brute, puis **DeepSeek**
+(`deepseek-v4-flash`) structure ce texte en JSON (`{elements: [{quantite, description}], montantHT}`). Repli
+propre si DeepSeek échoue : une seule ligne avec le texte brut plutôt qu'un échec complet.
+
+### Wizard Commercial simplifié (`commercial_quote_wizard.dart`)
+- Étape "Éléments du devis" (détail par produit) **supprimée** — avec elle, tout le code mort associé
+  (`_productForm`/`_productCard`/`_DropdownField`/`_categoryChoices`/`_tradeNode`/`_allMetiers`/etc., plus la
+  classe `_Choice` devenue inutile dans `commercial_models.dart`).
+- Ce qui reste inchangé : coordonnées client, écran "Infos générales chantier" (type de chantier/habitation/
+  accessibilité), durée estimée + nombre de poseurs vendus, date souhaitée, commentaire, upload PDF/photos.
+- **Catégorie automatique** : le chip `tradeLabel` (métier du workspace connecté) déjà affiché sert maintenant
+  seul indicateur de catégorie — plus de sélection manuelle par élément.
+- **Nouveau champ "Combien d'éléments à métrer ?"** (`_ElementCountField`, nouveau widget) : un `DropdownMenu`
+  Material 3 propose 1 à 10 en suggestions rapides, mais le contrôleur texte sous-jacent reste librement
+  modifiable (taper "13" directement fonctionne, écouté via un listener sur le texte en plus de `onSelected`).
+- **Nouveau champ "Montant HT total du chantier"** (`montantHTController`) — nouveau champ `montantHT` sur
+  `_QuoteDraft` (dupliqué dans `commercial_models.dart` et `metreur_home_screen.dart`, comme le reste de ce
+  modèle), écrit aussi en champ top-level `montantHT` sur le document devis pour que l'admin puisse l'agréger
+  facilement.
+- Édition d'un devis existant (`existingItem`) : les éléments déjà présents dans le draft (avec mesures
+  éventuelles du métreur) sont **conservés tels quels**, jamais régénérés — seul un nouveau devis (ou un ancien
+  sans draft) génère ses placeholders depuis `_elementsCount`/l'extraction IA à la soumission
+  (`_buildPlaceholderProducts`).
+- Bug corrigé au passage : l'upload de fichiers n'envoyait réellement que le **premier** fichier sélectionné
+  (les autres noms s'affichaient mais n'étaient jamais uploadés) — corrigé (`_uploadAllFiles`), nécessaire pour
+  que l'IA puisse lire un devis multi-pages en entier. Nouveau champ `uploadedFileUrls`/`attachmentUrls`.
+
+### Extraction IA branchée sur l'étape upload
+Dès l'upload terminé, appel automatique (non bloquant) à la Cloud Function `analyzeDevis` avec toutes les
+URLs. Résultat affiché en chips éditables (quantité + description, bouton supprimer) sur l'étape upload, qui
+met à jour `_elementsCount` (somme des quantités) et pré-remplit `montantHT` si détecté — jamais bloquant :
+échec ou quota IA dépassé (100/mois/workspace, mécanisme déjà en place) → simple message, saisie manuelle du
+nombre reste possible. Chaque élément détecté garde sa description en `aiHint` (nouveau champ sur
+`_ProductFormData`, dupliqué dans les deux fichiers de modèle) — affiché ensuite comme suggestion au métreur.
+
+### Cloud Function `analyzeDevis` réécrite (`functions/index.js`)
+Fonction déjà existante mais **jamais branchée côté client jusqu'ici** (posée en avance de phase le 03/08,
+avec quota IA déjà en place) — réutilisée plutôt que dupliquée. Avant : résumé texte libre via OpenAI Vision,
+un seul `fileUrl`. Maintenant : `fileUrls[]` (liste), pipeline OpenAI Vision → DeepSeek décrit ci-dessus, sortie
+JSON structurée `{elements, montantHT}`.
+
+### Métreur : choix de la catégorie sur place (`measurement_form_screen.dart`)
+Nouvel écran-gate `_CategoryPickerStep` : pour tout élément créé sans `categoryKey` (nouveau flux ci-dessus),
+affiché avant le formulaire de métré — catégorie puis type, choisis depuis `DictionaryService.categoriesFor`/
+`typesFor` (déjà existant, réutilisé tel quel, pas de duplication de logique). Suggestion IA (`aiHint`) affichée
+en aide si disponible, jamais pré-sélectionnée automatiquement (le métreur doit confirmer activement). Une fois
+choisi, `DictionaryService.metreFieldsFor` recharge le bon formulaire spécialisé (champs par catégorie,
+inchangé) pour cet élément. Sans choix (métreur qui passe outre), repli générique déjà existant, inchangé.
+
+### Vérifications faites cette session
+`flutter analyze` (scope `lib/`) : 0 erreur, 142 issues au total (uniquement infos/warnings déjà tolérés type
+`withOpacity` déprécié — pas de nouvelle catégorie de warning introduite). `npm run lint` + `node -c index.js`
+(functions) : 0 erreur. `firebase deploy --only functions --dry-run` : propre, secret `DEEPSEEK_API_KEY`
+correctement reconnu et l'accès sera accordé au prochain déploiement réel.
+
+### ⚠️ Pas fait cette session — à valider avec Christophe avant d'aller plus loin
+- **Aucun test en simulateur/device réel** — session Windows sans environnement de test mobile, tout le travail
+  ci-dessus n'a été vérifié que par `flutter analyze` (compile proprement) et relecture de code, jamais exécuté
+  à l'écran.
+- **Rien commité ni poussé sur `origin/main`** — à faire avec l'accord de Christophe.
+- **Cloud Functions pas redéployées en prod** (`analyzeDevis` tourne encore dans son ancienne version côté
+  serveur tant que le déploiement réel n'est pas fait) — dry-run propre, mais déploiement réel à confirmer
+  explicitement avant de le lancer (coûts API OpenAI/DeepSeek à chaque analyse, quota déjà en place).
+- **Carte "Montant HT en cours" côté Admin** (`admin_dashboard_tab.dart`) : somme tous les devis non terminés —
+  périmètre par défaut (à confirmer avec Christophe si un autre filtre est préférable, ex. exclure aussi SAV).
+- **Contenu du prompt IA** (lecture OpenAI Vision + structuration DeepSeek) jamais testé sur un vrai devis —
+  qualité de l'extraction à valider en conditions réelles avant de compter dessus.
+
+### Reste à faire (prochaine session)
+1. Tester le nouveau flux en simulateur/device réel avec Christophe (Commercial : ajout devis simplifié +
+   upload + IA ; Métreur : choix catégorie sur place).
+2. Décider avec Christophe du commit/push, puis du déploiement Cloud Functions réel.
+3. Ajuster le prompt IA / le périmètre de la carte Montant HT selon les retours de test.
+
+---
+
 **Dernière mise à jour :** 2026-08-18 — Session de deux jours (démarrée le 17, poursuivie le 18 après une
 coupure de nuit), 3 simulateurs iOS en parallèle (Commercial iPhone 17 Pro Max, Métreur iPhone 17 Pro, Admin
 iPhone 17 ajouté en cours de session), pilotée par Christophe qui testait en direct et remontait bugs/demandes
