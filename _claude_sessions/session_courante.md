@@ -3,9 +3,10 @@
 **Dernière mise à jour :** 2026-08-19 — Session Windows (pas de simulateur, code + config uniquement, pas encore
 testé en direct par Christophe). Simplification du formulaire "Nouveau devis" côté Commercial (trop détaillé,
 jamais rempli en pratique) + montant HT + extraction IA des éléments du devis. **Code écrit et vérifié
-(`flutter analyze` 0 erreur, `npm run lint` 0 erreur, `firebase deploy --only functions --dry-run` propre),
-secret `DEEPSEEK_API_KEY` posé sur Firebase — mais rien commité/poussé ni déployé en prod, à valider avec
-Christophe avant.**
+(`flutter analyze` 0 erreur, `npm run lint` 0 erreur), secret `DEEPSEEK_API_KEY` posé sur Firebase, commité et
+poussé sur `origin/main` (`0e80183`), Cloud Functions déployées en prod (confirmation explicite de Christophe
+via AskUserQuestion) — `analyzeDevis` tourne donc déjà en version DeepSeek+OpenAI Vision. Reste non fait :
+aucun test en simulateur/device réel (session Windows sans environnement mobile).**
 
 ## 🆕 Session 2026-08-19 — Wizard devis simplifié, montant HT, extraction IA (DeepSeek + OpenAI Vision)
 
@@ -83,24 +84,28 @@ inchangé) pour cet élément. Sans choix (métreur qui passe outre), repli gén
 (functions) : 0 erreur. `firebase deploy --only functions --dry-run` : propre, secret `DEEPSEEK_API_KEY`
 correctement reconnu et l'accès sera accordé au prochain déploiement réel.
 
-### ⚠️ Pas fait cette session — à valider avec Christophe avant d'aller plus loin
+### ✅ Commité, poussé, déployé
+Confirmation explicite de Christophe (via AskUserQuestion : "Commit + push + déployer les functions") pour
+passer directement en prod sans test préalable en simulateur — décision assumée de sa part, à garder en tête
+si un souci apparaît au premier test réel. Commit `0e80183` sur `origin/main`. `firebase deploy --only
+functions` : les 10 fonctions déployées avec succès, `analyzeDevis` a maintenant accès au secret
+`DEEPSEEK_API_KEY` (rôle `secretAccessor` accordé automatiquement au déploiement).
+
+### ⚠️ Pas fait cette session — à surveiller au premier test réel
 - **Aucun test en simulateur/device réel** — session Windows sans environnement de test mobile, tout le travail
-  ci-dessus n'a été vérifié que par `flutter analyze` (compile proprement) et relecture de code, jamais exécuté
-  à l'écran.
-- **Rien commité ni poussé sur `origin/main`** — à faire avec l'accord de Christophe.
-- **Cloud Functions pas redéployées en prod** (`analyzeDevis` tourne encore dans son ancienne version côté
-  serveur tant que le déploiement réel n'est pas fait) — dry-run propre, mais déploiement réel à confirmer
-  explicitement avant de le lancer (coûts API OpenAI/DeepSeek à chaque analyse, quota déjà en place).
+  ci-dessus n'a été vérifié que par `flutter analyze`/`npm run lint` (compile proprement) et relecture de code,
+  jamais exécuté à l'écran. Le code tourne déjà en prod (voir ci-dessus) sans avoir été vu fonctionner une
+  seule fois.
 - **Carte "Montant HT en cours" côté Admin** (`admin_dashboard_tab.dart`) : somme tous les devis non terminés —
   périmètre par défaut (à confirmer avec Christophe si un autre filtre est préférable, ex. exclure aussi SAV).
 - **Contenu du prompt IA** (lecture OpenAI Vision + structuration DeepSeek) jamais testé sur un vrai devis —
   qualité de l'extraction à valider en conditions réelles avant de compter dessus.
 
 ### Reste à faire (prochaine session)
-1. Tester le nouveau flux en simulateur/device réel avec Christophe (Commercial : ajout devis simplifié +
-   upload + IA ; Métreur : choix catégorie sur place).
-2. Décider avec Christophe du commit/push, puis du déploiement Cloud Functions réel.
-3. Ajuster le prompt IA / le périmètre de la carte Montant HT selon les retours de test.
+1. **Priorité** : tester le nouveau flux en simulateur/device réel avec Christophe dès que possible (Commercial :
+   ajout devis simplifié + upload + IA ; Métreur : choix catégorie sur place) — c'est du code jamais vu tourner,
+   déjà en prod.
+2. Ajuster le prompt IA / le périmètre de la carte Montant HT selon les retours de ce premier test.
 
 ---
 
